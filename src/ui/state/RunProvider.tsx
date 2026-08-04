@@ -6,6 +6,8 @@ import { pickWorstTeamId } from '../../run/assignWorstTeam'
 import { RUN_SEASON_LENGTH, RUN_TEAM_COUNT } from '../../run/constants'
 import { createRun } from '../../run/runState'
 import { simulateRunSeason } from '../../run/simulateRunSeason'
+import { applyHouseRule, pickRandomHouseRule } from '../../run/variation/houseRules'
+import { applyRosterQuirk, pickRandomRosterQuirk } from '../../run/variation/rosterQuirks'
 import { RunContext, type RunContextValue } from './runContext.core'
 
 export function RunProvider({ children }: { children: ReactNode }) {
@@ -30,7 +32,30 @@ export function RunProvider({ children }: { children: ReactNode }) {
     const teamId = pickWorstTeamId(teams, players)
     league.userControlledTeamId = teamId
 
-    const newBundle: RunBundle = { run: createRun(teamId), league, teams, players, games: [], lastSeasonTargetHit: false }
+    const rosterQuirk = pickRandomRosterQuirk(defaultRng)
+    const houseRule = pickRandomHouseRule(defaultRng)
+
+    const rosterAfterQuirk = applyRosterQuirk(
+      rosterQuirk,
+      players.filter((p) => p.teamId === teamId),
+      defaultRng,
+    )
+    const rosterAfterQuirkById = new Map(rosterAfterQuirk.map((p) => [p.id, p]))
+    const playersAfterQuirk = players.map((p) => rosterAfterQuirkById.get(p.id) ?? p)
+
+    const userTeam = teams.find((t) => t.id === teamId)!
+    const { team: teamAfterHouseRule, players: playersAfterHouseRule } = applyHouseRule(houseRule, userTeam, playersAfterQuirk)
+    const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamAfterHouseRule : t))
+
+    const newBundle: RunBundle = {
+      run: createRun(teamId, rosterQuirk, houseRule),
+      league,
+      teams: teamsAfterHouseRule,
+      players: playersAfterHouseRule,
+      games: [],
+      lastSeasonTargetHit: false,
+      lastWildcardEvent: null,
+    }
     await saveRunBundle(newBundle)
     setBundle(newBundle)
   }, [])
@@ -45,6 +70,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
       players: result.players,
       games: result.games,
       lastSeasonTargetHit: result.targetHit,
+      lastWildcardEvent: result.wildcardEvent,
     }
     await saveRunBundle(updatedBundle)
     setBundle(updatedBundle)

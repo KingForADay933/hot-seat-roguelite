@@ -12,7 +12,7 @@ const MISS = [row('them'), row('us')] // rank 2 of 2 -- fails any rankFraction <
 
 describe('createRun', () => {
   it('starts a fresh run at stretch 1, season 1, active, with the starting target', () => {
-    const run = createRun('us')
+    const run = createRun('us', 'stacked-guards', 'youth-movement')
     expect(run).toMatchObject({
       teamId: 'us',
       stretchNumber: 1,
@@ -26,7 +26,7 @@ describe('createRun', () => {
 
 describe('evaluateSeasonEnd', () => {
   it('hitting the target escalates to a new stretch with a harder target and resets seasonInStretch', () => {
-    const run = createRun('us')
+    const run = createRun('us', 'stacked-guards', 'youth-movement')
     const next = evaluateSeasonEnd(run, HIT)
     expect(next.status).toBe('active')
     expect(next.stretchNumber).toBe(2)
@@ -36,7 +36,7 @@ describe('evaluateSeasonEnd', () => {
   })
 
   it('missing the target with chances left burns a season but stays in the same stretch', () => {
-    const run = createRun('us')
+    const run = createRun('us', 'stacked-guards', 'youth-movement')
     const next = evaluateSeasonEnd(run, MISS)
     expect(next.status).toBe('active')
     expect(next.stretchNumber).toBe(1)
@@ -46,7 +46,7 @@ describe('evaluateSeasonEnd', () => {
   })
 
   it('missing the target on the final season of a stretch fires the GM', () => {
-    let run = createRun('us')
+    let run = createRun('us', 'stacked-guards', 'youth-movement')
     for (let i = 0; i < SEASONS_PER_STRETCH - 1; i++) {
       run = evaluateSeasonEnd(run, MISS)
       expect(run.status).toBe('active')
@@ -57,7 +57,7 @@ describe('evaluateSeasonEnd', () => {
   })
 
   it('a fired run is terminal -- further evaluation is a no-op', () => {
-    let run = createRun('us')
+    let run = createRun('us', 'stacked-guards', 'youth-movement')
     for (let i = 0; i < SEASONS_PER_STRETCH; i++) run = evaluateSeasonEnd(run, MISS)
     expect(run.status).toBe('fired')
 

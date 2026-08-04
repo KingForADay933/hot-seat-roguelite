@@ -1,5 +1,6 @@
 import type { Game, League, Player, Team } from '../types'
 import type { RunState } from '../../run/types'
+import type { WildcardEventOutcome } from '../../run/variation/wildcardEvents'
 import { localStorageAdapter } from './localStorageAdapter'
 import type { StorageAdapter } from './storageAdapter'
 
@@ -14,12 +15,20 @@ export interface RunBundle {
   /** Whether the season just played hit the run's target -- display-only, saved rather than
    *  re-derived so the results screen doesn't need to infer it from run-state-machine internals. */
   lastSeasonTargetHit: boolean
+  /** The wildcard event (if any) rolled during the season just played -- display-only, same reason. */
+  lastWildcardEvent: WildcardEventOutcome | null
 }
 
 function isValidBundleShape(data: unknown): data is RunBundle {
   if (!data || typeof data !== 'object') return false
   const b = data as Record<string, unknown>
-  return !!b.run && typeof b.run === 'object' && !!b.league && typeof b.league === 'object' && Array.isArray(b.teams) && Array.isArray(b.players)
+  if (!b.run || typeof b.run !== 'object' || !b.league || typeof b.league !== 'object') return false
+  if (!Array.isArray(b.teams) || !Array.isArray(b.players) || !Array.isArray(b.games)) return false
+
+  // run.rosterQuirk/houseRule were added after the first version of this bundle shipped -- reject
+  // (rather than silently accept and crash a screen reading them later) a save from before that.
+  const run = b.run as Record<string, unknown>
+  return typeof run.rosterQuirk === 'string' && typeof run.houseRule === 'string'
 }
 
 /**

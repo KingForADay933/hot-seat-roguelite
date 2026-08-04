@@ -3,8 +3,10 @@ import type { StandingsRow, TeamId } from '../data/types'
 import { SEASONS_PER_STRETCH } from './constants'
 import { hasHitTarget, targetForStretch } from './target'
 import type { RunState } from './types'
+import type { HouseRuleId } from './variation/houseRules'
+import type { RosterQuirkId } from './variation/rosterQuirks'
 
-export function createRun(teamId: TeamId): RunState {
+export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule: HouseRuleId): RunState {
   return {
     runId: createId('run'),
     teamId,
@@ -13,6 +15,8 @@ export function createRun(teamId: TeamId): RunState {
     seasonsPlayed: 0,
     target: targetForStretch(1),
     status: 'active',
+    rosterQuirk,
+    houseRule,
   }
 }
 

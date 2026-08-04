@@ -39,7 +39,15 @@ function makeTestLeague(): League {
 }
 
 function makeTestBundle(): RunBundle {
-  return { run: createRun('team-1'), league: makeTestLeague(), teams: [], players: [], games: [], lastSeasonTargetHit: false }
+  return {
+    run: createRun('team-1', 'stacked-guards', 'youth-movement'),
+    league: makeTestLeague(),
+    teams: [],
+    players: [],
+    games: [],
+    lastSeasonTargetHit: false,
+    lastWildcardEvent: null,
+  }
 }
 
 describe('saveRunBundle / loadRunBundle', () => {
@@ -58,6 +66,14 @@ describe('saveRunBundle / loadRunBundle', () => {
   it('returns null (not a throw) for malformed JSON', async () => {
     const adapter = makeMemoryAdapter()
     await adapter.setItem('hotseat:run', '{not valid json')
+    expect(await loadRunBundle(adapter)).toBeNull()
+  })
+
+  it('returns null (not a throw) for a pre-variation-system save missing rosterQuirk/houseRule', async () => {
+    const adapter = makeMemoryAdapter()
+    const legacyBundle = makeTestBundle()
+    const { rosterQuirk: _rosterQuirk, houseRule: _houseRule, ...legacyRun } = legacyBundle.run
+    await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
     expect(await loadRunBundle(adapter)).toBeNull()
   })
 })

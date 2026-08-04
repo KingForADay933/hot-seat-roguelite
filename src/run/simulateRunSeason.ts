@@ -8,6 +8,7 @@ import { RUN_SEASON_LENGTH } from './constants'
 import { evaluateSeasonEnd } from './runState'
 import { hasHitTarget } from './target'
 import type { RunState } from './types'
+import { rollWildcardEvent, type WildcardEventOutcome } from './variation/wildcardEvents'
 
 export interface RunSeasonResult {
   run: RunState
@@ -17,17 +18,22 @@ export interface RunSeasonResult {
   games: Game[]
   standings: StandingsRow[]
   targetHit: boolean
+  wildcardEvent: WildcardEventOutcome | null
 }
 
 /**
- * Plays one full season headlessly -- schedule, every game, standings, player development -- and
- * folds the result into the run's target/fired state machine. The one function a caller (a UI
- * screen, a leaderboard sim, a test) needs to advance a run by a season; no UI required to play a
- * run start to finish.
+ * Plays one full season headlessly -- wildcard roll, schedule, every game, standings, player
+ * development -- and folds the result into the run's target/fired state machine. The one function
+ * a caller (a UI screen, a leaderboard sim, a test) needs to advance a run by a season; no UI
+ * required to play a run start to finish.
  */
 export function simulateRunSeason(run: RunState, league: League, teams: Team[], players: Player[], rng: Rng): RunSeasonResult {
+  // Rolled before the season plays, not after, so a breakout/slump actually affects this season's
+  // games rather than landing as after-the-fact flavor text.
+  const { players: playersAfterWildcard, outcome: wildcardEvent } = rollWildcardEvent(players, run.teamId, rng)
+
   const scheduledGames = generateSchedule(league.id, league.teamIds, RUN_SEASON_LENGTH, rng)
-  const playersById = new Map(players.map((p) => [p.id, p]))
+  const playersById = new Map(playersAfterWildcard.map((p) => [p.id, p]))
   const teamsById = new Map(teams.map((t) => [t.id, t]))
 
   const games = scheduledGames.map((game) => {
@@ -40,7 +46,7 @@ export function simulateRunSeason(run: RunState, league: League, teams: Team[], 
   const standings = computeStandings(teams, games)
   const targetHit = hasHitTarget(standings, run.teamId, run.target)
   const nextRun = evaluateSeasonEnd(run, standings)
-  const developedPlayers = developSeason(players, teams, games)
+  const developedPlayers = developSeason(playersAfterWildcard, teams, games)
 
   const updatedLeague: League = {
     ...league,
@@ -50,5 +56,5 @@ export function simulateRunSeason(run: RunState, league: League, teams: Team[], 
     currentDate: new Date().toISOString(),
   }
 
-  return { run: nextRun, league: updatedLeague, teams, players: developedPlayers, games, standings, targetHit }
+  return { run: nextRun, league: updatedLeague, teams, players: developedPlayers, games, standings, targetHit, wildcardEvent }
 }

@@ -8,7 +8,7 @@ import { simulateRunSeason } from './simulateRunSeason'
 function setUpRun(seed: number) {
   const rng = createSeededRng(seed)
   const { league, teams, players } = generateLeague({ teamCount: 8, leagueName: 'Test League', rng })
-  const run = createRun(teams[0].id)
+  const run = createRun(teams[0].id, 'stacked-guards', 'youth-movement')
   return { rng, league, teams, players, run }
 }
 
@@ -53,6 +53,19 @@ describe('simulateRunSeason', () => {
 
     expect(resultA.standings).toEqual(resultB.standings)
     expect(resultA.targetHit).toBe(resultB.targetHit)
+  })
+
+  it('wildcardEvent is either null or references a real player on the user\'s team', () => {
+    const { rng, league, teams, players, run } = setUpRun(5)
+    const result = simulateRunSeason(run, league, teams, players, rng)
+
+    if (result.wildcardEvent) {
+      const target = players.find((p) => p.id === result.wildcardEvent?.playerId)
+      expect(target?.teamId).toBe(run.teamId)
+      expect(result.wildcardEvent.playerName).toBe(target?.name)
+    } else {
+      expect(result.wildcardEvent).toBeNull()
+    }
   })
 
   it('returns players run through development (ages incremented by one)', () => {

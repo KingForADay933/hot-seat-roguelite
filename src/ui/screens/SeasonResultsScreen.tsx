@@ -4,7 +4,7 @@ import { StandingsTable } from '../components/StandingsTable'
 import { TeamSummary } from '../components/TeamSummary'
 
 export function SeasonResultsScreen({ bundle, onNextSeason }: { bundle: RunBundle; onNextSeason: () => void }) {
-  const { run, league, teams, players, lastSeasonTargetHit } = bundle
+  const { run, league, teams, players, lastSeasonTargetHit, lastWildcardEvent } = bundle
   const completedSeason = league.seasonHistory[league.seasonHistory.length - 1]
   const team = teams.find((t) => t.id === run.teamId)
   if (!completedSeason || !team) return null
@@ -26,6 +26,13 @@ export function SeasonResultsScreen({ bundle, onNextSeason }: { bundle: RunBundl
         <p className="text-negative">
           Missed it. Season {run.seasonInStretch} of {SEASONS_PER_STRETCH} this stretch is next — same top {targetPct}%
           target.
+        </p>
+      )}
+      {lastWildcardEvent && (
+        <p className={lastWildcardEvent.eventId === 'breakout' ? 'text-positive' : 'text-negative'}>
+          {lastWildcardEvent.eventId === 'breakout'
+            ? `${lastWildcardEvent.playerName} had a breakout season.`
+            : `${lastWildcardEvent.playerName} hit a slump this season.`}
         </p>
       )}
       <TeamSummary team={team} roster={roster} record={record} />

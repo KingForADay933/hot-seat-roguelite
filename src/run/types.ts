@@ -1,4 +1,6 @@
 import type { TeamId } from '../data/types'
+import type { HouseRuleId } from './variation/houseRules'
+import type { RosterQuirkId } from './variation/rosterQuirks'
 
 export interface RunTarget {
   /** Fraction of the league a team must rank within (best = 0) to hit the target, e.g. 0.5 = top half. */
@@ -19,4 +21,7 @@ export interface RunState {
   seasonsPlayed: number
   target: RunTarget
   status: RunStatus
+  /** Randomized once at run creation and fixed for the whole run (Section 3's variation axes). */
+  rosterQuirk: RosterQuirkId
+  houseRule: HouseRuleId
 }
