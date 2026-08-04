@@ -1,0 +1,54 @@
+import type { Game, League, Player, StandingsRow, Team } from '../data/types'
+import { developSeason } from '../engine/season/developSeason'
+import { generateSchedule } from '../engine/schedule/generateSchedule'
+import { computeStandings } from '../engine/schedule/standings'
+import type { Rng } from '../engine/rng'
+import { simulateGame } from '../engine/simulateGame'
+import { RUN_SEASON_LENGTH } from './constants'
+import { evaluateSeasonEnd } from './runState'
+import { hasHitTarget } from './target'
+import type { RunState } from './types'
+
+export interface RunSeasonResult {
+  run: RunState
+  league: League
+  teams: Team[]
+  players: Player[]
+  games: Game[]
+  standings: StandingsRow[]
+  targetHit: boolean
+}
+
+/**
+ * Plays one full season headlessly -- schedule, every game, standings, player development -- and
+ * folds the result into the run's target/fired state machine. The one function a caller (a UI
+ * screen, a leaderboard sim, a test) needs to advance a run by a season; no UI required to play a
+ * run start to finish.
+ */
+export function simulateRunSeason(run: RunState, league: League, teams: Team[], players: Player[], rng: Rng): RunSeasonResult {
+  const scheduledGames = generateSchedule(league.id, league.teamIds, RUN_SEASON_LENGTH, rng)
+  const playersById = new Map(players.map((p) => [p.id, p]))
+  const teamsById = new Map(teams.map((t) => [t.id, t]))
+
+  const games = scheduledGames.map((game) => {
+    const homeTeam = teamsById.get(game.homeTeamId)
+    const awayTeam = teamsById.get(game.awayTeamId)
+    if (!homeTeam || !awayTeam) throw new Error(`Game ${game.id} references a team not in this league`)
+    return simulateGame(game, homeTeam, awayTeam, playersById, league.pacePresets.possessionsPerGame, rng)
+  })
+
+  const standings = computeStandings(teams, games)
+  const targetHit = hasHitTarget(standings, run.teamId, run.target)
+  const nextRun = evaluateSeasonEnd(run, standings)
+  const developedPlayers = developSeason(players, teams, games)
+
+  const updatedLeague: League = {
+    ...league,
+    seasonNumber: league.seasonNumber + 1,
+    seasonHistory: [...league.seasonHistory, { seasonNumber: league.seasonNumber, standings }],
+    scheduleGameIds: games.map((g) => g.id),
+    currentDate: new Date().toISOString(),
+  }
+
+  return { run: nextRun, league: updatedLeague, teams, players: developedPlayers, games, standings, targetHit }
+}

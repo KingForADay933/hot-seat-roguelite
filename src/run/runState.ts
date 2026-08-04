@@ -1,0 +1,47 @@
+import { createId } from '../data/ids'
+import type { StandingsRow, TeamId } from '../data/types'
+import { SEASONS_PER_STRETCH } from './constants'
+import { hasHitTarget, targetForStretch } from './target'
+import type { RunState } from './types'
+
+export function createRun(teamId: TeamId): RunState {
+  return {
+    runId: createId('run'),
+    teamId,
+    stretchNumber: 1,
+    seasonInStretch: 1,
+    seasonsPlayed: 0,
+    target: targetForStretch(1),
+    status: 'active',
+  }
+}
+
+/**
+ * Pure state transition for the end of a season: hitting the target ends the stretch early and
+ * escalates (new stretch, harder target, season count resets); missing it burns one of the
+ * stretch's SEASONS_PER_STRETCH chances; running out of chances without ever hitting it fires the GM.
+ */
+export function evaluateSeasonEnd(run: RunState, standings: StandingsRow[]): RunState {
+  if (run.status === 'fired') return run
+
+  const seasonsPlayed = run.seasonsPlayed + 1
+  const targetHit = hasHitTarget(standings, run.teamId, run.target)
+
+  if (targetHit) {
+    const stretchNumber = run.stretchNumber + 1
+    return {
+      ...run,
+      seasonsPlayed,
+      stretchNumber,
+      seasonInStretch: 1,
+      target: targetForStretch(stretchNumber),
+      status: 'active',
+    }
+  }
+
+  if (run.seasonInStretch < SEASONS_PER_STRETCH) {
+    return { ...run, seasonsPlayed, seasonInStretch: run.seasonInStretch + 1 }
+  }
+
+  return { ...run, seasonsPlayed, status: 'fired' }
+}
