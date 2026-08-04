@@ -1,3 +1,4 @@
+export * from './assignWorstTeam'
 export * from './constants'
 export * from './runState'
 export * from './simulateRunSeason'

@@ -5,6 +5,9 @@
  *  and reads (commentary/insights) in the doc's ~5-10 minute session target. */
 export const RUN_SEASON_LENGTH = 32
 
+/** Teams in a run's league. Must be even (generateSchedule's round-robin requirement). */
+export const RUN_TEAM_COUNT = 8
+
 /** Seasons in a stretch's window to hit the target at least once before getting fired. */
 export const SEASONS_PER_STRETCH = 3
 
