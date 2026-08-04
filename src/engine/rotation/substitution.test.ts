@@ -1,0 +1,231 @@
+import { describe, expect, it } from 'vitest'
+import type { Player, PlayerId, Team } from '../../data/types'
+import { makeTestPlayer, makeTestTeam } from '../testFixtures'
+import {
+  FATIGUE_EMERGENCY_THRESHOLD,
+  FATIGUE_SUB_IN_MAX,
+  FATIGUE_SUB_OUT_THRESHOLD,
+  MIN_SHIFT_POSSESSIONS,
+  PACE_CHECK_MIN_POSSESSIONS,
+} from '../constants'
+import { checkSubstitutions, rotationValue } from './substitution'
+import type { RotationState } from './rotationState'
+
+function buildFixture(opts: {
+  starterFatigue?: number
+  benchFatigue?: number
+  rotationMinutes?: Record<PlayerId, number>
+  possessionsPlayed?: number
+  shiftEnteredAt?: number
+}) {
+  const starter = makeTestPlayer({ positions: ['PG'], name: 'Starter' })
+  const bench = makeTestPlayer({ positions: ['PG'], name: 'Bench' })
+  const offPosition = makeTestPlayer({ positions: ['C'], name: 'WrongPosition' })
+
+  const team: Team = makeTestTeam({
+    rosterPlayerIds: [starter.id, bench.id, offPosition.id],
+    startingFive: [starter.id],
+    rotationMinutes: opts.rotationMinutes ?? { [starter.id]: 32, [bench.id]: 16, [offPosition.id]: 20 },
+  })
+
+  const playersById = new Map<PlayerId, Player>([
+    [starter.id, starter],
+    [bench.id, bench],
+    [offPosition.id, offPosition],
+  ])
+
+  const state: RotationState = {
+    onCourt: [starter],
+    fatigue: new Map([
+      [starter.id, opts.starterFatigue ?? 0],
+      [bench.id, opts.benchFatigue ?? 0],
+      [offPosition.id, 0],
+    ]),
+    possessionsPlayed: new Map([
+      [starter.id, opts.possessionsPlayed ?? 0],
+      [bench.id, 0],
+      [offPosition.id, 0],
+    ]),
+    shiftEnteredAt: new Map([[starter.id, opts.shiftEnteredAt ?? 0]]),
+  }
+
+  return { starter, bench, offPosition, team, playersById, state }
+}
+
+describe('checkSubstitutions', () => {
+  it('does not sub even at high fatigue before MIN_SHIFT_POSSESSIONS has elapsed', () => {
+    const { starter, state, team, playersById } = buildFixture({
+      starterFatigue: 90,
+      benchFatigue: 0,
+      shiftEnteredAt: 0,
+    })
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS - 1)
+    expect(state.onCourt[0]).toBe(starter)
+  })
+
+  it('subs out at the fatigue threshold once past the cooldown, bringing in the rested bench player', () => {
+    const { bench, state, team, playersById } = buildFixture({
+      starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
+      benchFatigue: 0,
+      shiftEnteredAt: 0,
+    })
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS + 1)
+    expect(state.onCourt[0]).toBe(bench)
+  })
+
+  it('the emergency threshold bypasses the shift cooldown', () => {
+    const { bench, state, team, playersById } = buildFixture({
+      starterFatigue: FATIGUE_EMERGENCY_THRESHOLD,
+      benchFatigue: 0,
+      shiftEnteredAt: 0,
+    })
+    checkSubstitutions(state, team, [], playersById, 1) // well within the normal cooldown window
+    expect(state.onCourt[0]).toBe(bench)
+  })
+
+  it('leaves the outgoing player in if every same-position bench player is also too tired', () => {
+    const { starter, state, team, playersById } = buildFixture({
+      starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
+      benchFatigue: FATIGUE_SUB_IN_MAX + 1,
+      shiftEnteredAt: 0,
+    })
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS + 1)
+    expect(state.onCourt[0]).toBe(starter)
+  })
+
+  it('never selects a cross-position bench player even if more rested', () => {
+    // offPosition (C) is rested and high quality, but starter is PG -- must not be selected
+    const { starter, offPosition, bench, state, team, playersById } = buildFixture({
+      starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
+      benchFatigue: FATIGUE_SUB_IN_MAX + 1, // the only same-position bench player is too tired
+      shiftEnteredAt: 0,
+    })
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS + 1)
+    expect(state.onCourt[0]).not.toBe(offPosition)
+    expect(state.onCourt[0]).toBe(starter) // falls back to "stays in", not the wrong-position player
+    expect(state.onCourt[0]).not.toBe(bench)
+  })
+
+  it('triggers a pace-overage sub for a low-target-minutes player running ahead of pace, even below the fatigue threshold', () => {
+    const { bench, state, team, playersById } = buildFixture({
+      starterFatigue: 10, // well below FATIGUE_SUB_OUT_THRESHOLD
+      benchFatigue: 0,
+      rotationMinutes: undefined,
+      possessionsPlayed: 10, // played all 10 possessions elapsed so far -- way over any reasonable target
+      shiftEnteredAt: 0,
+    })
+    // give the starter a small target so their pace is clearly over
+    team.rotationMinutes[state.onCourt[0].id] = 5 // 5/48 target share
+    checkSubstitutions(state, team, [], playersById, PACE_CHECK_MIN_POSSESSIONS + 3)
+    expect(state.onCourt[0]).toBe(bench)
+  })
+
+  it('skips the pace check entirely before PACE_CHECK_MIN_POSSESSIONS', () => {
+    const { starter, state, team, playersById } = buildFixture({
+      starterFatigue: 0,
+      possessionsPlayed: 5,
+      shiftEnteredAt: 0,
+    })
+    team.rotationMinutes[starter.id] = 1 // tiny target, would trigger pace overage if checked
+    checkSubstitutions(state, team, [], playersById, PACE_CHECK_MIN_POSSESSIONS - 1)
+    expect(state.onCourt[0]).toBe(starter)
+  })
+
+  it('does not double-book a bench player across two simultaneous outgoing slots', () => {
+    const starter1 = makeTestPlayer({ positions: ['PG'], name: 'Starter1' })
+    const starter2 = makeTestPlayer({ positions: ['PG'], name: 'Starter2' }) // same position, unusual but exercises the guard
+    const onlyBench = makeTestPlayer({ positions: ['PG'], name: 'OnlyBench' })
+
+    const team = makeTestTeam({
+      rosterPlayerIds: [starter1.id, starter2.id, onlyBench.id],
+      startingFive: [starter1.id, starter2.id],
+      rotationMinutes: { [starter1.id]: 32, [starter2.id]: 32, [onlyBench.id]: 16 },
+    })
+    const playersById = new Map<PlayerId, Player>([
+      [starter1.id, starter1],
+      [starter2.id, starter2],
+      [onlyBench.id, onlyBench],
+    ])
+    const state: RotationState = {
+      onCourt: [starter1, starter2],
+      fatigue: new Map([
+        [starter1.id, FATIGUE_SUB_OUT_THRESHOLD],
+        [starter2.id, FATIGUE_SUB_OUT_THRESHOLD],
+        [onlyBench.id, 0],
+      ]),
+      possessionsPlayed: new Map([
+        [starter1.id, 0],
+        [starter2.id, 0],
+        [onlyBench.id, 0],
+      ]),
+      shiftEnteredAt: new Map([
+        [starter1.id, 0],
+        [starter2.id, 0],
+      ]),
+    }
+
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS + 1)
+
+    const onCourtIds = state.onCourt.map((p) => p.id)
+    expect(new Set(onCourtIds).size).toBe(2) // no duplicate
+    expect(onCourtIds).toContain(onlyBench.id) // one slot got the only candidate
+  })
+})
+
+describe('rotationValue', () => {
+  it('prefers the better perimeter defender when the opponent is a stronger outside shooter', () => {
+    const perimeterSpecialist = makeTestPlayer({
+      attributes: { lateralQuickness: 90, perimeterDefense: 90, interiorDefense: 40, vertical: 40 },
+    })
+    const interiorSpecialist = makeTestPlayer({
+      attributes: { lateralQuickness: 40, perimeterDefense: 40, interiorDefense: 90, vertical: 90 },
+    })
+    const perimeterOpponent = makeTestPlayer({ attributes: { outsideShot: 90, insideShot: 20 } })
+
+    expect(rotationValue(perimeterSpecialist, perimeterOpponent)).toBeGreaterThan(
+      rotationValue(interiorSpecialist, perimeterOpponent),
+    )
+  })
+
+  it('prefers the better interior defender when the opponent is a stronger inside scorer', () => {
+    const perimeterSpecialist = makeTestPlayer({
+      attributes: { lateralQuickness: 90, perimeterDefense: 90, interiorDefense: 40, vertical: 40 },
+    })
+    const interiorSpecialist = makeTestPlayer({
+      attributes: { lateralQuickness: 40, perimeterDefense: 40, interiorDefense: 90, vertical: 90 },
+    })
+    const interiorOpponent = makeTestPlayer({ attributes: { outsideShot: 20, insideShot: 90 } })
+
+    expect(rotationValue(interiorSpecialist, interiorOpponent)).toBeGreaterThan(
+      rotationValue(perimeterSpecialist, interiorOpponent),
+    )
+  })
+
+  it('a clearly higher-quality candidate beats a marginally-better-matchup one', () => {
+    const starPlayer = makeTestPlayer({
+      attributes: {
+        insideShot: 90,
+        outsideShot: 90,
+        passing: 90,
+        ballHandling: 90,
+        rebounding: 90,
+        perimeterDefense: 60,
+        interiorDefense: 60,
+        speed: 90,
+        lateralQuickness: 60,
+        vertical: 90,
+      },
+    })
+    const marginalDefender = makeTestPlayer({
+      attributes: { lateralQuickness: 65, perimeterDefense: 65 }, // slightly better perimeter fit, much lower overall
+    })
+    const opponent = makeTestPlayer({ attributes: { outsideShot: 90, insideShot: 20 } })
+
+    expect(rotationValue(starPlayer, opponent)).toBeGreaterThan(rotationValue(marginalDefender, opponent))
+  })
+
+  it('falls back to raw quality with no opponent to defend', () => {
+    const player = makeTestPlayer()
+    expect(rotationValue(player, undefined)).toBeCloseTo(50, 5) // all-default attributes average to 50
+  })
+})
