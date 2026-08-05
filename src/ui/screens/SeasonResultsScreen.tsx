@@ -2,7 +2,7 @@ import type { RunBundle } from '../../data/persistence/runRepository'
 import { StandingsTable } from '../components/StandingsTable'
 import { TeamSummary } from '../components/TeamSummary'
 
-export function SeasonResultsScreen({ bundle, onNextSeason }: { bundle: RunBundle; onNextSeason: () => void }) {
+export function SeasonResultsScreen({ bundle, onContinue }: { bundle: RunBundle; onContinue: () => void }) {
   const { run, league, teams, players, lastSeasonTargetHit, lastWildcardEvent, lastBudgetEarned } = bundle
   const completedSeason = league.seasonHistory[league.seasonHistory.length - 1]
   const team = teams.find((t) => t.id === run.teamId)
@@ -40,8 +40,8 @@ export function SeasonResultsScreen({ bundle, onNextSeason }: { bundle: RunBundl
       <TeamSummary team={team} roster={roster} record={record} />
       <h2>Final Standings</h2>
       <StandingsTable rows={completedSeason.standings} teams={teams} userTeamId={run.teamId} />
-      <button className="primary" onClick={onNextSeason}>
-        Sim Next Season
+      <button className="primary" onClick={onContinue}>
+        Continue to Shop
       </button>
     </main>
   )

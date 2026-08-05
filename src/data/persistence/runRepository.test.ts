@@ -48,6 +48,7 @@ function makeTestBundle(): RunBundle {
     lastSeasonTargetHit: false,
     lastWildcardEvent: null,
     lastBudgetEarned: 0,
+    shop: null,
   }
 }
 

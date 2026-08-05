@@ -7,6 +7,7 @@ import { pickWorstTeamId } from '../../run/assignWorstTeam'
 import { HOUSE_RULE_DRAFT_SIZE, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT, SYSTEM_DRAFT_SIZE } from '../../run/constants'
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { createRun } from '../../run/runState'
+import { applyPlayerCamp, applyTeamCamp, generateShopOffers, openShopVisit, type ShopTier } from '../../run/shop'
 import { simulateRunSeason } from '../../run/simulateRunSeason'
 import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
 import { applyRosterQuirk, pickRandomRosterQuirks, type RosterQuirkId } from '../../run/variation/rosterQuirks'
@@ -82,6 +83,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
         lastSeasonTargetHit: false,
         lastWildcardEvent: null,
         lastBudgetEarned: 0,
+        shop: null,
       }
       await saveRunBundle(newBundle)
       setBundle(newBundle)
@@ -102,12 +104,74 @@ export function RunProvider({ children }: { children: ReactNode }) {
       lastSeasonTargetHit: result.targetHit,
       lastWildcardEvent: result.wildcardEvent,
       lastBudgetEarned: result.budgetEarned,
+      shop: null,
     }
     await saveRunBundle(updatedBundle)
     setBundle(updatedBundle)
   }, [bundle])
 
-  const value: RunContextValue = { bundle, draft, loading, beginDraft, confirmDraft, simSeason }
+  const openShop = useCallback(async () => {
+    if (!bundle) return
+    const roster = bundle.players.filter((p) => p.teamId === bundle.run.teamId)
+    const tier: ShopTier = bundle.lastSeasonTargetHit ? 'expanded' : 'condensed'
+    const updatedBundle: RunBundle = { ...bundle, shop: openShopVisit(tier, roster, defaultRng) }
+    await saveRunBundle(updatedBundle)
+    setBundle(updatedBundle)
+  }, [bundle])
+
+  const buyShopOffer = useCallback(
+    async (offerId: string) => {
+      if (!bundle?.shop) return
+      const offer = bundle.shop.offers.find((o) => o.id === offerId)
+      if (!offer || bundle.run.budget < offer.cost) return
+
+      const updatedPlayers =
+        offer.type === 'player-camp'
+          ? applyPlayerCamp(bundle.players, offer.playerId!, defaultRng)
+          : applyTeamCamp(bundle.players, bundle.run.teamId, defaultRng)
+
+      // Camps grow synergy from where the draft-time roster fit left it (Team.synergyScore's doc
+      // comment flags camps as one of the systems expected to feed back into it) -- recomputed the
+      // same way the initial draft-time score was, from the (now camp-boosted) roster's fit to the
+      // team's drafted system, not a parallel invented bump.
+      const team = bundle.teams.find((t) => t.id === bundle.run.teamId)
+      const updatedTeams = team
+        ? bundle.teams.map((t) =>
+            t.id === team.id
+              ? { ...t, synergyScore: computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId], updatedPlayers.filter((p) => p.teamId === t.id)) }
+              : t,
+          )
+        : bundle.teams
+
+      const updatedBundle: RunBundle = {
+        ...bundle,
+        run: { ...bundle.run, budget: bundle.run.budget - offer.cost },
+        players: updatedPlayers,
+        teams: updatedTeams,
+        shop: { ...bundle.shop, offers: bundle.shop.offers.filter((o) => o.id !== offerId) },
+      }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
+
+  const rerollShop = useCallback(async () => {
+    if (!bundle?.shop || bundle.shop.rerollsRemaining <= 0) return
+    const roster = bundle.players.filter((p) => p.teamId === bundle.run.teamId)
+    const updatedBundle: RunBundle = {
+      ...bundle,
+      shop: {
+        tier: bundle.shop.tier,
+        offers: generateShopOffers(bundle.shop.tier, roster, defaultRng),
+        rerollsRemaining: bundle.shop.rerollsRemaining - 1,
+      },
+    }
+    await saveRunBundle(updatedBundle)
+    setBundle(updatedBundle)
+  }, [bundle])
+
+  const value: RunContextValue = { bundle, draft, loading, beginDraft, confirmDraft, simSeason, openShop, buyShopOffer, rerollShop }
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>
 }
