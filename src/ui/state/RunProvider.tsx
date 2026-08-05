@@ -4,6 +4,7 @@ import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { pickWorstTeamId } from '../../run/assignWorstTeam'
 import { HOUSE_RULE_DRAFT_SIZE, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT } from '../../run/constants'
+import { pickRandomMarketSize } from '../../run/marketSize'
 import { createRun } from '../../run/runState'
 import { simulateRunSeason } from '../../run/simulateRunSeason'
 import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
@@ -41,13 +42,14 @@ export function RunProvider({ children }: { children: ReactNode }) {
       teamId,
       rosterQuirkOptions: pickRandomRosterQuirks(QUIRK_DRAFT_SIZE, defaultRng),
       houseRuleOptions: pickRandomHouseRules(HOUSE_RULE_DRAFT_SIZE, defaultRng),
+      marketSize: pickRandomMarketSize(defaultRng),
     })
   }, [])
 
   const confirmDraft = useCallback(
     async (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => {
       if (!draft) return
-      const { league, teams, players, teamId } = draft
+      const { league, teams, players, teamId, marketSize } = draft
 
       const rosterAfterQuirk = applyRosterQuirk(
         rosterQuirk,
@@ -62,13 +64,14 @@ export function RunProvider({ children }: { children: ReactNode }) {
       const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamAfterHouseRule : t))
 
       const newBundle: RunBundle = {
-        run: createRun(teamId, rosterQuirk, houseRule),
+        run: createRun(teamId, rosterQuirk, houseRule, marketSize),
         league,
         teams: teamsAfterHouseRule,
         players: playersAfterHouseRule,
         games: [],
         lastSeasonTargetHit: false,
         lastWildcardEvent: null,
+        lastBudgetEarned: 0,
       }
       await saveRunBundle(newBundle)
       setBundle(newBundle)
@@ -88,6 +91,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
       games: result.games,
       lastSeasonTargetHit: result.targetHit,
       lastWildcardEvent: result.wildcardEvent,
+      lastBudgetEarned: result.budgetEarned,
     }
     await saveRunBundle(updatedBundle)
     setBundle(updatedBundle)

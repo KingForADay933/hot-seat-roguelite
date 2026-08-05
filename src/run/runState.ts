@@ -1,12 +1,12 @@
 import { createId } from '../data/ids'
 import type { StandingsRow, TeamId } from '../data/types'
-import { SEASONS_PER_STRETCH } from './constants'
+import { MARKET_SIZES, type MarketSizeId } from './marketSize'
 import { hasHitTarget, targetForStretch } from './target'
 import type { RunState } from './types'
 import type { HouseRuleId } from './variation/houseRules'
 import type { RosterQuirkId } from './variation/rosterQuirks'
 
-export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule: HouseRuleId): RunState {
+export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, marketSize: MarketSizeId): RunState {
   return {
     runId: createId('run'),
     teamId,
@@ -17,13 +17,17 @@ export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule:
     status: 'active',
     rosterQuirk,
     houseRule,
+    marketSize,
+    seasonsPerStretch: MARKET_SIZES[marketSize].seasonsPerStretch,
+    budget: 0,
   }
 }
 
 /**
  * Pure state transition for the end of a season: hitting the target ends the stretch early and
  * escalates (new stretch, harder target, season count resets); missing it burns one of the
- * stretch's SEASONS_PER_STRETCH chances; running out of chances without ever hitting it fires the GM.
+ * stretch's run.seasonsPerStretch chances (market-size-dependent, Section 8.1); running out of
+ * chances without ever hitting it fires the GM.
  */
 export function evaluateSeasonEnd(run: RunState, standings: StandingsRow[]): RunState {
   if (run.status === 'fired') return run
@@ -43,7 +47,7 @@ export function evaluateSeasonEnd(run: RunState, standings: StandingsRow[]): Run
     }
   }
 
-  if (run.seasonInStretch < SEASONS_PER_STRETCH) {
+  if (run.seasonInStretch < run.seasonsPerStretch) {
     return { ...run, seasonsPlayed, seasonInStretch: run.seasonInStretch + 1 }
   }
 

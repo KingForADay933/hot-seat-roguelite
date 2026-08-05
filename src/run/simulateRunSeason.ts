@@ -4,6 +4,7 @@ import { generateSchedule } from '../engine/schedule/generateSchedule'
 import { computeStandings } from '../engine/schedule/standings'
 import type { Rng } from '../engine/rng'
 import { simulateGame } from '../engine/simulateGame'
+import { computeSeasonBudgetEarnings } from './budget'
 import { RUN_SEASON_LENGTH } from './constants'
 import { evaluateSeasonEnd } from './runState'
 import { hasHitTarget } from './target'
@@ -19,6 +20,8 @@ export interface RunSeasonResult {
   standings: StandingsRow[]
   targetHit: boolean
   wildcardEvent: WildcardEventOutcome | null
+  /** Budget earned this season specifically (not the cumulative total, which lives on run.budget). */
+  budgetEarned: number
 }
 
 /**
@@ -45,7 +48,8 @@ export function simulateRunSeason(run: RunState, league: League, teams: Team[], 
 
   const standings = computeStandings(teams, games)
   const targetHit = hasHitTarget(standings, run.teamId, run.target)
-  const nextRun = evaluateSeasonEnd(run, standings)
+  const budgetEarned = computeSeasonBudgetEarnings(run, standings, targetHit)
+  const nextRun: RunState = { ...evaluateSeasonEnd(run, standings), budget: run.budget + budgetEarned }
   const developedPlayers = developSeason(playersAfterWildcard, teams, games)
 
   const updatedLeague: League = {
@@ -56,5 +60,5 @@ export function simulateRunSeason(run: RunState, league: League, teams: Team[], 
     currentDate: new Date().toISOString(),
   }
 
-  return { run: nextRun, league: updatedLeague, teams, players: developedPlayers, games, standings, targetHit, wildcardEvent }
+  return { run: nextRun, league: updatedLeague, teams, players: developedPlayers, games, standings, targetHit, wildcardEvent, budgetEarned }
 }

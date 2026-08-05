@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MARKET_SIZES } from '../../run/marketSize'
 import { HOUSE_RULES, type HouseRuleId } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS, type RosterQuirkId } from '../../run/variation/rosterQuirks'
 import { DraftOptionCard } from '../components/DraftOptionCard'
@@ -13,10 +14,14 @@ export function RunDraftScreen({
 }) {
   const [rosterQuirk, setRosterQuirk] = useState<RosterQuirkId | null>(null)
   const [houseRule, setHouseRule] = useState<HouseRuleId | null>(null)
+  const market = MARKET_SIZES[draft.marketSize]
 
   return (
     <main>
       <h1>Build Your Roster</h1>
+      <p>
+        <strong>{market.label}</strong> -- {market.description}
+      </p>
       <p>Two choices before the season starts. Pick one from each.</p>
 
       <h2>Roster Quirk</h2>

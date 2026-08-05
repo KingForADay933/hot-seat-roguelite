@@ -1,5 +1,5 @@
 import type { RunBundle } from '../../data/persistence/runRepository'
-import { SEASONS_PER_STRETCH } from '../../run/constants'
+import { MARKET_SIZES } from '../../run/marketSize'
 import { HOUSE_RULES } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS } from '../../run/variation/rosterQuirks'
 import { TeamSummary } from '../components/TeamSummary'
@@ -13,6 +13,7 @@ export function TeamRevealScreen({ bundle, onBeginSeason }: { bundle: RunBundle;
   const targetPct = Math.round(run.target.rankFraction * 100)
   const quirk = ROSTER_QUIRKS[run.rosterQuirk]
   const houseRule = HOUSE_RULES[run.houseRule]
+  const market = MARKET_SIZES[run.marketSize]
 
   return (
     <main>
@@ -20,8 +21,11 @@ export function TeamRevealScreen({ bundle, onBeginSeason }: { bundle: RunBundle;
         {team.city} {team.name}
       </h1>
       <p>
-        Stretch {run.stretchNumber}, Season {run.seasonInStretch} of {SEASONS_PER_STRETCH}. Finish top {targetPct}% of
+        Stretch {run.stretchNumber}, Season {run.seasonInStretch} of {run.seasonsPerStretch}. Finish top {targetPct}% of
         standings or it&apos;s over.
+      </p>
+      <p>
+        {market.label} -- Budget: ${run.budget}
       </p>
       <div className="team-summary">
         <p>

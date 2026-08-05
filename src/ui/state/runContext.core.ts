@@ -1,6 +1,7 @@
 import { createContext } from 'react'
 import type { League, Player, Team, TeamId } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
+import type { MarketSizeId } from '../../run/marketSize'
 import type { HouseRuleId } from '../../run/variation/houseRules'
 import type { RosterQuirkId } from '../../run/variation/rosterQuirks'
 
@@ -15,6 +16,8 @@ export interface PendingDraft {
   teamId: TeamId
   rosterQuirkOptions: RosterQuirkId[]
   houseRuleOptions: HouseRuleId[]
+  /** Rolled (not drafted) alongside the league -- Section 8.1 is imposed, no player choice. */
+  marketSize: MarketSizeId
 }
 
 export interface RunContextValue {

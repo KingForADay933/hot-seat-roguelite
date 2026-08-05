@@ -17,6 +17,9 @@ export interface RunBundle {
   lastSeasonTargetHit: boolean
   /** The wildcard event (if any) rolled during the season just played -- display-only, same reason. */
   lastWildcardEvent: WildcardEventOutcome | null
+  /** Budget earned during the season just played (not the running total, which lives on
+   *  run.budget) -- display-only, same reason as the two fields above. */
+  lastBudgetEarned: number
 }
 
 function isValidBundleShape(data: unknown): data is RunBundle {
@@ -25,10 +28,10 @@ function isValidBundleShape(data: unknown): data is RunBundle {
   if (!b.run || typeof b.run !== 'object' || !b.league || typeof b.league !== 'object') return false
   if (!Array.isArray(b.teams) || !Array.isArray(b.players) || !Array.isArray(b.games)) return false
 
-  // run.rosterQuirk/houseRule were added after the first version of this bundle shipped -- reject
-  // (rather than silently accept and crash a screen reading them later) a save from before that.
+  // run.rosterQuirk/houseRule/marketSize were added across Phases 3-5 -- reject (rather than
+  // silently accept and crash a screen reading them later) a save from before any of them existed.
   const run = b.run as Record<string, unknown>
-  return typeof run.rosterQuirk === 'string' && typeof run.houseRule === 'string'
+  return typeof run.rosterQuirk === 'string' && typeof run.houseRule === 'string' && typeof run.marketSize === 'string'
 }
 
 /**

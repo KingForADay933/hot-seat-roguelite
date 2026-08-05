@@ -40,13 +40,14 @@ function makeTestLeague(): League {
 
 function makeTestBundle(): RunBundle {
   return {
-    run: createRun('team-1', 'stacked-guards', 'youth-movement'),
+    run: createRun('team-1', 'stacked-guards', 'youth-movement', 'mid'),
     league: makeTestLeague(),
     teams: [],
     players: [],
     games: [],
     lastSeasonTargetHit: false,
     lastWildcardEvent: null,
+    lastBudgetEarned: 0,
   }
 }
 
@@ -73,6 +74,14 @@ describe('saveRunBundle / loadRunBundle', () => {
     const adapter = makeMemoryAdapter()
     const legacyBundle = makeTestBundle()
     const { rosterQuirk: _rosterQuirk, houseRule: _houseRule, ...legacyRun } = legacyBundle.run
+    await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
+    expect(await loadRunBundle(adapter)).toBeNull()
+  })
+
+  it('returns null (not a throw) for a pre-market-size save missing marketSize', async () => {
+    const adapter = makeMemoryAdapter()
+    const legacyBundle = makeTestBundle()
+    const { marketSize: _marketSize, ...legacyRun } = legacyBundle.run
     await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
     expect(await loadRunBundle(adapter)).toBeNull()
   })

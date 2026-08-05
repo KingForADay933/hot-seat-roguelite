@@ -1,4 +1,5 @@
 import type { TeamId } from '../data/types'
+import type { MarketSizeId } from './marketSize'
 import type { HouseRuleId } from './variation/houseRules'
 import type { RosterQuirkId } from './variation/rosterQuirks'
 
@@ -24,4 +25,11 @@ export interface RunState {
   /** Randomized once at run creation and fixed for the whole run (Section 3's variation axes). */
   rosterQuirk: RosterQuirkId
   houseRule: HouseRuleId
+  /** Imposed (not drafted) at run creation; fixes seasonsPerStretch below for the whole run. */
+  marketSize: MarketSizeId
+  /** Derived from marketSize at creation and copied here so evaluateSeasonEnd doesn't need to look
+   *  it up -- was a global constant before Section 8.1 made it market-dependent. */
+  seasonsPerStretch: number
+  /** Section 8.4's currency. Earned each season, spent in the shop once that exists. */
+  budget: number
 }

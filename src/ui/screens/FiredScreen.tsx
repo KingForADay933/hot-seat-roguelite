@@ -9,7 +9,8 @@ export function FiredScreen({ bundle, onNewRun }: { bundle: RunBundle; onNewRun:
       <h1>Fired</h1>
       <p>
         {team ? `${team.city} ${team.name} let you go. ` : ''}
-        You survived {run.seasonsPlayed} season{run.seasonsPlayed === 1 ? '' : 's'}, reaching Stretch {run.stretchNumber}.
+        You survived {run.seasonsPlayed} season{run.seasonsPlayed === 1 ? '' : 's'}, reaching Stretch {run.stretchNumber}, with ${run.budget}{' '}
+        left in the budget.
       </p>
       <button className="primary" onClick={onNewRun}>
         Start New Run

@@ -8,7 +8,7 @@ import { simulateRunSeason } from './simulateRunSeason'
 function setUpRun(seed: number) {
   const rng = createSeededRng(seed)
   const { league, teams, players } = generateLeague({ teamCount: 8, leagueName: 'Test League', rng })
-  const run = createRun(teams[0].id, 'stacked-guards', 'youth-movement')
+  const run = createRun(teams[0].id, 'stacked-guards', 'youth-movement', 'mid')
   return { rng, league, teams, players, run }
 }
 
@@ -66,6 +66,15 @@ describe('simulateRunSeason', () => {
     } else {
       expect(result.wildcardEvent).toBeNull()
     }
+  })
+
+  it('adds budgetEarned onto run.budget rather than replacing it', () => {
+    const { rng, league, teams, players, run } = setUpRun(6)
+    const startingBudget = 500
+    const result = simulateRunSeason({ ...run, budget: startingBudget }, league, teams, players, rng)
+
+    expect(result.budgetEarned).toBeGreaterThanOrEqual(0)
+    expect(result.run.budget).toBe(startingBudget + result.budgetEarned)
   })
 
   it('returns players run through development (ages incremented by one)', () => {
