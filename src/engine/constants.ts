@@ -198,3 +198,16 @@ export const INSIGHT_WEAK_LINK_MIN_TARGETING_COUNT = 4
 /** Caps how many fatigue-driven-substitution insights render per game, so a game with a lot of
  *  natural rotation churn doesn't drown the summary in near-duplicate observations. */
 export const INSIGHT_MAX_FATIGUE_EVENTS = 3
+
+// --- Synergy (Team.synergyScore -> offense strength multiplier, roguelite Section 8.3) ---
+
+/** synergyScore at which the multiplier is exactly 1 -- matches the generator's baseline average
+ *  roll and every other "neutral rating" constant here (COACHING_NEUTRAL_RATING, DURABILITY_NEUTRAL).
+ *  Every AI-controlled team defaults here (see randomTeam.ts): only a roguelite run's user-controlled
+ *  team ever deviates, via the drafted-system roster fit (run/variation/systemDraft.ts). */
+export const SYNERGY_NEUTRAL = 65
+
+/** Each synergyScore point above/below SYNERGY_NEUTRAL shifts the multiplier by 0.4%. */
+export const SYNERGY_MULTIPLIER_FACTOR = 0.004
+export const SYNERGY_MULTIPLIER_MIN = 0.9
+export const SYNERGY_MULTIPLIER_MAX = 1.1

@@ -7,6 +7,7 @@ export interface OffensivePlaybook {
   weights: Record<PlayCallType, number>
   /** Multiplier applied to passing-dependent play calls (PnR, Spot-Up, Cutting). */
   ballMovementModifier: number
+  description: string
 }
 
 export interface DefensiveScheme {
@@ -19,6 +20,22 @@ export interface DefensiveScheme {
   /** Scales turnover-forcing pressure. High = Full-Court Press. */
   pressureCoefficient: number
 }
+
+/** Keys of OFFENSIVE_PLAYBOOKS -- kept as a standalone literal type (rather than retyping
+ *  OFFENSIVE_PLAYBOOKS itself to Record<SystemId, ...>) so every existing Record<string, ...>-typed
+ *  consumer (randomLeague's pickKey, simulateGame's OFFENSIVE_PLAYBOOKS[team.offensiveStrategyId])
+ *  is untouched -- only the roguelite system draft (run/variation/systemDraft.ts) needs the
+ *  narrower type, to keep its candidate arrays type-safe. */
+export type SystemId =
+  | 'motion'
+  | 'isoHeavy'
+  | 'balanced'
+  | 'paceAndSpace'
+  | 'sevenSecondsOrLess'
+  | 'princeton'
+  | 'triangle'
+  | 'gritAndGrind'
+  | 'twinTowers'
 
 export const OFFENSIVE_PLAYBOOKS: Record<string, OffensivePlaybook> = {
   motion: {
@@ -33,6 +50,7 @@ export const OFFENSIVE_PLAYBOOKS: Record<string, OffensivePlaybook> = {
       transition: 0,
     },
     ballMovementModifier: 1.15,
+    description: 'Cutters and shooters constantly moving without the ball.',
   },
   isoHeavy: {
     id: 'isoHeavy',
@@ -46,6 +64,7 @@ export const OFFENSIVE_PLAYBOOKS: Record<string, OffensivePlaybook> = {
       transition: 0,
     },
     ballMovementModifier: 0.85,
+    description: 'Clear out and let your best scorer cook one-on-one.',
   },
   balanced: {
     id: 'balanced',
@@ -59,6 +78,7 @@ export const OFFENSIVE_PLAYBOOKS: Record<string, OffensivePlaybook> = {
       transition: 0.05,
     },
     ballMovementModifier: 1.0,
+    description: 'No single identity -- a bit of everything.',
   },
   paceAndSpace: {
     id: 'paceAndSpace',
@@ -72,6 +92,77 @@ export const OFFENSIVE_PLAYBOOKS: Record<string, OffensivePlaybook> = {
       'post-up': 0,
     },
     ballMovementModifier: 1.1,
+    description: 'Spread the floor and push in transition whenever possible.',
+  },
+  sevenSecondsOrLess: {
+    id: 'sevenSecondsOrLess',
+    name: '7 Seconds or Less',
+    weights: {
+      transition: 0.35,
+      'spot-up': 0.3,
+      'pick-and-roll': 0.2,
+      cutting: 0.1,
+      isolation: 0.05,
+      'post-up': 0,
+    },
+    ballMovementModifier: 1.25,
+    description: 'Push pace on every possession, spot-up off it.',
+  },
+  princeton: {
+    id: 'princeton',
+    name: 'Princeton',
+    weights: {
+      cutting: 0.35,
+      'spot-up': 0.25,
+      'pick-and-roll': 0.2,
+      'post-up': 0.15,
+      isolation: 0.05,
+      transition: 0,
+    },
+    ballMovementModifier: 1.2,
+    description: 'Backdoor cuts, deliberate half-court passing.',
+  },
+  triangle: {
+    id: 'triangle',
+    name: 'Triangle',
+    weights: {
+      'post-up': 0.35,
+      cutting: 0.25,
+      'spot-up': 0.2,
+      'pick-and-roll': 0.15,
+      isolation: 0.05,
+      transition: 0,
+    },
+    ballMovementModifier: 1.1,
+    description: 'Post entries feeding cutters and shooters.',
+  },
+  gritAndGrind: {
+    id: 'gritAndGrind',
+    name: 'Grit and Grind',
+    weights: {
+      'post-up': 0.4,
+      isolation: 0.35,
+      'pick-and-roll': 0.15,
+      'spot-up': 0.1,
+      cutting: 0,
+      transition: 0,
+    },
+    ballMovementModifier: 0.75,
+    description: 'Grind it out on the block, minimal ball movement.',
+  },
+  twinTowers: {
+    id: 'twinTowers',
+    name: 'Twin Towers',
+    weights: {
+      'post-up': 0.5,
+      'pick-and-roll': 0.25,
+      'spot-up': 0.15,
+      cutting: 0.1,
+      isolation: 0,
+      transition: 0,
+    },
+    ballMovementModifier: 0.9,
+    description: 'Feed the bigs -- everything runs through the post.',
   },
 }
 

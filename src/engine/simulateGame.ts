@@ -2,7 +2,7 @@ import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
 import type { Game, Player, PossessionLogEntry, Team } from '../data/types'
 import { deriveBoxScore } from './boxScore'
 import { OVERTIME_MINUTES, REGULATION_MINUTES } from './constants'
-import { computeOffenseStrength } from './possession/possessionStrength'
+import { computeOffenseStrength, synergyMultiplier } from './possession/possessionStrength'
 import { getInvolvedPlayerIds, selectPlayers } from './possession/playerSelector'
 import { selectPlayCall } from './possession/playCallSelector'
 import { resolvePossession } from './possession/outcomeResolver'
@@ -106,6 +106,9 @@ export function* simulateGameSteps(
   const awayPlaybook = OFFENSIVE_PLAYBOOKS[awayTeam.offensiveStrategyId]
   const homeScheme = DEFENSIVE_SCHEMES[homeTeam.defensiveStrategyId]
   const awayScheme = DEFENSIVE_SCHEMES[awayTeam.defensiveStrategyId]
+  // Computed once -- synergyScore doesn't change mid-game.
+  const homeSynergy = synergyMultiplier(homeTeam.synergyScore)
+  const awaySynergy = synergyMultiplier(awayTeam.synergyScore)
 
   const possessionLog: PossessionLogEntry[] = []
   let homeScore = 0
@@ -130,11 +133,12 @@ export function* simulateGameSteps(
       const defenseOnCourt = homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt
       const playbook = homeIsOffense ? homePlaybook : awayPlaybook
       const scheme = homeIsOffense ? awayScheme : homeScheme
+      const synergy = homeIsOffense ? homeSynergy : awaySynergy
       const scoreMargin = homeIsOffense ? homeScore - awayScore : awayScore - homeScore
 
       const playCall = selectPlayCall(playbook, rng)
       const selection = selectPlayers(playCall, offenseOnCourt, defenseOnCourt, scheme, rng)
-      const strength = computeOffenseStrength(playCall, selection, playbook, offenseOnCourt)
+      const strength = computeOffenseStrength(playCall, selection, playbook, offenseOnCourt, synergy)
       const resistance = computeResistance(playCall, selection, scheme, offenseOnCourt, defenseOnCourt)
       const resolved = resolvePossession(
         playCall,

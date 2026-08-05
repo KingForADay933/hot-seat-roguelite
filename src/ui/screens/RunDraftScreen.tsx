@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
 import { MARKET_SIZES } from '../../run/marketSize'
 import { HOUSE_RULES, type HouseRuleId } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS, type RosterQuirkId } from '../../run/variation/rosterQuirks'
@@ -10,11 +11,14 @@ export function RunDraftScreen({
   onConfirm,
 }: {
   draft: PendingDraft
-  onConfirm: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => void
+  onConfirm: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => void
 }) {
   const [rosterQuirk, setRosterQuirk] = useState<RosterQuirkId | null>(null)
   const [houseRule, setHouseRule] = useState<HouseRuleId | null>(null)
+  const [system, setSystem] = useState<SystemId | null>(null)
   const market = MARKET_SIZES[draft.marketSize]
+
+  const canConfirm = rosterQuirk && houseRule && system
 
   return (
     <main>
@@ -22,7 +26,7 @@ export function RunDraftScreen({
       <p>
         <strong>{market.label}</strong> -- {market.description}
       </p>
-      <p>Two choices before the season starts. Pick one from each.</p>
+      <p>Three choices before the season starts. Pick one from each.</p>
 
       <h2>Roster Quirk</h2>
       <div className="draft-options">
@@ -50,7 +54,20 @@ export function RunDraftScreen({
         ))}
       </div>
 
-      <button className="primary" disabled={!rosterQuirk || !houseRule} onClick={() => rosterQuirk && houseRule && onConfirm(rosterQuirk, houseRule)}>
+      <h2>System</h2>
+      <div className="draft-options">
+        {draft.systemOptions.map((id) => (
+          <DraftOptionCard
+            key={id}
+            label={OFFENSIVE_PLAYBOOKS[id].name}
+            description={OFFENSIVE_PLAYBOOKS[id].description}
+            selected={id === system}
+            onSelect={() => setSystem(id)}
+          />
+        ))}
+      </div>
+
+      <button className="primary" disabled={!canConfirm} onClick={() => canConfirm && onConfirm(rosterQuirk, houseRule, system)}>
         Confirm
       </button>
     </main>

@@ -52,7 +52,12 @@ export interface Team {
    *  here, or present with an empty/all-zero object, falls back to an auto-computed weighting
    *  proportional to that attribute's gap-to-potential. See engine/development/trainingFocus.ts. */
   trainingFocus: Record<PlayerId, Partial<Record<AttributeKey, number>>>
-  /** Contract-only — synergy/morale system not built yet. */
+  /** Attribute-scale (40-99ish), neutral at engine/constants.ts's SYNERGY_NEUTRAL (65) -- feeds a
+   *  small offense-strength multiplier via engine/possession/possessionStrength.ts's
+   *  synergyMultiplier. Every AI-generated team stays neutral; only a roguelite run's
+   *  user-controlled team deviates, set once at system-draft time from roster fit
+   *  (run/variation/systemDraft.ts's computeInitialSynergyScore) and expected to grow from there
+   *  via later camps/coaching-upgrades/consumables systems. Morale itself is still unbuilt. */
   synergyScore: number
 
   /** Derived by engine/schedule/standings.ts; cached here for convenience. */

@@ -1,3 +1,4 @@
+import { OFFENSIVE_PLAYBOOKS } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { MARKET_SIZES } from '../../run/marketSize'
 import { HOUSE_RULES } from '../../run/variation/houseRules'
@@ -14,6 +15,7 @@ export function TeamRevealScreen({ bundle, onBeginSeason }: { bundle: RunBundle;
   const quirk = ROSTER_QUIRKS[run.rosterQuirk]
   const houseRule = HOUSE_RULES[run.houseRule]
   const market = MARKET_SIZES[run.marketSize]
+  const system = OFFENSIVE_PLAYBOOKS[team.offensiveStrategyId]
 
   return (
     <main>
@@ -33,6 +35,9 @@ export function TeamRevealScreen({ bundle, onBeginSeason }: { bundle: RunBundle;
         </p>
         <p>
           <strong>House Rule: {houseRule.label}</strong> -- {houseRule.description}
+        </p>
+        <p>
+          <strong>System: {system.name}</strong> -- {system.description} (Synergy: {team.synergyScore})
         </p>
       </div>
       <TeamSummary team={team} roster={roster} />

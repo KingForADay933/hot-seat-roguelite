@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { OffensivePlaybook } from '../../data/presets'
+import { SYNERGY_MULTIPLIER_MAX, SYNERGY_MULTIPLIER_MIN, SYNERGY_NEUTRAL } from '../constants'
 import { makeTestPlayer } from '../testFixtures'
 import type { PlaySelection } from './playerSelector'
-import { computeOffenseStrength } from './possessionStrength'
+import { computeOffenseStrength, synergyMultiplier } from './possessionStrength'
 
 const dummyDefender = makeTestPlayer()
 
@@ -10,6 +11,7 @@ function playbook(ballMovementModifier: number): OffensivePlaybook {
   return {
     id: 'test',
     name: 'Test',
+    description: 'Test',
     ballMovementModifier,
     weights: {
       'pick-and-roll': 1,
@@ -71,5 +73,35 @@ describe('computeOffenseStrength', () => {
     const s = computeOffenseStrength('transition', selection(handler), playbook(1), [handler, ...teammates])
     // rebounding avg = 50 (default), 0.4*85 + 0.3*65 + 0.3*50 = 68.5
     expect(s).toBeCloseTo(68.5, 5)
+  })
+
+  it('defaults synergy to 1 (neutral) when omitted, unaffecting every existing call site', () => {
+    const poster = makeTestPlayer({ attributes: { insideShot: 75, vertical: 65 } })
+    const withDefault = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster])
+    const withExplicitNeutral = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster], 1)
+    expect(withDefault).toBe(withExplicitNeutral)
+  })
+
+  it('scales the final result by the synergy multiplier, applied uniformly regardless of play call', () => {
+    const poster = makeTestPlayer({ attributes: { insideShot: 75, vertical: 65 } })
+    const neutral = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster], 1)
+    const boosted = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster], 1.1)
+    expect(boosted).toBeCloseTo(neutral * 1.1, 5)
+  })
+})
+
+describe('synergyMultiplier', () => {
+  it('is exactly 1 at SYNERGY_NEUTRAL', () => {
+    expect(synergyMultiplier(SYNERGY_NEUTRAL)).toBe(1)
+  })
+
+  it('is greater than 1 above neutral and less than 1 below it', () => {
+    expect(synergyMultiplier(SYNERGY_NEUTRAL + 10)).toBeGreaterThan(1)
+    expect(synergyMultiplier(SYNERGY_NEUTRAL - 10)).toBeLessThan(1)
+  })
+
+  it('clamps to SYNERGY_MULTIPLIER_MIN/MAX at the attribute-scale extremes', () => {
+    expect(synergyMultiplier(0)).toBe(SYNERGY_MULTIPLIER_MIN)
+    expect(synergyMultiplier(99)).toBe(SYNERGY_MULTIPLIER_MAX)
   })
 })

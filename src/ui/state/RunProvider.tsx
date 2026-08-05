@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
 import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from '../../data/persistence/runRepository'
 import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { pickWorstTeamId } from '../../run/assignWorstTeam'
-import { HOUSE_RULE_DRAFT_SIZE, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT } from '../../run/constants'
+import { HOUSE_RULE_DRAFT_SIZE, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT, SYSTEM_DRAFT_SIZE } from '../../run/constants'
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { createRun } from '../../run/runState'
 import { simulateRunSeason } from '../../run/simulateRunSeason'
 import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
 import { applyRosterQuirk, pickRandomRosterQuirks, type RosterQuirkId } from '../../run/variation/rosterQuirks'
+import { computeInitialSynergyScore, pickRandomSystems } from '../../run/variation/systemDraft'
 import { RunContext, type PendingDraft, type RunContextValue } from './runContext.core'
 
 export function RunProvider({ children }: { children: ReactNode }) {
@@ -42,12 +44,13 @@ export function RunProvider({ children }: { children: ReactNode }) {
       teamId,
       rosterQuirkOptions: pickRandomRosterQuirks(QUIRK_DRAFT_SIZE, defaultRng),
       houseRuleOptions: pickRandomHouseRules(HOUSE_RULE_DRAFT_SIZE, defaultRng),
+      systemOptions: pickRandomSystems(SYSTEM_DRAFT_SIZE, defaultRng),
       marketSize: pickRandomMarketSize(defaultRng),
     })
   }, [])
 
   const confirmDraft = useCallback(
-    async (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => {
+    async (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => {
       if (!draft) return
       const { league, teams, players, teamId, marketSize } = draft
 
@@ -61,7 +64,14 @@ export function RunProvider({ children }: { children: ReactNode }) {
 
       const userTeam = teams.find((t) => t.id === teamId)!
       const { team: teamAfterHouseRule, players: playersAfterHouseRule } = applyHouseRule(houseRule, userTeam, playersAfterQuirk)
-      const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamAfterHouseRule : t))
+
+      // Synergy is computed from the roster's FINAL state -- after both the quirk's attribute
+      // shifts and the house rule's roster cuts -- so it reflects what the team actually is, not
+      // its pre-draft starting point.
+      const finalRoster = playersAfterHouseRule.filter((p) => p.teamId === teamId)
+      const synergyScore = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[system], finalRoster)
+      const teamWithSystem = { ...teamAfterHouseRule, offensiveStrategyId: system, synergyScore }
+      const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamWithSystem : t))
 
       const newBundle: RunBundle = {
         run: createRun(teamId, rosterQuirk, houseRule, marketSize),

@@ -1,4 +1,5 @@
 import type { AttributeKey, Player, PlayerAttributes, PlayerDevelopment, PlayerHiddenTraits, Position, Team } from '../data/types'
+import { SYNERGY_NEUTRAL } from './constants'
 
 let idCounter = 0
 
@@ -94,7 +95,7 @@ export function makeTestTeam(overrides: Partial<Team> = {}): Team {
     coaching: { headCoachRating: 50 },
     practiceSettings: { individualDevelopmentShare: 50 },
     trainingFocus: {},
-    synergyScore: 0,
+    synergyScore: SYNERGY_NEUTRAL,
     record: { wins: 0, losses: 0 },
     ...overrides,
   }

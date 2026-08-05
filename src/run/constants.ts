@@ -23,6 +23,9 @@ export const MIN_TARGET_RANK_FRACTION = 0.1
 export const QUIRK_DRAFT_SIZE = 2
 export const HOUSE_RULE_DRAFT_SIZE = 2
 
+/** Wider hand for the system draft -- framed as a real build choice, not a constraint. */
+export const SYSTEM_DRAFT_SIZE = 3
+
 // --- Market size (Section 8.1) -- imposed, not drafted, at run start ---
 // Two distinct axes per tier: cash (budgetMultiplier) vs. patience (seasonsPerStretch), so no tier
 // is strictly better than another. Wired into marketSize.ts's MARKET_SIZES table.

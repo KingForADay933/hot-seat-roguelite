@@ -6,6 +6,7 @@ function makePlaybook(weights: Partial<OffensivePlaybook['weights']>): Offensive
   return {
     id: 'test',
     name: 'Test',
+    description: 'Test',
     ballMovementModifier: 1,
     weights: {
       'pick-and-roll': 0,

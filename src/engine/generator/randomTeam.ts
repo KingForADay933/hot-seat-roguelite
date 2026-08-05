@@ -1,6 +1,6 @@
 import { createId } from '../../data/ids'
 import type { Player, PlayerId, Position, Team } from '../../data/types'
-import { DEFAULT_INDIVIDUAL_DEVELOPMENT_SHARE, ROTATION_DEPTH_WEIGHTS, REGULATION_MINUTES } from '../constants'
+import { DEFAULT_INDIVIDUAL_DEVELOPMENT_SHARE, ROTATION_DEPTH_WEIGHTS, REGULATION_MINUTES, SYNERGY_NEUTRAL } from '../constants'
 import type { Rng } from '../rng'
 import { generatePlayer } from './randomPlayer'
 
@@ -76,7 +76,9 @@ export function generateTeam(params: GenerateTeamParams): GeneratedTeam {
     coaching: { headCoachRating: Math.round(40 + rng() * 50) },
     practiceSettings: { individualDevelopmentShare: DEFAULT_INDIVIDUAL_DEVELOPMENT_SHARE },
     trainingFocus: {},
-    synergyScore: 0,
+    // Neutral by default -- only a roguelite run's user-controlled team ever deviates, via the
+    // drafted-system roster fit (run/variation/systemDraft.ts). Every AI opponent stays neutral.
+    synergyScore: SYNERGY_NEUTRAL,
     record: { wins: 0, losses: 0 },
   }
 
