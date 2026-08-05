@@ -1,5 +1,5 @@
 import type { Game, League, Player, Team } from '../types'
-import { localStorageAdapter } from './localStorageAdapter'
+import { indexedDbAdapter } from './indexedDbAdapter'
 import { applyMigrations, CURRENT_SCHEMA_VERSION, MIGRATIONS } from './migrations'
 import type { StorageAdapter } from './storageAdapter'
 
@@ -33,7 +33,7 @@ function isValidBundleShape(data: unknown): data is LeagueBundle {
  *  plus a 5th key tagging the schema version everything was saved at (see ./migrations.ts). */
 export async function saveLeagueBundle(
   bundle: LeagueBundle,
-  adapter: StorageAdapter = localStorageAdapter,
+  adapter: StorageAdapter = indexedDbAdapter,
 ): Promise<void> {
   await Promise.all([
     adapter.setItem(LEAGUE_KEY, JSON.stringify(bundle.league)),
@@ -52,7 +52,7 @@ export async function saveLeagueBundle(
  * matching the existing behavior for when no save exists at all, just now also covering saves
  * that exist but can't be safely loaded.
  */
-export async function loadLeagueBundle(adapter: StorageAdapter = localStorageAdapter): Promise<LeagueBundle | null> {
+export async function loadLeagueBundle(adapter: StorageAdapter = indexedDbAdapter): Promise<LeagueBundle | null> {
   const [leagueRaw, teamsRaw, playersRaw, gamesRaw, versionRaw] = await Promise.all([
     adapter.getItem(LEAGUE_KEY),
     adapter.getItem(TEAMS_KEY),
@@ -94,7 +94,7 @@ export async function loadLeagueBundle(adapter: StorageAdapter = localStorageAda
   }
 }
 
-export async function clearLeagueBundle(adapter: StorageAdapter = localStorageAdapter): Promise<void> {
+export async function clearLeagueBundle(adapter: StorageAdapter = indexedDbAdapter): Promise<void> {
   await Promise.all([
     adapter.removeItem(LEAGUE_KEY),
     adapter.removeItem(TEAMS_KEY),
