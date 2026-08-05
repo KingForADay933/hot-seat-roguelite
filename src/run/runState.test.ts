@@ -23,6 +23,7 @@ describe('createRun', () => {
       target: { rankFraction: STARTING_TARGET_RANK_FRACTION },
       marketSize: 'mid',
       budget: 0,
+      chunkInSeason: 0,
     })
   })
 
@@ -33,34 +34,37 @@ describe('createRun', () => {
 })
 
 describe('evaluateSeasonEnd', () => {
-  it('hitting the target escalates to a new stretch with a harder target and resets seasonInStretch', () => {
-    const run = createRun('us', 'stacked-guards', 'youth-movement', 'mid')
+  it('hitting the target escalates to a new stretch with a harder target and resets seasonInStretch/chunkInSeason', () => {
+    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3 }
     const next = evaluateSeasonEnd(run, HIT)
     expect(next.status).toBe('active')
     expect(next.stretchNumber).toBe(2)
     expect(next.seasonInStretch).toBe(1)
     expect(next.seasonsPlayed).toBe(1)
+    expect(next.chunkInSeason).toBe(0)
     expect(next.target.rankFraction).toBeCloseTo(STARTING_TARGET_RANK_FRACTION - TARGET_RANK_FRACTION_STEP)
   })
 
-  it('missing the target with chances left burns a season but stays in the same stretch', () => {
-    const run = createRun('us', 'stacked-guards', 'youth-movement', 'mid')
+  it('missing the target with chances left burns a season, stays in the same stretch, and resets chunkInSeason', () => {
+    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3 }
     const next = evaluateSeasonEnd(run, MISS)
     expect(next.status).toBe('active')
     expect(next.stretchNumber).toBe(1)
     expect(next.seasonInStretch).toBe(2)
     expect(next.seasonsPlayed).toBe(1)
+    expect(next.chunkInSeason).toBe(0)
     expect(next.target).toEqual(run.target)
   })
 
-  it('missing the target on the final season of a stretch fires the GM', () => {
-    let run = createRun('us', 'stacked-guards', 'youth-movement', 'mid')
+  it('missing the target on the final season of a stretch fires the GM and resets chunkInSeason', () => {
+    let run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3 }
     for (let i = 0; i < run.seasonsPerStretch - 1; i++) {
       run = evaluateSeasonEnd(run, MISS)
       expect(run.status).toBe('active')
     }
     run = evaluateSeasonEnd(run, MISS)
     expect(run.status).toBe('fired')
+    expect(run.chunkInSeason).toBe(0)
     expect(run.seasonsPlayed).toBe(MARKET_SIZES.mid.seasonsPerStretch)
   })
 

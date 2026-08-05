@@ -1,4 +1,5 @@
 import type { Game, League, Player, Team } from '../types'
+import type { CoachingInsight } from '../../engine/insights/generateCoachingInsights'
 import type { ShopVisit } from '../../run/shop'
 import type { RunState } from '../../run/types'
 import type { WildcardEventOutcome } from '../../run/variation/wildcardEvents'
@@ -25,6 +26,10 @@ export interface RunBundle {
    *  the results recap has been continued past); non-null while a visit is in progress, holding
    *  the current offer list and remaining rerolls so a refresh mid-shop doesn't lose progress. */
   shop: ShopVisit | null
+  /** Section 1.5's Coaching Insights for the chunk just simulated -- display-only, read by
+   *  ChunkResultsScreen. Only meaningful (and only ever shown) between chunks; ignored once the
+   *  season's last chunk lands on the season-end results screen instead. */
+  lastChunkInsights: CoachingInsight[]
 }
 
 function isValidBundleShape(data: unknown): data is RunBundle {

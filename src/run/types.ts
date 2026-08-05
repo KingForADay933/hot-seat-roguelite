@@ -32,4 +32,9 @@ export interface RunState {
   seasonsPerStretch: number
   /** Section 8.4's currency. Earned each season, spent in the shop once that exists. */
   budget: number
+  /** Chunks of the CURRENT season completed so far (Section 1.5), 0..SEASON_CHUNK_COUNT. Reset to
+   *  0 whenever a season fully concludes (see evaluateSeasonEnd) -- 0 doubles as "no chunk of the
+   *  next season has been simulated yet," the signal simulateSeasonChunk uses to know it needs to
+   *  generate a fresh schedule and roll that season's wildcard event before simming chunk 1. */
+  chunkInSeason: number
 }

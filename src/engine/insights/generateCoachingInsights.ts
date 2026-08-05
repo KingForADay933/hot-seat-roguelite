@@ -13,6 +13,9 @@ import { getPeriodLabel } from '../simulateGame'
 
 export interface CoachingInsight {
   text: string
+  /** Which team this insight is about -- lets a caller (Section 1.5's chunk checkpoints) filter
+   *  down to just the user's own team rather than showing observations about the AI opponent. */
+  teamId: TeamId
 }
 
 function resolvePlayer(id: PlayerId, playersById: Map<PlayerId, Player>): Player {
@@ -94,6 +97,7 @@ function detectWeakLinkTargeting(
   const defenderName = resolvePlayer(topId, playersById).name
   const possessionWord = top.count === 1 ? 'possession' : 'possessions'
   return {
+    teamId: defendingTeam.id,
     text: `${scheme.name} defense got picked on: ${defenderName} was matched up on ${top.count} ${possessionWord} this game, allowing ${top.pointsAllowed} points.`,
   }
 }
@@ -103,6 +107,7 @@ interface FatigueSubEvent {
   outPlayerId: PlayerId
   inPlayerId: PlayerId
   reason: 'emergency' | 'fatigue'
+  teamId: TeamId
 }
 
 /**
@@ -151,6 +156,7 @@ function detectFatigueSubstitutionEvents(
         outPlayerId: outId,
         inPlayerId: inIds[idx] ?? outId,
         reason: fatigueLevel >= FATIGUE_EMERGENCY_THRESHOLD ? 'emergency' : 'fatigue',
+        teamId: team.id,
       })
     })
   }
@@ -189,7 +195,7 @@ export function generateCoachingInsights(
     const outName = resolvePlayer(event.outPlayerId, playersById).name
     const inName = resolvePlayer(event.inPlayerId, playersById).name
     const period = getPeriodLabel(event.possessionNumber, possessionsPerGame)
-    insights.push({ text: `${outName} was pulled with heavy fatigue in the ${period}, ${inName} checked in.` })
+    insights.push({ teamId: event.teamId, text: `${outName} was pulled with heavy fatigue in the ${period}, ${inName} checked in.` })
   }
 
   return insights

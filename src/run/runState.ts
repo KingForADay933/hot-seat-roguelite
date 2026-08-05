@@ -20,6 +20,7 @@ export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule:
     marketSize,
     seasonsPerStretch: MARKET_SIZES[marketSize].seasonsPerStretch,
     budget: 0,
+    chunkInSeason: 0,
   }
 }
 
@@ -27,7 +28,8 @@ export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule:
  * Pure state transition for the end of a season: hitting the target ends the stretch early and
  * escalates (new stretch, harder target, season count resets); missing it burns one of the
  * stretch's run.seasonsPerStretch chances (market-size-dependent, Section 8.1); running out of
- * chances without ever hitting it fires the GM.
+ * chances without ever hitting it fires the GM. Only called once a season's last chunk has played
+ * (Section 1.5) -- every branch resets chunkInSeason to 0 since the (next) season hasn't started yet.
  */
 export function evaluateSeasonEnd(run: RunState, standings: StandingsRow[]): RunState {
   if (run.status === 'fired') return run
@@ -44,12 +46,13 @@ export function evaluateSeasonEnd(run: RunState, standings: StandingsRow[]): Run
       seasonInStretch: 1,
       target: targetForStretch(stretchNumber),
       status: 'active',
+      chunkInSeason: 0,
     }
   }
 
   if (run.seasonInStretch < run.seasonsPerStretch) {
-    return { ...run, seasonsPlayed, seasonInStretch: run.seasonInStretch + 1 }
+    return { ...run, seasonsPlayed, seasonInStretch: run.seasonInStretch + 1, chunkInSeason: 0 }
   }
 
-  return { ...run, seasonsPlayed, status: 'fired' }
+  return { ...run, seasonsPlayed, status: 'fired', chunkInSeason: 0 }
 }

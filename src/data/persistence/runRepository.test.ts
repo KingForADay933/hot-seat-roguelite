@@ -49,6 +49,7 @@ function makeTestBundle(): RunBundle {
     lastWildcardEvent: null,
     lastBudgetEarned: 0,
     shop: null,
+    lastChunkInsights: [],
   }
 }
 

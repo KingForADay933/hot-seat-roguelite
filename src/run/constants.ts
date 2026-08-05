@@ -26,6 +26,12 @@ export const HOUSE_RULE_DRAFT_SIZE = 2
 /** Wider hand for the system draft -- framed as a real build choice, not a constraint. */
 export const SYSTEM_DRAFT_SIZE = 3
 
+/** A season is split into this many checkpoints (Section 1.5) -- 32 games / 4 = an even split,
+ *  landing checkpoints after games 8/16/24 plus the real season end after 32. Each checkpoint
+ *  (except the season-ending one) surfaces that stretch's Coaching Insights and lets the GM nudge
+ *  rotation minutes / training focus in response before the next chunk plays. */
+export const SEASON_CHUNK_COUNT = 4
+
 // --- Market size (Section 8.1) -- imposed, not drafted, at run start ---
 // Two distinct axes per tier: cash (budgetMultiplier) vs. patience (seasonsPerStretch), so no tier
 // is strictly better than another. Wired into marketSize.ts's MARKET_SIZES table.
