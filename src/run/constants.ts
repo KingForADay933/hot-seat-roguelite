@@ -20,3 +20,8 @@ export const TARGET_RANK_FRACTION_STEP = 0.1
 /** Target can never demand better than top-10% -- keeps late stretches hard but not literally
  *  "finish 1st or fired." */
 export const MIN_TARGET_RANK_FRACTION = 0.1
+
+/** Candidates rolled for the run-start roster-quirk and house-rule drafts -- picked from a
+ *  tighter hand than the system draft, since these are framed as constraints, not a build choice. */
+export const QUIRK_DRAFT_SIZE = 2
+export const HOUSE_RULE_DRAFT_SIZE = 2

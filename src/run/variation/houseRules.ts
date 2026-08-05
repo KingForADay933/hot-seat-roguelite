@@ -1,5 +1,6 @@
 import type { Player, PlayerId, Team } from '../../data/types'
 import type { Rng } from '../../engine/rng'
+import { pickDistinct } from './draftPool'
 
 export type HouseRuleId = 'youth-movement' | 'short-bench'
 
@@ -103,7 +104,7 @@ export function applyHouseRule(ruleId: HouseRuleId, team: Team, players: Player[
   return { team: updatedTeam, players: updatedPlayers }
 }
 
-export function pickRandomHouseRule(rng: Rng): HouseRuleId {
-  const ids = Object.keys(HOUSE_RULES) as HouseRuleId[]
-  return ids[Math.floor(rng() * ids.length)]
+/** Rolls `count` distinct candidates for the run-start house-rule draft (Section 8.2). */
+export function pickRandomHouseRules(count: number, rng: Rng): HouseRuleId[] {
+  return pickDistinct(Object.keys(HOUSE_RULES) as HouseRuleId[], count, rng)
 }

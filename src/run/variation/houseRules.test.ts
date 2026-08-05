@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createSeededRng } from '../../engine/rng'
 import { makeTestPlayer, makeTestTeam } from '../../engine/testFixtures'
 import type { Player, Position, Team } from '../../data/types'
-import { applyHouseRule, HOUSE_RULES, pickRandomHouseRule } from './houseRules'
+import { applyHouseRule, HOUSE_RULES, pickRandomHouseRules } from './houseRules'
 
 function buildTeam(ages: Record<Position, number[]>): { team: Team; players: Player[] } {
   const players: Player[] = []
@@ -82,11 +82,14 @@ describe('applyHouseRule / short-bench', () => {
   })
 })
 
-describe('pickRandomHouseRule', () => {
-  it('always returns a valid rule id', () => {
+describe('pickRandomHouseRules', () => {
+  it('returns the requested count of distinct valid rule ids', () => {
     const rng = createSeededRng(9)
     for (let i = 0; i < 20; i++) {
-      expect(Object.keys(HOUSE_RULES)).toContain(pickRandomHouseRule(rng))
+      const picks = pickRandomHouseRules(2, rng)
+      expect(picks).toHaveLength(2)
+      expect(new Set(picks).size).toBe(2)
+      for (const id of picks) expect(Object.keys(HOUSE_RULES)).toContain(id)
     }
   })
 })

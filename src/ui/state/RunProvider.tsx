@@ -3,15 +3,16 @@ import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from '..
 import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { pickWorstTeamId } from '../../run/assignWorstTeam'
-import { RUN_SEASON_LENGTH, RUN_TEAM_COUNT } from '../../run/constants'
+import { HOUSE_RULE_DRAFT_SIZE, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT } from '../../run/constants'
 import { createRun } from '../../run/runState'
 import { simulateRunSeason } from '../../run/simulateRunSeason'
-import { applyHouseRule, pickRandomHouseRule } from '../../run/variation/houseRules'
-import { applyRosterQuirk, pickRandomRosterQuirk } from '../../run/variation/rosterQuirks'
-import { RunContext, type RunContextValue } from './runContext.core'
+import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
+import { applyRosterQuirk, pickRandomRosterQuirks, type RosterQuirkId } from '../../run/variation/rosterQuirks'
+import { RunContext, type PendingDraft, type RunContextValue } from './runContext.core'
 
 export function RunProvider({ children }: { children: ReactNode }) {
   const [bundle, setBundle] = useState<RunBundle | null>(null)
+  const [draft, setDraft] = useState<PendingDraft | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const startNewRun = useCallback(async () => {
+  const beginDraft = useCallback(async () => {
     await clearRunBundle()
     const { league, teams, players } = generateLeague({
       teamCount: RUN_TEAM_COUNT,
@@ -32,33 +33,49 @@ export function RunProvider({ children }: { children: ReactNode }) {
     const teamId = pickWorstTeamId(teams, players)
     league.userControlledTeamId = teamId
 
-    const rosterQuirk = pickRandomRosterQuirk(defaultRng)
-    const houseRule = pickRandomHouseRule(defaultRng)
-
-    const rosterAfterQuirk = applyRosterQuirk(
-      rosterQuirk,
-      players.filter((p) => p.teamId === teamId),
-      defaultRng,
-    )
-    const rosterAfterQuirkById = new Map(rosterAfterQuirk.map((p) => [p.id, p]))
-    const playersAfterQuirk = players.map((p) => rosterAfterQuirkById.get(p.id) ?? p)
-
-    const userTeam = teams.find((t) => t.id === teamId)!
-    const { team: teamAfterHouseRule, players: playersAfterHouseRule } = applyHouseRule(houseRule, userTeam, playersAfterQuirk)
-    const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamAfterHouseRule : t))
-
-    const newBundle: RunBundle = {
-      run: createRun(teamId, rosterQuirk, houseRule),
+    setBundle(null)
+    setDraft({
       league,
-      teams: teamsAfterHouseRule,
-      players: playersAfterHouseRule,
-      games: [],
-      lastSeasonTargetHit: false,
-      lastWildcardEvent: null,
-    }
-    await saveRunBundle(newBundle)
-    setBundle(newBundle)
+      teams,
+      players,
+      teamId,
+      rosterQuirkOptions: pickRandomRosterQuirks(QUIRK_DRAFT_SIZE, defaultRng),
+      houseRuleOptions: pickRandomHouseRules(HOUSE_RULE_DRAFT_SIZE, defaultRng),
+    })
   }, [])
+
+  const confirmDraft = useCallback(
+    async (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => {
+      if (!draft) return
+      const { league, teams, players, teamId } = draft
+
+      const rosterAfterQuirk = applyRosterQuirk(
+        rosterQuirk,
+        players.filter((p) => p.teamId === teamId),
+        defaultRng,
+      )
+      const rosterAfterQuirkById = new Map(rosterAfterQuirk.map((p) => [p.id, p]))
+      const playersAfterQuirk = players.map((p) => rosterAfterQuirkById.get(p.id) ?? p)
+
+      const userTeam = teams.find((t) => t.id === teamId)!
+      const { team: teamAfterHouseRule, players: playersAfterHouseRule } = applyHouseRule(houseRule, userTeam, playersAfterQuirk)
+      const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamAfterHouseRule : t))
+
+      const newBundle: RunBundle = {
+        run: createRun(teamId, rosterQuirk, houseRule),
+        league,
+        teams: teamsAfterHouseRule,
+        players: playersAfterHouseRule,
+        games: [],
+        lastSeasonTargetHit: false,
+        lastWildcardEvent: null,
+      }
+      await saveRunBundle(newBundle)
+      setBundle(newBundle)
+      setDraft(null)
+    },
+    [draft],
+  )
 
   const simSeason = useCallback(async () => {
     if (!bundle) return
@@ -76,7 +93,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setBundle(updatedBundle)
   }, [bundle])
 
-  const value: RunContextValue = { bundle, loading, startNewRun, simSeason }
+  const value: RunContextValue = { bundle, draft, loading, beginDraft, confirmDraft, simSeason }
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>
 }

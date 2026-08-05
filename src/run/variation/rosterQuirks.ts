@@ -2,6 +2,7 @@ import type { AttributeKey, Player } from '../../data/types'
 import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR } from '../../engine/constants'
 import { average, clamp } from '../../engine/math'
 import type { Rng } from '../../engine/rng'
+import { pickDistinct } from './draftPool'
 
 export type RosterQuirkId = 'stacked-guards' | 'aging-superstar' | 'low-ceiling'
 
@@ -84,7 +85,7 @@ export function applyRosterQuirk(quirkId: RosterQuirkId, players: Player[], rng:
   }
 }
 
-export function pickRandomRosterQuirk(rng: Rng): RosterQuirkId {
-  const ids = Object.keys(ROSTER_QUIRKS) as RosterQuirkId[]
-  return ids[Math.floor(rng() * ids.length)]
+/** Rolls `count` distinct candidates for the run-start roster-quirk draft (Section 8.2). */
+export function pickRandomRosterQuirks(count: number, rng: Rng): RosterQuirkId[] {
+  return pickDistinct(Object.keys(ROSTER_QUIRKS) as RosterQuirkId[], count, rng)
 }

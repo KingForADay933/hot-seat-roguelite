@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createSeededRng } from '../../engine/rng'
 import { makeTestPlayer } from '../../engine/testFixtures'
-import { applyRosterQuirk, pickRandomRosterQuirk, ROSTER_QUIRKS } from './rosterQuirks'
+import { applyRosterQuirk, pickRandomRosterQuirks, ROSTER_QUIRKS } from './rosterQuirks'
 
 function makeRoster(): ReturnType<typeof makeTestPlayer>[] {
   return [
@@ -56,11 +56,14 @@ describe('applyRosterQuirk', () => {
   })
 })
 
-describe('pickRandomRosterQuirk', () => {
-  it('always returns a valid quirk id', () => {
+describe('pickRandomRosterQuirks', () => {
+  it('returns the requested count of distinct valid quirk ids', () => {
     const rng = createSeededRng(7)
     for (let i = 0; i < 20; i++) {
-      expect(Object.keys(ROSTER_QUIRKS)).toContain(pickRandomRosterQuirk(rng))
+      const picks = pickRandomRosterQuirks(2, rng)
+      expect(picks).toHaveLength(2)
+      expect(new Set(picks).size).toBe(2)
+      for (const id of picks) expect(Object.keys(ROSTER_QUIRKS)).toContain(id)
     }
   })
 })
