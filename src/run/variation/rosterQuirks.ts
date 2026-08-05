@@ -1,6 +1,7 @@
 import type { AttributeKey, Player } from '../../data/types'
+import { shiftPlayerAttributes } from '../../engine/attributeShift'
 import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR } from '../../engine/constants'
-import { average, clamp } from '../../engine/math'
+import { clamp } from '../../engine/math'
 import type { Rng } from '../../engine/rng'
 import { pickDistinct } from './draftPool'
 
@@ -30,19 +31,11 @@ export const ROSTER_QUIRKS: Record<RosterQuirkId, RosterQuirk> = {
   },
 }
 
-function withAttributeShift(player: Player, shift: number): Player {
-  const attributes = { ...player.attributes }
-  for (const key of Object.keys(attributes) as AttributeKey[]) {
-    attributes[key] = clamp(attributes[key] + shift, ATTRIBUTE_FLOOR, ATTRIBUTE_CEILING)
-  }
-  return { ...player, attributes, overallRating: Math.round(average(Object.values(attributes))) }
-}
-
 function applyStackedGuards(players: Player[]): Player[] {
   return players.map((p) => {
     const position = p.positions[0]
-    if (position === 'PG' || position === 'SG') return withAttributeShift(p, 12)
-    if (position === 'PF' || position === 'C') return withAttributeShift(p, -12)
+    if (position === 'PG' || position === 'SG') return shiftPlayerAttributes(p, 12)
+    if (position === 'PF' || position === 'C') return shiftPlayerAttributes(p, -12)
     return p
   })
 }
@@ -55,7 +48,7 @@ function applyAgingSuperstar(players: Player[], rng: Rng): Player[] {
 
   return players.map((p) => {
     if (p.id === star.id) {
-      const elevated = withAttributeShift(p, 20)
+      const elevated = shiftPlayerAttributes(p, 20)
       return { ...elevated, age: 34 + Math.floor(rng() * 3), development: { ...elevated.development, ageCurveStage: 'declining' } }
     }
     return { ...p, age: 19 + Math.floor(rng() * 3), development: { ...p.development, ageCurveStage: 'rising' } }

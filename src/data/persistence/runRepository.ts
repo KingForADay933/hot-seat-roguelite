@@ -1,4 +1,5 @@
 import type { Game, League, Player, Team } from '../types'
+import type { ShopVisit } from '../../run/shop'
 import type { RunState } from '../../run/types'
 import type { WildcardEventOutcome } from '../../run/variation/wildcardEvents'
 import { localStorageAdapter } from './localStorageAdapter'
@@ -20,6 +21,10 @@ export interface RunBundle {
   /** Budget earned during the season just played (not the running total, which lives on
    *  run.budget) -- display-only, same reason as the two fields above. */
   lastBudgetEarned: number
+  /** Section 8.5's Shop: null while between shop visits (e.g. right after a season sims, before
+   *  the results recap has been continued past); non-null while a visit is in progress, holding
+   *  the current offer list and remaining rerolls so a refresh mid-shop doesn't lose progress. */
+  shop: ShopVisit | null
 }
 
 function isValidBundleShape(data: unknown): data is RunBundle {

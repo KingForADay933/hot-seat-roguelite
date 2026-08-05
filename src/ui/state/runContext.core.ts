@@ -29,6 +29,12 @@ export interface RunContextValue {
   beginDraft: () => Promise<void>
   confirmDraft: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => Promise<void>
   simSeason: () => Promise<void>
+  /** Opens this season's shop visit (Section 8.5) -- tier picked from lastSeasonTargetHit. */
+  openShop: () => Promise<void>
+  /** Buys one shop offer by id: spends budget, applies the camp, removes it from the offer list. */
+  buyShopOffer: (offerId: string) => Promise<void>
+  /** Re-rolls the current shop's offer list, consuming one of its rerollsRemaining. */
+  rerollShop: () => Promise<void>
 }
 
 export const RunContext = createContext<RunContextValue | null>(null)

@@ -1,6 +1,5 @@
-import type { AttributeKey, Player, TeamId } from '../../data/types'
-import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR } from '../../engine/constants'
-import { average, clamp } from '../../engine/math'
+import type { Player, TeamId } from '../../data/types'
+import { shiftPlayerAttributes } from '../../engine/attributeShift'
 import type { Rng } from '../../engine/rng'
 
 export type WildcardEventId = 'breakout' | 'slump'
@@ -28,14 +27,6 @@ const BREAKOUT_MAX_AGE = 23
 const BREAKOUT_SHIFT = 8
 const SLUMP_SHIFT = -6
 
-function shiftPlayer(player: Player, shift: number): Player {
-  const attributes = { ...player.attributes }
-  for (const key of Object.keys(attributes) as AttributeKey[]) {
-    attributes[key] = clamp(attributes[key] + shift, ATTRIBUTE_FLOOR, ATTRIBUTE_CEILING)
-  }
-  return { ...player, attributes, overallRating: Math.round(average(Object.values(attributes))) }
-}
-
 /**
  * Rolls whether a wildcard event fires this season for the given team, and if so applies it
  * immediately (an in-season jolt, not a development-system change). Breakout targets a young
@@ -53,7 +44,7 @@ export function rollWildcardEvent(players: Player[], teamId: TeamId, rng: Rng): 
 
   const target = pool[Math.floor(rng() * pool.length)]
   const eventId: WildcardEventId = isBreakout ? 'breakout' : 'slump'
-  const shifted = shiftPlayer(target, isBreakout ? BREAKOUT_SHIFT : SLUMP_SHIFT)
+  const shifted = shiftPlayerAttributes(target, isBreakout ? BREAKOUT_SHIFT : SLUMP_SHIFT)
 
   return {
     players: players.map((p) => (p.id === target.id ? shifted : p)),
