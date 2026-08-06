@@ -48,10 +48,13 @@ export interface RunContextValue {
   setTrainingFocus: (playerId: PlayerId, attribute: AttributeKey | null) => Promise<void>
   /** Opens this season's shop visit (Section 8.4) -- tier picked from lastSeasonTargetHit. */
   openShop: () => Promise<void>
-  /** Buys one shop offer by id: spends budget, applies the camp, removes it from the offer list. */
-  buyShopOffer: (offerId: string) => Promise<void>
-  /** Re-rolls the current shop's offer list, consuming one of its rerollsRemaining. */
-  rerollShop: () => Promise<void>
+  /** Sends one freely-chosen roster player to camp for a boost to one freely-chosen attribute
+   *  (Section 8.5): spends budget, applies the camp, consumes one of the visit's
+   *  playerCampsRemaining. No-ops if the visit is out of player-camp purchases or budget. */
+  buyPlayerCamp: (playerId: PlayerId, attribute: AttributeKey) => Promise<void>
+  /** Same as buyPlayerCamp but for the whole roster at once (expanded tier only), targeting one
+   *  attribute across every player. Consumes one of the visit's teamCampsRemaining. */
+  buyTeamCamp: (attribute: AttributeKey) => Promise<void>
 }
 
 export const RunContext = createContext<RunContextValue | null>(null)

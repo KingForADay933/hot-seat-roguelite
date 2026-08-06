@@ -1,2 +1,2 @@
 export * from './campEffect'
-export * from './shopOffers'
+export * from './shopVisit'

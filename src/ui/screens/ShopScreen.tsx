@@ -1,46 +1,55 @@
+import type { AttributeKey } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
-import { ShopOfferCard } from '../components/ShopOfferCard'
+import { PLAYER_CAMP_COST, TEAM_CAMP_COST } from '../../run/constants'
+import { CampPurchaseForm } from '../components/CampPurchaseForm'
 
 export function ShopScreen({
   bundle,
-  onBuy,
-  onReroll,
+  onBuyPlayerCamp,
+  onBuyTeamCamp,
   onContinue,
 }: {
   bundle: RunBundle
-  onBuy: (offerId: string) => void
-  onReroll: () => void
+  onBuyPlayerCamp: (playerId: string, attribute: AttributeKey) => void
+  onBuyTeamCamp: (attribute: AttributeKey) => void
   onContinue: () => void
 }) {
   const { run, players, shop } = bundle
   if (!shop) return null
 
-  const playersById = new Map(players.map((p) => [p.id, p]))
+  const roster = players.filter((p) => p.teamId === run.teamId)
+  const nothingLeftToBuy = shop.playerCampsRemaining <= 0 && shop.teamCampsRemaining <= 0
 
   return (
     <main>
       <h1>{shop.tier === 'expanded' ? 'Expanded Shop' : 'Shop'}</h1>
       <p>
         {shop.tier === 'expanded'
-          ? 'Stretch cleared -- a bigger, pricier hand this visit, plus a reroll.'
+          ? 'Stretch cleared -- a bigger, pricier hand this visit.'
           : 'A quick, cheap look before the next season.'}
       </p>
       <p>Budget: ${run.budget}</p>
 
-      <div className="draft-options">
-        {shop.offers.map((offer) => (
-          <ShopOfferCard
-            key={offer.id}
-            offer={offer}
-            playerName={offer.playerId ? (playersById.get(offer.playerId)?.name ?? null) : null}
-            affordable={run.budget >= offer.cost}
-            onBuy={() => onBuy(offer.id)}
-          />
-        ))}
-        {shop.offers.length === 0 && <p>Nothing left to buy this visit.</p>}
-      </div>
+      <CampPurchaseForm
+        title="Send a Player to Camp"
+        description="Pick the player and the attribute -- a bounded random boost lands there."
+        cost={PLAYER_CAMP_COST}
+        remaining={shop.playerCampsRemaining}
+        budget={run.budget}
+        players={roster}
+        onBuy={(attribute, playerId) => playerId && onBuyPlayerCamp(playerId, attribute)}
+      />
 
-      {shop.rerollsRemaining > 0 && <button onClick={onReroll}>Reroll Offers ({shop.rerollsRemaining} left)</button>}
+      <CampPurchaseForm
+        title="Whole-Team Camp"
+        description="Sends the entire roster to camp for a smaller boost to one attribute, spread across everyone."
+        cost={TEAM_CAMP_COST}
+        remaining={shop.teamCampsRemaining}
+        budget={run.budget}
+        onBuy={(attribute) => onBuyTeamCamp(attribute)}
+      />
+
+      {nothingLeftToBuy && <p>Nothing left to buy this visit.</p>}
 
       <p>
         <button className="primary" onClick={onContinue}>

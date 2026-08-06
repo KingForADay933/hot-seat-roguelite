@@ -21,7 +21,7 @@ export function TeamSummary({ team, roster, record }: { team: Team; roster: Play
   const starterIds = new Set(starters.map((p) => p.id))
   const bench = roster.filter((p) => !starterIds.has(p.id))
   const groups: { label: string; players: Player[] }[] = [
-    { label: 'Starters', players: starters },
+    { label: 'Starting Five', players: starters },
     { label: 'Bench', players: bench },
   ]
 
@@ -34,7 +34,7 @@ export function TeamSummary({ team, roster, record }: { team: Team; roster: Play
         Record: <span className={recordClass}>{record ? `${record.wins}-${record.losses}` : '0-0'}</span>
         {record && gamesPlayed > 0 && ` (${formatWinPct(record.winPct)})`}
       </p>
-      <p>Starters: {starters.length > 0 ? starters.map((p) => `${p.positions[0]} ${p.name}`).join(', ') : 'Not set'}</p>
+      <p>Starting Five: {starters.length > 0 ? starters.map((p) => `${p.positions[0]} ${p.name}`).join(', ') : 'Not set'}</p>
       <div className="table-scroll">
         <table>
           <thead>
