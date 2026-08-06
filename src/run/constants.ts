@@ -26,7 +26,7 @@ export const HOUSE_RULE_DRAFT_SIZE = 2
 /** Wider hand for the system draft -- framed as a real build choice, not a constraint. */
 export const SYSTEM_DRAFT_SIZE = 3
 
-/** A season is split into this many checkpoints (Section 1.5) -- 32 games / 4 = an even split,
+/** A season is split into this many checkpoints (Section 9) -- 32 games / 4 = an even split,
  *  landing checkpoints after games 8/16/24 plus the real season end after 32. Each checkpoint
  *  (except the season-ending one) surfaces that stretch's Coaching Insights and lets the GM nudge
  *  rotation minutes / training focus in response before the next chunk plays. */
@@ -53,7 +53,7 @@ export const BUDGET_PER_WIN = 10
  *  before the market multiplier -- ties the economy to the escalation system, not just wins. */
 export const STRETCH_CLEAR_BUDGET_BONUS = 150
 
-// --- Shop (Section 8.5, Phase 7) -- first-pass numbers, needs playtesting to tune ---
+// --- Shop (Section 8.4) & Camps (Section 8.5), Phase 7 -- first-pass numbers, needs playtesting to tune ---
 // The condensed tier runs every season; a stretch-clear season instead opens the pricier,
 // wider expanded tier (run/shop/shopOffers.ts's generateShopOffers picks which from
 // lastSeasonTargetHit). Both sell camps -- see run/shop/campEffect.ts -- coaching upgrades
@@ -66,7 +66,7 @@ export const SHOP_CONDENSED_OFFER_COUNT = 2
 export const SHOP_EXPANDED_PLAYER_OFFER_COUNT = 3
 export const SHOP_EXPANDED_TEAM_OFFER_COUNT = 1
 
-/** Free re-rolls of the whole offer list -- an expanded-tier-only perk (Section 8.5's "plus a
+/** Free re-rolls of the whole offer list -- an expanded-tier-only perk (Section 8.4's "plus a
  *  reroll option"), not available on the every-season condensed tier. */
 export const SHOP_EXPANDED_REROLLS = 1
 

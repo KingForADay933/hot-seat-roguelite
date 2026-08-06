@@ -38,7 +38,7 @@ function teamCampOffers(count: number): ShopOffer[] {
 }
 
 /**
- * Rolls a fresh offer list for a shop tier (Section 8.5): the condensed tier is a cheap,
+ * Rolls a fresh offer list for a shop tier (Section 8.4): the condensed tier is a cheap,
  * every-season glance limited to single-player camps; the expanded tier -- unlocked by a
  * stretch-clear -- adds the pricier whole-team camp on top.
  */

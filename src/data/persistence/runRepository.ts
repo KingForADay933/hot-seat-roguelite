@@ -22,11 +22,11 @@ export interface RunBundle {
   /** Budget earned during the season just played (not the running total, which lives on
    *  run.budget) -- display-only, same reason as the two fields above. */
   lastBudgetEarned: number
-  /** Section 8.5's Shop: null while between shop visits (e.g. right after a season sims, before
+  /** Section 8.4's Shop: null while between shop visits (e.g. right after a season sims, before
    *  the results recap has been continued past); non-null while a visit is in progress, holding
    *  the current offer list and remaining rerolls so a refresh mid-shop doesn't lose progress. */
   shop: ShopVisit | null
-  /** Section 1.5's Coaching Insights for the chunk just simulated -- display-only, read by
+  /** Section 9's Coaching Insights for the chunk just simulated -- display-only, read by
    *  ChunkResultsScreen. Only meaningful (and only ever shown) between chunks; ignored once the
    *  season's last chunk lands on the season-end results screen instead. */
   lastChunkInsights: CoachingInsight[]
