@@ -54,21 +54,21 @@ export const BUDGET_PER_WIN = 10
 export const STRETCH_CLEAR_BUDGET_BONUS = 150
 
 // --- Shop (Section 8.4) & Camps (Section 8.5), Phase 7 -- first-pass numbers, needs playtesting to tune ---
-// The condensed tier runs every season; a stretch-clear season instead opens the pricier,
-// wider expanded tier (run/shop/shopOffers.ts's generateShopOffers picks which from
-// lastSeasonTargetHit). Both sell camps -- see run/shop/campEffect.ts -- coaching upgrades
-// (Phase 8) and consumables (Phase 9) aren't built yet.
+// The condensed tier runs every season; a stretch-clear season instead opens the pricier, wider
+// expanded tier. Both grant "purchase power" -- a count of camp buys the GM can spend on any
+// roster player, and any attribute, of their choosing (run/shop/shopVisit.ts's openShopVisit) --
+// reworked from an earlier pre-rolled-offer-list design after playtesting found "hope it rolled
+// the player/attribute you needed" too restrictive. Coaching upgrades (Phase 8) and consumables
+// (Phase 9) aren't built yet -- those will stay randomly rolled from a content pool, which is what
+// a reroll option will matter for once they exist; camps have nothing left to reroll now that
+// player/attribute choice is free.
 
-/** Player-camp offers rolled for the every-season condensed tier. */
-export const SHOP_CONDENSED_OFFER_COUNT = 2
+/** Player-camp purchases grantable in the every-season condensed tier. */
+export const SHOP_CONDENSED_PLAYER_CAMPS = 2
 
-/** Player-camp offers rolled for the stretch-clear expanded tier, plus SHOP_EXPANDED_TEAM_OFFER_COUNT team-camp offers. */
-export const SHOP_EXPANDED_PLAYER_OFFER_COUNT = 3
-export const SHOP_EXPANDED_TEAM_OFFER_COUNT = 1
-
-/** Free re-rolls of the whole offer list -- an expanded-tier-only perk (Section 8.4's "plus a
- *  reroll option"), not available on the every-season condensed tier. */
-export const SHOP_EXPANDED_REROLLS = 1
+/** Player-camp purchases grantable in the stretch-clear expanded tier, plus SHOP_EXPANDED_TEAM_CAMPS team-camp purchases. */
+export const SHOP_EXPANDED_PLAYER_CAMPS = 3
+export const SHOP_EXPANDED_TEAM_CAMPS = 1
 
 /** Cost of sending one player to camp. */
 export const PLAYER_CAMP_COST = 60
@@ -77,9 +77,10 @@ export const PLAYER_CAMP_COST = 60
  *  below) so it's a breadth-vs-depth choice, not a strictly better buy. */
 export const TEAM_CAMP_COST = 350
 
-/** Bounded random attribute-point boost a single-player camp applies -- same mechanic as Tier
- *  3's wildcard breakout (run/variation/wildcardEvents.ts's BREAKOUT_SHIFT), chosen and paid for
- *  instead of random and free. */
+/** Bounded random magnitude for the single, GM-chosen attribute a player-camp purchase boosts --
+ *  same shift range as Tier 3's wildcard breakout (run/variation/wildcardEvents.ts's
+ *  BREAKOUT_SHIFT), chosen and paid for instead of random and free, but concentrated on one
+ *  attribute rather than spread across all of them. */
 export const CAMP_ATTRIBUTE_SHIFT_MIN = 3
 export const CAMP_ATTRIBUTE_SHIFT_MAX = 6
 

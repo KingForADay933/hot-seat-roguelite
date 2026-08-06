@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shiftPlayerAttributes } from './attributeShift'
+import { shiftPlayerAttribute, shiftPlayerAttributes } from './attributeShift'
 import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR } from './constants'
 import { makeTestPlayer } from './testFixtures'
 
@@ -39,5 +39,32 @@ describe('shiftPlayerAttributes', () => {
     const originalInsideShot = player.attributes.insideShot
     shiftPlayerAttributes(player, 5)
     expect(player.attributes.insideShot).toBe(originalInsideShot)
+  })
+})
+
+describe('shiftPlayerAttribute', () => {
+  it('shifts only the named attribute, leaving every other attribute untouched', () => {
+    const player = makeTestPlayer()
+    const shifted = shiftPlayerAttribute(player, 'outsideShot', 5)
+    expect(shifted.attributes.outsideShot).toBe(player.attributes.outsideShot + 5)
+    for (const key of Object.keys(shifted.attributes) as (keyof typeof shifted.attributes)[]) {
+      if (key === 'outsideShot') continue
+      expect(shifted.attributes[key]).toBe(player.attributes[key])
+    }
+    expect(shifted.overallRating).toBeGreaterThan(player.overallRating)
+  })
+
+  it('clamps at ATTRIBUTE_CEILING/FLOOR like shiftPlayerAttributes', () => {
+    const player = makeTestPlayer({ attributes: { outsideShot: 97 } })
+    expect(shiftPlayerAttribute(player, 'outsideShot', 10).attributes.outsideShot).toBe(ATTRIBUTE_CEILING)
+    const low = makeTestPlayer({ attributes: { outsideShot: 42 } })
+    expect(shiftPlayerAttribute(low, 'outsideShot', -10).attributes.outsideShot).toBe(ATTRIBUTE_FLOOR)
+  })
+
+  it('does not mutate the original player', () => {
+    const player = makeTestPlayer()
+    const original = player.attributes.outsideShot
+    shiftPlayerAttribute(player, 'outsideShot', 5)
+    expect(player.attributes.outsideShot).toBe(original)
   })
 })
