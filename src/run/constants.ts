@@ -86,3 +86,66 @@ export const CAMP_ATTRIBUTE_SHIFT_MAX = 6
  *  on the whole roster at once. */
 export const TEAM_CAMP_ATTRIBUTE_SHIFT_MIN = 2
 export const TEAM_CAMP_ATTRIBUTE_SHIFT_MAX = 4
+
+// --- Coaching Upgrades (Section 8.6), Phase 8 -- first-pass numbers, needs playtesting to tune ---
+// A small persistent pool of 9 named cards (run/coachingUpgrades/catalog.ts), each a one-time,
+// permanent nudge to one rating/attribute the simulation already reads -- same "flat, permanent
+// shift" mechanic as roster quirks and wildcard events, just GM-purchased instead of imposed.
+// Acquired through the shop's rolled-offer-plus-reroll flow (the one piece of the pre-Phase-7-
+// rework shop mechanic that was kept, since these aren't a free player pick the way camps are).
+
+/** Flat cost to buy any one coaching-upgrade card -- same price regardless of card for this first
+ *  pass, unlike camps' condensed/expanded cost split. */
+export const COACHING_UPGRADE_COST = 300
+
+/** Candidates rolled each shop visit -- fewer on the every-season condensed tier, matching how
+ *  camp purchase power splits across the two tiers. */
+export const COACHING_UPGRADE_DRAFT_SIZE_CONDENSED = 1
+export const COACHING_UPGRADE_DRAFT_SIZE_EXPANDED = 2
+
+/** Free rerolls granted on the expanded tier only -- mirrors the pre-rework shop's
+ *  SHOP_EXPANDED_REROLLS, kept alive here since coaching upgrades are still a rolled offer. */
+export const COACHING_UPGRADE_REROLLS_EXPANDED = 1
+
+/** Roster-wide hidden.clutch boost (Clutch Gene) -- feeds engine/possession/variance.ts's
+ *  computeClutchBonus, active only in the same late-game window every player's Clutch already is. */
+export const CLUTCH_GENE_CLUTCH_SHIFT = 12
+
+/** Roster-wide hidden.durability boost (Iron Man Program) -- feeds engine/rotation/fatigue.ts's
+ *  gain/recovery multiplier, same hook every player's Durability already uses. */
+export const IRON_MAN_DURABILITY_SHIFT = 12
+
+/** Roster-wide ballHandling boost (Film Study) -- feeds engine/possession/outcomeResolver.ts's
+ *  turnover formula (ballHandling vs. defender pressure): sharper prep reads as fewer live-ball
+ *  turnovers, without inventing a new "scouting" mechanic. */
+export const FILM_STUDY_BALL_HANDLING_SHIFT = 6
+
+/** Roster-wide interiorDefense/perimeterDefense boost, applied to both (Defensive Coordinator) --
+ *  feeds engine/possession/resistance.ts's computeResistance directly through the defenders
+ *  already read there. */
+export const DEFENSIVE_COORDINATOR_DEFENSE_SHIFT = 8
+
+/** Roster-wide hidden.consistency boost (Steady Hand) -- feeds engine/possession/variance.ts's
+ *  computeConsistencyNoise, shrinking the same night-to-night swing every player's Consistency
+ *  already governs. */
+export const STEADY_HAND_CONSISTENCY_SHIFT = 12
+
+/** headCoachRating boost (Player Development Guru) -- feeds engine/development/dpFormula.ts's
+ *  coaching multiplier directly. One-time, unlike synergy's bonuses below: nothing ever
+ *  recomputes headCoachRating from scratch the way camps recompute synergyScore. */
+export const PLAYER_DEVELOPMENT_GURU_RATING_BONUS = 12
+
+/** All-attribute boost for the CURRENT bench (roster minus startingFive) at purchase time (Bench
+ *  Mob Mentality) -- feeds engine/rotation/substitution.ts's rotationValue via the bench
+ *  candidates' own attributes, same as any other roster-wide shift. Targets a snapshot of the
+ *  bench rather than re-deriving it later since startingFive never changes mid-run. */
+export const BENCH_MOB_ATTRIBUTE_SHIFT = 6
+
+/** Flat Team.synergyScore bonus for owning Players' Coach / System Guru -- feeds
+ *  engine/possession/possessionStrength.ts's synergyMultiplier the same way roster-fit synergy
+ *  does. Re-added on top of the roster-fit score every time it's recomputed (see
+ *  run/coachingUpgrades/synergyBonus.ts) rather than applied as a one-time mutation, so a later
+ *  camp purchase's full synergy recompute can't silently erase it. System Guru's is larger,
+ *  reflecting deeper system mastery vs. Players' Coach's general chemistry bump. */
+export const PLAYERS_COACH_SYNERGY_BONUS = 6
+export const SYSTEM_GURU_SYNERGY_BONUS = 10

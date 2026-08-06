@@ -1,4 +1,5 @@
 import type { TeamId } from '../data/types'
+import type { CoachingUpgradeId } from './coachingUpgrades/catalog'
 import type { MarketSizeId } from './marketSize'
 import type { HouseRuleId } from './variation/houseRules'
 import type { RosterQuirkId } from './variation/rosterQuirks'
@@ -37,4 +38,8 @@ export interface RunState {
    *  next season has been simulated yet," the signal simulateSeasonChunk uses to know it needs to
    *  generate a fresh schedule and roll that season's wildcard event before simming chunk 1. */
   chunkInSeason: number
+  /** Section 8.6's coaching-upgrade cards owned so far this run -- permanent once bought, never
+   *  reset mid-run. Each id can only appear once (run/coachingUpgrades/catalog.ts's pool is
+   *  exclusion-filtered by this list when rolling shop offers). */
+  coachingUpgrades: CoachingUpgradeId[]
 }

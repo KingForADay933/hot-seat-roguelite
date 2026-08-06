@@ -1,5 +1,6 @@
 export * from './assignWorstTeam'
 export * from './budget'
+export * from './coachingUpgrades'
 export * from './constants'
 export * from './marketSize'
 export * from './runState'

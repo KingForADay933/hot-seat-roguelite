@@ -87,6 +87,14 @@ describe('saveRunBundle / loadRunBundle', () => {
     await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
     expect(await loadRunBundle(adapter)).toBeNull()
   })
+
+  it('returns null (not a throw) for a pre-coaching-upgrades save missing coachingUpgrades', async () => {
+    const adapter = makeMemoryAdapter()
+    const legacyBundle = makeTestBundle()
+    const { coachingUpgrades: _coachingUpgrades, ...legacyRun } = legacyBundle.run
+    await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
+    expect(await loadRunBundle(adapter)).toBeNull()
+  })
 })
 
 describe('clearRunBundle', () => {

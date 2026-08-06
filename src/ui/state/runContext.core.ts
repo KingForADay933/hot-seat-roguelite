@@ -2,6 +2,7 @@ import { createContext } from 'react'
 import type { AttributeKey, League, Player, PlayerId, Team, TeamId } from '../../data/types'
 import type { SystemId } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
+import type { CoachingUpgradeId } from '../../run/coachingUpgrades'
 import type { MarketSizeId } from '../../run/marketSize'
 import type { HouseRuleId } from '../../run/variation/houseRules'
 import type { RosterQuirkId } from '../../run/variation/rosterQuirks'
@@ -55,6 +56,13 @@ export interface RunContextValue {
   /** Same as buyPlayerCamp but for the whole roster at once (expanded tier only), targeting one
    *  attribute across every player. Consumes one of the visit's teamCampsRemaining. */
   buyTeamCamp: (attribute: AttributeKey) => Promise<void>
+  /** Buys one coaching-upgrade card (Section 8.6) from the visit's rolled upgradeOffers: spends
+   *  COACHING_UPGRADE_COST, applies its permanent effect, and adds it to run.coachingUpgrades for
+   *  good. No-ops if the id isn't currently offered, is already owned, or budget is short. */
+  buyCoachingUpgrade: (upgradeId: CoachingUpgradeId) => Promise<void>
+  /** Reshuffles the visit's coaching-upgrade offers, consuming one of upgradeRerollsRemaining
+   *  (expanded tier only). No-ops at 0 remaining. */
+  rerollUpgradeOffers: () => Promise<void>
 }
 
 export const RunContext = createContext<RunContextValue | null>(null)
