@@ -1,8 +1,9 @@
 import type { Game, League, Player, Team } from '../types'
+import type { CoachingInsight } from '../../engine/insights/generateCoachingInsights'
 import type { ShopVisit } from '../../run/shop'
 import type { RunState } from '../../run/types'
 import type { WildcardEventOutcome } from '../../run/variation/wildcardEvents'
-import { localStorageAdapter } from './localStorageAdapter'
+import { indexedDbAdapter } from './indexedDbAdapter'
 import type { StorageAdapter } from './storageAdapter'
 
 const RUN_KEY = 'hotseat:run'
@@ -25,6 +26,10 @@ export interface RunBundle {
    *  the results recap has been continued past); non-null while a visit is in progress, holding
    *  the current offer list and remaining rerolls so a refresh mid-shop doesn't lose progress. */
   shop: ShopVisit | null
+  /** Section 1.5's Coaching Insights for the chunk just simulated -- display-only, read by
+   *  ChunkResultsScreen. Only meaningful (and only ever shown) between chunks; ignored once the
+   *  season's last chunk lands on the season-end results screen instead. */
+  lastChunkInsights: CoachingInsight[]
 }
 
 function isValidBundleShape(data: unknown): data is RunBundle {
@@ -45,11 +50,11 @@ function isValidBundleShape(data: unknown): data is RunBundle {
  * that granularity isn't worth the complexity -- no migration system yet either, for the same
  * reason: nothing has shipped to migrate away from.
  */
-export async function saveRunBundle(bundle: RunBundle, adapter: StorageAdapter = localStorageAdapter): Promise<void> {
+export async function saveRunBundle(bundle: RunBundle, adapter: StorageAdapter = indexedDbAdapter): Promise<void> {
   await adapter.setItem(RUN_KEY, JSON.stringify(bundle))
 }
 
-export async function loadRunBundle(adapter: StorageAdapter = localStorageAdapter): Promise<RunBundle | null> {
+export async function loadRunBundle(adapter: StorageAdapter = indexedDbAdapter): Promise<RunBundle | null> {
   const raw = await adapter.getItem(RUN_KEY)
   if (!raw) return null
 
@@ -63,6 +68,6 @@ export async function loadRunBundle(adapter: StorageAdapter = localStorageAdapte
   }
 }
 
-export async function clearRunBundle(adapter: StorageAdapter = localStorageAdapter): Promise<void> {
+export async function clearRunBundle(adapter: StorageAdapter = indexedDbAdapter): Promise<void> {
   await adapter.removeItem(RUN_KEY)
 }

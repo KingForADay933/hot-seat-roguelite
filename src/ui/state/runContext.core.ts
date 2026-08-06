@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { League, Player, Team, TeamId } from '../../data/types'
+import type { AttributeKey, League, Player, PlayerId, Team, TeamId } from '../../data/types'
 import type { SystemId } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import type { MarketSizeId } from '../../run/marketSize'
@@ -28,7 +28,16 @@ export interface RunContextValue {
   loading: boolean
   beginDraft: () => Promise<void>
   confirmDraft: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => Promise<void>
-  simSeason: () => Promise<void>
+  /** Simulates the next chunk of the current season (or a fresh season's first chunk) -- Section
+   *  1.5. The resulting bundle tells the caller which screen comes next (chunk checkpoint vs. the
+   *  season-end results screen) via run.chunkInSeason. */
+  simSeasonChunk: () => Promise<void>
+  /** GM adjustment available at a chunk checkpoint (Section 1.5): overrides one player's target
+   *  minutes (clamped 0-48) for the rest of the season. */
+  setRotationMinutes: (playerId: PlayerId, minutes: number) => Promise<void>
+  /** GM adjustment available at a chunk checkpoint: sets (or, given null, clears back to
+   *  auto-computed) one player's training focus to a single attribute. */
+  setTrainingFocus: (playerId: PlayerId, attribute: AttributeKey | null) => Promise<void>
   /** Opens this season's shop visit (Section 8.5) -- tier picked from lastSeasonTargetHit. */
   openShop: () => Promise<void>
   /** Buys one shop offer by id: spends budget, applies the camp, removes it from the offer list. */

@@ -52,6 +52,10 @@ describe('generateCoachingInsights', () => {
     const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById, 100)
 
     expect(insights.some((i) => i.text.includes('Weak Defender') && i.text.includes('8 points'))).toBe(true)
+    // The weak link is on the defending (home) team -- the insight must be tagged accordingly, not
+    // the attacking away team, so a caller can filter to "insights about my own team" correctly.
+    const matchupInsight = insights.find((i) => i.text.includes('Weak Defender'))
+    expect(matchupInsight?.teamId).toBe(homeTeam.id)
   })
 
   it('does not flag a matchup insight for a non-weak-link-sensitive scheme, even with the same targeting pattern', () => {
@@ -136,6 +140,9 @@ describe('generateCoachingInsights', () => {
         (i) => i.text.includes('Starter') && i.text.includes('Bench') && i.text.includes('heavy fatigue'),
       ),
     ).toBe(true)
+    // The substitution happened on the home team (Starter/Bench are both on homeTeam's roster).
+    const fatigueInsight = insights.find((i) => i.text.includes('heavy fatigue'))
+    expect(fatigueInsight?.teamId).toBe(homeTeam.id)
   })
 
   it('produces at least one fatigue insight over a real, fully-simulated game long enough to force natural substitutions', () => {

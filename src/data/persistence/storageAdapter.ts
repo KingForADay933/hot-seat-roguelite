@@ -1,7 +1,7 @@
 /**
- * Async-shaped even though the MVP's localStorage implementation is synchronous under the hood,
- * so swapping to IndexedDB later (once saved-games/multi-season retention needs it) is a drop-in
- * replacement with zero call-site changes.
+ * Async-shaped so the concrete backend can vary without touching call sites -- proven out when
+ * indexedDbAdapter.ts replaced the original (sync-under-the-hood) localStorage implementation
+ * after a season's possession-log payload started exceeding localStorage's ~5MB per-origin quota.
  */
 export interface StorageAdapter {
   getItem(key: string): Promise<string | null>

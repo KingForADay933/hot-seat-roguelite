@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import type { AttributeKey, PlayerId } from '../../data/types'
 import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
 import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from '../../data/persistence/runRepository'
+import { REGULATION_MINUTES } from '../../engine/constants'
 import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
+import { clamp } from '../../engine/math'
 import { pickWorstTeamId } from '../../run/assignWorstTeam'
 import { HOUSE_RULE_DRAFT_SIZE, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT, SYSTEM_DRAFT_SIZE } from '../../run/constants'
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { createRun } from '../../run/runState'
 import { applyPlayerCamp, applyTeamCamp, generateShopOffers, openShopVisit, type ShopTier } from '../../run/shop'
-import { simulateRunSeason } from '../../run/simulateRunSeason'
+import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
 import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
 import { applyRosterQuirk, pickRandomRosterQuirks, type RosterQuirkId } from '../../run/variation/rosterQuirks'
 import { computeInitialSynergyScore, pickRandomSystems } from '../../run/variation/systemDraft'
@@ -84,6 +87,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
         lastWildcardEvent: null,
         lastBudgetEarned: 0,
         shop: null,
+        lastChunkInsights: [],
       }
       await saveRunBundle(newBundle)
       setBundle(newBundle)
@@ -92,23 +96,59 @@ export function RunProvider({ children }: { children: ReactNode }) {
     [draft],
   )
 
-  const simSeason = useCallback(async () => {
+  const simSeasonChunk = useCallback(async () => {
     if (!bundle) return
-    const result = simulateRunSeason(bundle.run, bundle.league, bundle.teams, bundle.players, defaultRng)
+    const result = simulateSeasonChunk(bundle.run, bundle.league, bundle.teams, bundle.players, bundle.games, defaultRng)
     const updatedBundle: RunBundle = {
       run: result.run,
       league: result.league,
       teams: result.teams,
       players: result.players,
       games: result.games,
-      lastSeasonTargetHit: result.targetHit,
+      // Only the season's last chunk actually determines these -- every other chunk carries the
+      // bundle's existing values forward untouched rather than overwriting them with placeholders.
+      lastSeasonTargetHit: result.seasonComplete ? result.targetHit : bundle.lastSeasonTargetHit,
+      lastBudgetEarned: result.seasonComplete ? result.budgetEarned : bundle.lastBudgetEarned,
+      // Non-null only on the chunk that actually rolled it (a season's first) -- null on every
+      // other chunk, which naturally clears a stale reveal off the following chunk's screen.
       lastWildcardEvent: result.wildcardEvent,
-      lastBudgetEarned: result.budgetEarned,
       shop: null,
+      lastChunkInsights: result.chunkInsights,
     }
     await saveRunBundle(updatedBundle)
     setBundle(updatedBundle)
   }, [bundle])
+
+  const setRotationMinutes = useCallback(
+    async (playerId: PlayerId, minutes: number) => {
+      if (!bundle) return
+      const clamped = clamp(Math.round(minutes), 0, REGULATION_MINUTES)
+      const teams = bundle.teams.map((t) =>
+        t.id === bundle.run.teamId ? { ...t, rotationMinutes: { ...t.rotationMinutes, [playerId]: clamped } } : t,
+      )
+      const updatedBundle: RunBundle = { ...bundle, teams }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
+
+  const setTrainingFocus = useCallback(
+    async (playerId: PlayerId, attribute: AttributeKey | null) => {
+      if (!bundle) return
+      const teams = bundle.teams.map((t) => {
+        if (t.id !== bundle.run.teamId) return t
+        const trainingFocus = { ...t.trainingFocus }
+        if (attribute) trainingFocus[playerId] = { [attribute]: 1 }
+        else delete trainingFocus[playerId]
+        return { ...t, trainingFocus }
+      })
+      const updatedBundle: RunBundle = { ...bundle, teams }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
 
   const openShop = useCallback(async () => {
     if (!bundle) return
@@ -171,7 +211,19 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setBundle(updatedBundle)
   }, [bundle])
 
-  const value: RunContextValue = { bundle, draft, loading, beginDraft, confirmDraft, simSeason, openShop, buyShopOffer, rerollShop }
+  const value: RunContextValue = {
+    bundle,
+    draft,
+    loading,
+    beginDraft,
+    confirmDraft,
+    simSeasonChunk,
+    setRotationMinutes,
+    setTrainingFocus,
+    openShop,
+    buyShopOffer,
+    rerollShop,
+  }
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>
 }

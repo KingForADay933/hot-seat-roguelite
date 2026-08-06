@@ -1,0 +1,68 @@
+import type { AttributeKey } from '../../data/types'
+import type { RunBundle } from '../../data/persistence/runRepository'
+import { computeStandings } from '../../engine/schedule/standings'
+import { SEASON_CHUNK_COUNT } from '../../run/constants'
+import { RosterAdjustmentPanel } from '../components/RosterAdjustmentPanel'
+import { StandingsTable } from '../components/StandingsTable'
+
+export function ChunkResultsScreen({
+  bundle,
+  onContinue,
+  onSetMinutes,
+  onSetFocus,
+}: {
+  bundle: RunBundle
+  onContinue: () => void
+  onSetMinutes: (playerId: string, minutes: number) => void
+  onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
+}) {
+  const { run, teams, players, games, lastWildcardEvent, lastChunkInsights } = bundle
+  const team = teams.find((t) => t.id === run.teamId)
+  if (!team) return null
+
+  const roster = players.filter((p) => p.teamId === team.id)
+  const standings = computeStandings(teams, games)
+
+  return (
+    <main>
+      <h1>
+        Checkpoint {run.chunkInSeason} of {SEASON_CHUNK_COUNT - 1}
+      </h1>
+      <p>
+        {team.city} {team.name} -- Stretch {run.stretchNumber}, Season {run.seasonInStretch} of {run.seasonsPerStretch}.
+      </p>
+
+      {lastWildcardEvent && (
+        <p className={lastWildcardEvent.eventId === 'breakout' ? 'text-positive' : 'text-negative'}>
+          {lastWildcardEvent.eventId === 'breakout'
+            ? `${lastWildcardEvent.playerName} had a breakout to start the season.`
+            : `${lastWildcardEvent.playerName} started the season in a slump.`}
+        </p>
+      )}
+
+      <h2>Coaching Insights</h2>
+      {lastChunkInsights.length > 0 ? (
+        <ul>
+          {lastChunkInsights.map((insight, i) => (
+            <li key={i}>{insight.text}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>Nothing notable this stretch.</p>
+      )}
+
+      <h2>Standings So Far</h2>
+      <StandingsTable rows={standings} teams={teams} userTeamId={run.teamId} />
+
+      <h2>Adjust the Rotation</h2>
+      <p>Respond to what the Insights above are telling you before the next stretch of games plays out.</p>
+      <RosterAdjustmentPanel team={team} roster={roster} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+
+      <p>
+        <button className="primary" onClick={onContinue}>
+          Continue Season
+        </button>
+      </p>
+    </main>
+  )
+}
