@@ -13,7 +13,7 @@ import { getPeriodLabel } from '../simulateGame'
 
 export interface CoachingInsight {
   text: string
-  /** Which team this insight is about -- lets a caller (Section 1.5's chunk checkpoints) filter
+  /** Which team this insight is about -- lets a caller (Section 9's chunk checkpoints) filter
    *  down to just the user's own team rather than showing observations about the AI opponent. */
   teamId: TeamId
 }

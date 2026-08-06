@@ -29,7 +29,7 @@ export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule:
  * escalates (new stretch, harder target, season count resets); missing it burns one of the
  * stretch's run.seasonsPerStretch chances (market-size-dependent, Section 8.1); running out of
  * chances without ever hitting it fires the GM. Only called once a season's last chunk has played
- * (Section 1.5) -- every branch resets chunkInSeason to 0 since the (next) season hasn't started yet.
+ * (Section 9) -- every branch resets chunkInSeason to 0 since the (next) season hasn't started yet.
  */
 export function evaluateSeasonEnd(run: RunState, standings: StandingsRow[]): RunState {
   if (run.status === 'fired') return run

@@ -19,7 +19,7 @@ export interface SeasonChunkResult {
   teams: Team[]
   players: Player[]
   /** The season's games so far -- unplayed slots still scheduled-only, played ones with their
-   *  possession log already stripped (Section 1.5: Coaching Insights are pulled from it as it's
+   *  possession log already stripped (Section 9: Coaching Insights are pulled from it as it's
    *  simulated, then it's dropped -- nothing downstream needs possession-level detail). */
   games: Game[]
   /** This chunk's Coaching Insights for the user's own team only -- empty on a chunk with no

@@ -29,16 +29,16 @@ export interface RunContextValue {
   beginDraft: () => Promise<void>
   confirmDraft: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => Promise<void>
   /** Simulates the next chunk of the current season (or a fresh season's first chunk) -- Section
-   *  1.5. The resulting bundle tells the caller which screen comes next (chunk checkpoint vs. the
+   *  9. The resulting bundle tells the caller which screen comes next (chunk checkpoint vs. the
    *  season-end results screen) via run.chunkInSeason. */
   simSeasonChunk: () => Promise<void>
-  /** GM adjustment available at a chunk checkpoint (Section 1.5): overrides one player's target
+  /** GM adjustment available at a chunk checkpoint (Section 9): overrides one player's target
    *  minutes (clamped 0-48) for the rest of the season. */
   setRotationMinutes: (playerId: PlayerId, minutes: number) => Promise<void>
   /** GM adjustment available at a chunk checkpoint: sets (or, given null, clears back to
    *  auto-computed) one player's training focus to a single attribute. */
   setTrainingFocus: (playerId: PlayerId, attribute: AttributeKey | null) => Promise<void>
-  /** Opens this season's shop visit (Section 8.5) -- tier picked from lastSeasonTargetHit. */
+  /** Opens this season's shop visit (Section 8.4) -- tier picked from lastSeasonTargetHit. */
   openShop: () => Promise<void>
   /** Buys one shop offer by id: spends budget, applies the camp, removes it from the offer list. */
   buyShopOffer: (offerId: string) => Promise<void>

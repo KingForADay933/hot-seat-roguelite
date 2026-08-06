@@ -30,9 +30,9 @@ export interface RunState {
   /** Derived from marketSize at creation and copied here so evaluateSeasonEnd doesn't need to look
    *  it up -- was a global constant before Section 8.1 made it market-dependent. */
   seasonsPerStretch: number
-  /** Section 8.4's currency. Earned each season, spent in the shop once that exists. */
+  /** Section 8.4's currency. Earned each season, spent in the shop (Section 8.4/8.5). */
   budget: number
-  /** Chunks of the CURRENT season completed so far (Section 1.5), 0..SEASON_CHUNK_COUNT. Reset to
+  /** Chunks of the CURRENT season completed so far (Section 9), 0..SEASON_CHUNK_COUNT. Reset to
    *  0 whenever a season fully concludes (see evaluateSeasonEnd) -- 0 doubles as "no chunk of the
    *  next season has been simulated yet," the signal simulateSeasonChunk uses to know it needs to
    *  generate a fresh schedule and roll that season's wildcard event before simming chunk 1. */

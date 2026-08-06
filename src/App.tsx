@@ -33,7 +33,7 @@ function AppContent() {
   }
   if (bundle.run.status === 'fired') return <FiredScreen bundle={bundle} onNewRun={beginDraft} />
   if (bundle.shop) return <ShopScreen bundle={bundle} onBuy={buyShopOffer} onReroll={rerollShop} onContinue={simSeasonChunk} />
-  // chunkInSeason > 0 means a non-final chunk (Section 1.5) just played -- the season isn't over yet.
+  // chunkInSeason > 0 means a non-final chunk (Section 9) just played -- the season isn't over yet.
   if (bundle.run.chunkInSeason > 0) {
     return <ChunkResultsScreen bundle={bundle} onContinue={simSeasonChunk} onSetMinutes={setRotationMinutes} onSetFocus={setTrainingFocus} />
   }
