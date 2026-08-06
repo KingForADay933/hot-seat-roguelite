@@ -21,6 +21,7 @@ export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule:
     seasonsPerStretch: MARKET_SIZES[marketSize].seasonsPerStretch,
     budget: 0,
     chunkInSeason: 0,
+    coachingUpgrades: [],
   }
 }
 

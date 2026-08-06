@@ -23,6 +23,8 @@ function AppContent() {
     openShop,
     buyPlayerCamp,
     buyTeamCamp,
+    buyCoachingUpgrade,
+    rerollUpgradeOffers,
   } = useRun()
 
   if (loading) return <p>Loading…</p>
@@ -36,7 +38,18 @@ function AppContent() {
   // The season that got the GM fired still gets its own results recap -- just no shop, since
   // there's no next season left to spend the budget in. fireAcknowledged gates it to once.
   if (bundle.run.status === 'fired' && fireAcknowledged) return <FiredScreen bundle={bundle} onNewRun={beginDraft} />
-  if (bundle.shop) return <ShopScreen bundle={bundle} onBuyPlayerCamp={buyPlayerCamp} onBuyTeamCamp={buyTeamCamp} onContinue={simSeasonChunk} />
+  if (bundle.shop) {
+    return (
+      <ShopScreen
+        bundle={bundle}
+        onBuyPlayerCamp={buyPlayerCamp}
+        onBuyTeamCamp={buyTeamCamp}
+        onBuyCoachingUpgrade={buyCoachingUpgrade}
+        onRerollUpgradeOffers={rerollUpgradeOffers}
+        onContinue={simSeasonChunk}
+      />
+    )
+  }
   // chunkInSeason > 0 means a non-final chunk (Section 9) just played -- the season isn't over yet.
   if (bundle.run.chunkInSeason > 0) {
     return <ChunkResultsScreen bundle={bundle} onContinue={simSeasonChunk} onSetMinutes={setRotationMinutes} onSetFocus={setTrainingFocus} />

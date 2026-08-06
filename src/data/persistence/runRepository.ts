@@ -38,10 +38,16 @@ function isValidBundleShape(data: unknown): data is RunBundle {
   if (!b.run || typeof b.run !== 'object' || !b.league || typeof b.league !== 'object') return false
   if (!Array.isArray(b.teams) || !Array.isArray(b.players) || !Array.isArray(b.games)) return false
 
-  // run.rosterQuirk/houseRule/marketSize were added across Phases 3-5 -- reject (rather than
-  // silently accept and crash a screen reading them later) a save from before any of them existed.
+  // run.rosterQuirk/houseRule/marketSize were added across Phases 3-5, coachingUpgrades in Phase 8
+  // -- reject (rather than silently accept and crash a screen reading them later) a save from
+  // before any of them existed.
   const run = b.run as Record<string, unknown>
-  return typeof run.rosterQuirk === 'string' && typeof run.houseRule === 'string' && typeof run.marketSize === 'string'
+  return (
+    typeof run.rosterQuirk === 'string' &&
+    typeof run.houseRule === 'string' &&
+    typeof run.marketSize === 'string' &&
+    Array.isArray(run.coachingUpgrades)
+  )
 }
 
 /**

@@ -7,7 +7,17 @@ import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { clamp } from '../../engine/math'
 import { pickWorstTeamId } from '../../run/assignWorstTeam'
-import { HOUSE_RULE_DRAFT_SIZE, PLAYER_CAMP_COST, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT, SYSTEM_DRAFT_SIZE, TEAM_CAMP_COST } from '../../run/constants'
+import { applyCoachingUpgrade, computeSynergyUpgradeBonus, pickCoachingUpgradeOffers, type CoachingUpgradeId } from '../../run/coachingUpgrades'
+import {
+  COACHING_UPGRADE_COST,
+  HOUSE_RULE_DRAFT_SIZE,
+  PLAYER_CAMP_COST,
+  QUIRK_DRAFT_SIZE,
+  RUN_SEASON_LENGTH,
+  RUN_TEAM_COUNT,
+  SYSTEM_DRAFT_SIZE,
+  TEAM_CAMP_COST,
+} from '../../run/constants'
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { createRun } from '../../run/runState'
 import { applyPlayerCamp, applyTeamCamp, openShopVisit, type ShopTier } from '../../run/shop'
@@ -155,23 +165,43 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const openShop = useCallback(async () => {
     if (!bundle) return
     const tier: ShopTier = bundle.lastSeasonTargetHit ? 'expanded' : 'condensed'
-    const updatedBundle: RunBundle = { ...bundle, shop: openShopVisit(tier) }
+    const updatedBundle: RunBundle = { ...bundle, shop: openShopVisit(tier, bundle.run.coachingUpgrades, defaultRng) }
     await saveRunBundle(updatedBundle)
     setBundle(updatedBundle)
   }, [bundle])
 
-  /** Shared by both camp purchases: recomputes synergy from the (now camp-boosted) roster's fit to
-   *  the team's drafted system -- same computation the initial draft-time score used, not a
-   *  parallel invented bump (Team.synergyScore's doc comment flags camps as feeding back into it). */
-  const teamsWithRecomputedSynergy = useCallback((forBundle: RunBundle, updatedPlayers: RunBundle['players']) => {
-    const team = forBundle.teams.find((t) => t.id === forBundle.run.teamId)
-    if (!team) return forBundle.teams
-    return forBundle.teams.map((t) =>
-      t.id === team.id
-        ? { ...t, synergyScore: computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId], updatedPlayers.filter((p) => p.teamId === t.id)) }
-        : t,
-    )
-  }, [])
+  /**
+   * Shared by both camp purchases and coaching-upgrade purchases: recomputes synergy from the
+   * (now boosted) roster's fit to the team's drafted system -- same computation the initial
+   * draft-time score used, not a parallel invented bump (Team.synergyScore's doc comment flags
+   * camps as feeding back into it) -- plus computeSynergyUpgradeBonus's flat bonus from any owned
+   * Players' Coach / System Guru. The bonus has to be re-added here, every time, rather than
+   * applied as a one-time mutation at purchase time: since this full recompute discards
+   * synergyScore's previous value, a one-time mutation would get silently erased by the next camp
+   * (or coaching-upgrade) purchase that runs through this same function.
+   *
+   * `baseTeams` defaults to forBundle.teams but can be overridden to recompute on top of a team
+   * object that already carries another pending change this same action made (e.g. a coaching
+   * upgrade's own roster/rating mutation) rather than the stale pre-mutation bundle.teams.
+   */
+  const teamsWithRecomputedSynergy = useCallback(
+    (forBundle: RunBundle, updatedPlayers: RunBundle['players'], baseTeams: RunBundle['teams'] = forBundle.teams) => {
+      const team = baseTeams.find((t) => t.id === forBundle.run.teamId)
+      if (!team) return baseTeams
+      const upgradeBonus = computeSynergyUpgradeBonus(forBundle.run.coachingUpgrades)
+      return baseTeams.map((t) =>
+        t.id === team.id
+          ? {
+              ...t,
+              synergyScore:
+                computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId], updatedPlayers.filter((p) => p.teamId === t.id)) +
+                upgradeBonus,
+            }
+          : t,
+      )
+    },
+    [],
+  )
 
   const buyPlayerCamp = useCallback(
     async (playerId: PlayerId, attribute: AttributeKey) => {
@@ -211,6 +241,51 @@ export function RunProvider({ children }: { children: ReactNode }) {
     [bundle, teamsWithRecomputedSynergy],
   )
 
+  const buyCoachingUpgrade = useCallback(
+    async (upgradeId: CoachingUpgradeId) => {
+      if (!bundle?.shop) return
+      if (!bundle.shop.upgradeOffers.includes(upgradeId)) return
+      if (bundle.run.coachingUpgrades.includes(upgradeId)) return
+      if (bundle.run.budget < COACHING_UPGRADE_COST) return
+
+      const team = bundle.teams.find((t) => t.id === bundle.run.teamId)
+      if (!team) return
+
+      const { team: updatedTeam, players: updatedPlayers } = applyCoachingUpgrade(upgradeId, team, bundle.players)
+      const updatedRun = {
+        ...bundle.run,
+        budget: bundle.run.budget - COACHING_UPGRADE_COST,
+        coachingUpgrades: [...bundle.run.coachingUpgrades, upgradeId],
+      }
+      const teamsWithUpdatedTeam = bundle.teams.map((t) => (t.id === team.id ? updatedTeam : t))
+      const runBundleForSynergy: RunBundle = { ...bundle, run: updatedRun }
+
+      const updatedBundle: RunBundle = {
+        ...bundle,
+        run: updatedRun,
+        players: updatedPlayers,
+        teams: teamsWithRecomputedSynergy(runBundleForSynergy, updatedPlayers, teamsWithUpdatedTeam),
+        shop: { ...bundle.shop, upgradeOffers: bundle.shop.upgradeOffers.filter((id) => id !== upgradeId) },
+      }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle, teamsWithRecomputedSynergy],
+  )
+
+  const rerollUpgradeOffers = useCallback(async () => {
+    if (!bundle?.shop) return
+    if (bundle.shop.upgradeRerollsRemaining <= 0) return
+
+    const upgradeOffers = pickCoachingUpgradeOffers(bundle.run.coachingUpgrades, bundle.shop.upgradeOffers.length, defaultRng)
+    const updatedBundle: RunBundle = {
+      ...bundle,
+      shop: { ...bundle.shop, upgradeOffers, upgradeRerollsRemaining: bundle.shop.upgradeRerollsRemaining - 1 },
+    }
+    await saveRunBundle(updatedBundle)
+    setBundle(updatedBundle)
+  }, [bundle])
+
   const acknowledgeFired = useCallback(() => setFireAcknowledged(true), [])
 
   const value: RunContextValue = {
@@ -227,6 +302,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
     openShop,
     buyPlayerCamp,
     buyTeamCamp,
+    buyCoachingUpgrade,
+    rerollUpgradeOffers,
   }
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>

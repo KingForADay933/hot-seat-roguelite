@@ -24,6 +24,7 @@ describe('createRun', () => {
       marketSize: 'mid',
       budget: 0,
       chunkInSeason: 0,
+      coachingUpgrades: [],
     })
   })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shiftPlayerAttribute, shiftPlayerAttributes } from './attributeShift'
+import { shiftPlayerAttribute, shiftPlayerAttributes, shiftPlayerHiddenTrait } from './attributeShift'
 import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR } from './constants'
 import { makeTestPlayer } from './testFixtures'
 
@@ -65,5 +65,35 @@ describe('shiftPlayerAttribute', () => {
     const originalOutsideShot = player.attributes.outsideShot
     shiftPlayerAttribute(player, 'outsideShot', 5)
     expect(player.attributes.outsideShot).toBe(originalOutsideShot)
+  })
+})
+
+describe('shiftPlayerHiddenTrait', () => {
+  it('shifts only the given hidden trait, leaving the others and overallRating untouched', () => {
+    const player = makeTestPlayer()
+    const shifted = shiftPlayerHiddenTrait(player, 'clutch', 5)
+    expect(shifted.hidden.clutch).toBe(player.hidden.clutch + 5)
+    expect(shifted.hidden.consistency).toBe(player.hidden.consistency)
+    expect(shifted.hidden.durability).toBe(player.hidden.durability)
+    expect(shifted.overallRating).toBe(player.overallRating)
+  })
+
+  it('clamps at ATTRIBUTE_CEILING rather than overshooting', () => {
+    const player = makeTestPlayer({ hidden: { durability: 95 } })
+    const shifted = shiftPlayerHiddenTrait(player, 'durability', 10)
+    expect(shifted.hidden.durability).toBe(ATTRIBUTE_CEILING)
+  })
+
+  it('clamps at ATTRIBUTE_FLOOR rather than undershooting', () => {
+    const player = makeTestPlayer({ hidden: { consistency: 42 } })
+    const shifted = shiftPlayerHiddenTrait(player, 'consistency', -10)
+    expect(shifted.hidden.consistency).toBe(ATTRIBUTE_FLOOR)
+  })
+
+  it('does not mutate the original player', () => {
+    const player = makeTestPlayer()
+    const originalClutch = player.hidden.clutch
+    shiftPlayerHiddenTrait(player, 'clutch', 5)
+    expect(player.hidden.clutch).toBe(originalClutch)
   })
 })
