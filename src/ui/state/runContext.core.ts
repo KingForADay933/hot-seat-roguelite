@@ -26,6 +26,14 @@ export interface RunContextValue {
   bundle: RunBundle | null
   draft: PendingDraft | null
   loading: boolean
+  /** Whether the results screen for the season that ended a fired run has been continued past yet.
+   *  Held only in memory (not persisted, same rationale as PendingDraft above): the fired run's
+   *  final Season Results screen shows once (see App.tsx), and losing this flag to a refresh just
+   *  means it shows again, not a real loss of progress. Reset to false by beginDraft. */
+  fireAcknowledged: boolean
+  /** Continues past a fired run's final Season Results screen to the Fired screen -- the shop-less
+   *  equivalent of openShop for a run that's over. */
+  acknowledgeFired: () => void
   beginDraft: () => Promise<void>
   confirmDraft: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => Promise<void>
   /** Simulates the next chunk of the current season (or a fresh season's first chunk) -- Section

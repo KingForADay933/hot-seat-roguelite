@@ -13,6 +13,8 @@ function AppContent() {
     bundle,
     draft,
     loading,
+    fireAcknowledged,
+    acknowledgeFired,
     beginDraft,
     confirmDraft,
     simSeasonChunk,
@@ -31,13 +33,15 @@ function AppContent() {
   if (bundle.run.seasonsPlayed === 0 && bundle.run.chunkInSeason === 0) {
     return <TeamRevealScreen bundle={bundle} onBeginSeason={simSeasonChunk} />
   }
-  if (bundle.run.status === 'fired') return <FiredScreen bundle={bundle} onNewRun={beginDraft} />
+  // The season that got the GM fired still gets its own results recap -- just no shop, since
+  // there's no next season left to spend the budget in. fireAcknowledged gates it to once.
+  if (bundle.run.status === 'fired' && fireAcknowledged) return <FiredScreen bundle={bundle} onNewRun={beginDraft} />
   if (bundle.shop) return <ShopScreen bundle={bundle} onBuy={buyShopOffer} onReroll={rerollShop} onContinue={simSeasonChunk} />
   // chunkInSeason > 0 means a non-final chunk (Section 9) just played -- the season isn't over yet.
   if (bundle.run.chunkInSeason > 0) {
     return <ChunkResultsScreen bundle={bundle} onContinue={simSeasonChunk} onSetMinutes={setRotationMinutes} onSetFocus={setTrainingFocus} />
   }
-  return <SeasonResultsScreen bundle={bundle} onContinue={openShop} />
+  return <SeasonResultsScreen bundle={bundle} onContinue={bundle.run.status === 'fired' ? acknowledgeFired : openShop} />
 }
 
 function App() {

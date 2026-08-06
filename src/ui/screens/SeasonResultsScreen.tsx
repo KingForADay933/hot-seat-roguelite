@@ -21,6 +21,8 @@ export function SeasonResultsScreen({ bundle, onContinue }: { bundle: RunBundle;
         <p className="text-positive">
           Target hit. The board's raising the bar — Stretch {run.stretchNumber} begins, top {targetPct}% now required.
         </p>
+      ) : run.status === 'fired' ? (
+        <p className="text-negative">Missed it. That was the last chance this stretch -- the board's letting you go.</p>
       ) : (
         <p className="text-negative">
           Missed it. Season {run.seasonInStretch} of {run.seasonsPerStretch} this stretch is next — same top {targetPct}%
@@ -41,7 +43,7 @@ export function SeasonResultsScreen({ bundle, onContinue }: { bundle: RunBundle;
       <h2>Final Standings</h2>
       <StandingsTable rows={completedSeason.standings} teams={teams} userTeamId={run.teamId} />
       <button className="primary" onClick={onContinue}>
-        Continue to Shop
+        {run.status === 'fired' ? 'Continue' : 'Continue to Shop'}
       </button>
     </main>
   )

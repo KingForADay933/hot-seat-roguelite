@@ -21,6 +21,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const [bundle, setBundle] = useState<RunBundle | null>(null)
   const [draft, setDraft] = useState<PendingDraft | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fireAcknowledged, setFireAcknowledged] = useState(false)
 
   useEffect(() => {
     loadRunBundle().then((loaded) => {
@@ -30,6 +31,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const beginDraft = useCallback(async () => {
+    setFireAcknowledged(false)
     await clearRunBundle()
     const { league, teams, players } = generateLeague({
       teamCount: RUN_TEAM_COUNT,
@@ -196,6 +198,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
     [bundle],
   )
 
+  const acknowledgeFired = useCallback(() => setFireAcknowledged(true), [])
+
   const rerollShop = useCallback(async () => {
     if (!bundle?.shop || bundle.shop.rerollsRemaining <= 0) return
     const roster = bundle.players.filter((p) => p.teamId === bundle.run.teamId)
@@ -215,6 +219,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
     bundle,
     draft,
     loading,
+    fireAcknowledged,
+    acknowledgeFired,
     beginDraft,
     confirmDraft,
     simSeasonChunk,
