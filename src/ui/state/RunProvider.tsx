@@ -7,10 +7,10 @@ import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { clamp } from '../../engine/math'
 import { pickWorstTeamId } from '../../run/assignWorstTeam'
-import { HOUSE_RULE_DRAFT_SIZE, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT, SYSTEM_DRAFT_SIZE } from '../../run/constants'
+import { HOUSE_RULE_DRAFT_SIZE, PLAYER_CAMP_COST, QUIRK_DRAFT_SIZE, RUN_SEASON_LENGTH, RUN_TEAM_COUNT, SYSTEM_DRAFT_SIZE, TEAM_CAMP_COST } from '../../run/constants'
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { createRun } from '../../run/runState'
-import { applyPlayerCamp, applyTeamCamp, generateShopOffers, openShopVisit, type ShopTier } from '../../run/shop'
+import { applyPlayerCamp, applyTeamCamp, openShopVisit, type ShopTier } from '../../run/shop'
 import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
 import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
 import { applyRosterQuirk, pickRandomRosterQuirks, type RosterQuirkId } from '../../run/variation/rosterQuirks'
@@ -154,66 +154,64 @@ export function RunProvider({ children }: { children: ReactNode }) {
 
   const openShop = useCallback(async () => {
     if (!bundle) return
-    const roster = bundle.players.filter((p) => p.teamId === bundle.run.teamId)
     const tier: ShopTier = bundle.lastSeasonTargetHit ? 'expanded' : 'condensed'
-    const updatedBundle: RunBundle = { ...bundle, shop: openShopVisit(tier, roster, defaultRng) }
+    const updatedBundle: RunBundle = { ...bundle, shop: openShopVisit(tier) }
     await saveRunBundle(updatedBundle)
     setBundle(updatedBundle)
   }, [bundle])
 
-  const buyShopOffer = useCallback(
-    async (offerId: string) => {
+  /** Shared by both camp purchases: recomputes synergy from the (now camp-boosted) roster's fit to
+   *  the team's drafted system -- same computation the initial draft-time score used, not a
+   *  parallel invented bump (Team.synergyScore's doc comment flags camps as feeding back into it). */
+  const teamsWithRecomputedSynergy = useCallback((forBundle: RunBundle, updatedPlayers: RunBundle['players']) => {
+    const team = forBundle.teams.find((t) => t.id === forBundle.run.teamId)
+    if (!team) return forBundle.teams
+    return forBundle.teams.map((t) =>
+      t.id === team.id
+        ? { ...t, synergyScore: computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId], updatedPlayers.filter((p) => p.teamId === t.id)) }
+        : t,
+    )
+  }, [])
+
+  const buyPlayerCamp = useCallback(
+    async (playerId: PlayerId, attribute: AttributeKey) => {
       if (!bundle?.shop) return
-      const offer = bundle.shop.offers.find((o) => o.id === offerId)
-      if (!offer || bundle.run.budget < offer.cost) return
+      if (bundle.shop.playerCampsRemaining <= 0 || bundle.run.budget < PLAYER_CAMP_COST) return
 
-      const updatedPlayers =
-        offer.type === 'player-camp'
-          ? applyPlayerCamp(bundle.players, offer.playerId!, defaultRng)
-          : applyTeamCamp(bundle.players, bundle.run.teamId, defaultRng)
-
-      // Camps grow synergy from where the draft-time roster fit left it (Team.synergyScore's doc
-      // comment flags camps as one of the systems expected to feed back into it) -- recomputed the
-      // same way the initial draft-time score was, from the (now camp-boosted) roster's fit to the
-      // team's drafted system, not a parallel invented bump.
-      const team = bundle.teams.find((t) => t.id === bundle.run.teamId)
-      const updatedTeams = team
-        ? bundle.teams.map((t) =>
-            t.id === team.id
-              ? { ...t, synergyScore: computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId], updatedPlayers.filter((p) => p.teamId === t.id)) }
-              : t,
-          )
-        : bundle.teams
-
+      const updatedPlayers = applyPlayerCamp(bundle.players, playerId, attribute, defaultRng)
       const updatedBundle: RunBundle = {
         ...bundle,
-        run: { ...bundle.run, budget: bundle.run.budget - offer.cost },
+        run: { ...bundle.run, budget: bundle.run.budget - PLAYER_CAMP_COST },
         players: updatedPlayers,
-        teams: updatedTeams,
-        shop: { ...bundle.shop, offers: bundle.shop.offers.filter((o) => o.id !== offerId) },
+        teams: teamsWithRecomputedSynergy(bundle, updatedPlayers),
+        shop: { ...bundle.shop, playerCampsRemaining: bundle.shop.playerCampsRemaining - 1 },
       }
       await saveRunBundle(updatedBundle)
       setBundle(updatedBundle)
     },
-    [bundle],
+    [bundle, teamsWithRecomputedSynergy],
+  )
+
+  const buyTeamCamp = useCallback(
+    async (attribute: AttributeKey) => {
+      if (!bundle?.shop) return
+      if (bundle.shop.teamCampsRemaining <= 0 || bundle.run.budget < TEAM_CAMP_COST) return
+
+      const updatedPlayers = applyTeamCamp(bundle.players, bundle.run.teamId, attribute, defaultRng)
+      const updatedBundle: RunBundle = {
+        ...bundle,
+        run: { ...bundle.run, budget: bundle.run.budget - TEAM_CAMP_COST },
+        players: updatedPlayers,
+        teams: teamsWithRecomputedSynergy(bundle, updatedPlayers),
+        shop: { ...bundle.shop, teamCampsRemaining: bundle.shop.teamCampsRemaining - 1 },
+      }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle, teamsWithRecomputedSynergy],
   )
 
   const acknowledgeFired = useCallback(() => setFireAcknowledged(true), [])
-
-  const rerollShop = useCallback(async () => {
-    if (!bundle?.shop || bundle.shop.rerollsRemaining <= 0) return
-    const roster = bundle.players.filter((p) => p.teamId === bundle.run.teamId)
-    const updatedBundle: RunBundle = {
-      ...bundle,
-      shop: {
-        tier: bundle.shop.tier,
-        offers: generateShopOffers(bundle.shop.tier, roster, defaultRng),
-        rerollsRemaining: bundle.shop.rerollsRemaining - 1,
-      },
-    }
-    await saveRunBundle(updatedBundle)
-    setBundle(updatedBundle)
-  }, [bundle])
 
   const value: RunContextValue = {
     bundle,
@@ -227,8 +225,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setRotationMinutes,
     setTrainingFocus,
     openShop,
-    buyShopOffer,
-    rerollShop,
+    buyPlayerCamp,
+    buyTeamCamp,
   }
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>

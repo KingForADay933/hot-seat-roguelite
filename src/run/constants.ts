@@ -54,21 +54,20 @@ export const BUDGET_PER_WIN = 10
 export const STRETCH_CLEAR_BUDGET_BONUS = 150
 
 // --- Shop (Section 8.4) & Camps (Section 8.5), Phase 7 -- first-pass numbers, needs playtesting to tune ---
-// The condensed tier runs every season; a stretch-clear season instead opens the pricier,
-// wider expanded tier (run/shop/shopOffers.ts's generateShopOffers picks which from
-// lastSeasonTargetHit). Both sell camps -- see run/shop/campEffect.ts -- coaching upgrades
-// (Phase 8) and consumables (Phase 9) aren't built yet.
+// The condensed tier runs every season; a stretch-clear season instead opens the pricier, wider
+// expanded tier (run/shop/shopVisit.ts's openShopVisit picks which from lastSeasonTargetHit).
+// A tier grants *purchase power* -- how many camp buys this visit -- not a pre-rolled, fixed
+// player list: the GM freely picks who (any active roster player) and, for the boost itself,
+// which attribute (see run/shop/campEffect.ts). Coaching upgrades (Phase 8) and consumables
+// (Phase 9) aren't built yet.
 
-/** Player-camp offers rolled for the every-season condensed tier. */
-export const SHOP_CONDENSED_OFFER_COUNT = 2
+/** Single-player camp purchases allowed on the every-season condensed tier. */
+export const SHOP_CONDENSED_PLAYER_CAMP_LIMIT = 1
 
-/** Player-camp offers rolled for the stretch-clear expanded tier, plus SHOP_EXPANDED_TEAM_OFFER_COUNT team-camp offers. */
-export const SHOP_EXPANDED_PLAYER_OFFER_COUNT = 3
-export const SHOP_EXPANDED_TEAM_OFFER_COUNT = 1
-
-/** Free re-rolls of the whole offer list -- an expanded-tier-only perk (Section 8.4's "plus a
- *  reroll option"), not available on the every-season condensed tier. */
-export const SHOP_EXPANDED_REROLLS = 1
+/** Single-player camp purchases allowed on the stretch-clear expanded tier, plus
+ *  SHOP_EXPANDED_TEAM_CAMP_LIMIT whole-team camp purchases. */
+export const SHOP_EXPANDED_PLAYER_CAMP_LIMIT = 3
+export const SHOP_EXPANDED_TEAM_CAMP_LIMIT = 1
 
 /** Cost of sending one player to camp. */
 export const PLAYER_CAMP_COST = 60

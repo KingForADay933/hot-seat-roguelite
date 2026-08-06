@@ -15,15 +15,18 @@ function makeRoster(size: number) {
 }
 
 describe('applyPlayerCamp', () => {
-  it('boosts only the targeted player, within the bounded shift range', () => {
+  it('boosts only the targeted player, only on the chosen attribute, within the bounded shift range', () => {
     const roster = makeRoster(3)
     const target = roster[1]
-    const result = applyPlayerCamp(roster, target.id, createSeededRng(1))
+    const result = applyPlayerCamp(roster, target.id, 'insideShot', createSeededRng(1))
 
     const updatedTarget = result.find((p) => p.id === target.id)!
-    expect(updatedTarget.overallRating).toBeGreaterThan(target.overallRating)
+    // See the applyTeamCamp test below for why this is >= rather than a guaranteed increase --
+    // a single-attribute shift can round-trip to the same 10-attribute-average overallRating.
+    expect(updatedTarget.overallRating).toBeGreaterThanOrEqual(target.overallRating)
     expect(updatedTarget.attributes.insideShot - target.attributes.insideShot).toBeGreaterThanOrEqual(CAMP_ATTRIBUTE_SHIFT_MIN)
     expect(updatedTarget.attributes.insideShot - target.attributes.insideShot).toBeLessThanOrEqual(CAMP_ATTRIBUTE_SHIFT_MAX)
+    expect(updatedTarget.attributes.outsideShot).toBe(target.attributes.outsideShot)
 
     for (const p of result.filter((p) => p.id !== target.id)) {
       const original = roster.find((r) => r.id === p.id)!
@@ -33,18 +36,22 @@ describe('applyPlayerCamp', () => {
 })
 
 describe('applyTeamCamp', () => {
-  it('boosts every player on the given team, and leaves other teams untouched', () => {
+  it('boosts the chosen attribute for every player on the given team, and leaves other teams untouched', () => {
     const roster = makeRoster(3)
     const other = makeTestPlayer()
     other.teamId = 'other-team'
     const players = [...roster, other]
 
-    const result = applyTeamCamp(players, TEAM_ID, createSeededRng(1))
+    const result = applyTeamCamp(players, TEAM_ID, 'insideShot', createSeededRng(1))
 
     for (const p of roster) {
       const updated = result.find((r) => r.id === p.id)!
-      expect(updated.overallRating).toBeGreaterThan(p.overallRating)
+      // A single-attribute shift moves the 10-attribute average so little it can round to the same
+      // overallRating -- unlike the old uniform-shift-every-attribute camp, so this only asserts
+      // no *decrease*, not a guaranteed bump.
+      expect(updated.overallRating).toBeGreaterThanOrEqual(p.overallRating)
       expect(updated.attributes.insideShot - p.attributes.insideShot).toBeLessThanOrEqual(TEAM_CAMP_ATTRIBUTE_SHIFT_MAX)
+      expect(updated.attributes.outsideShot).toBe(p.attributes.outsideShot)
     }
 
     const updatedOther = result.find((r) => r.id === other.id)!

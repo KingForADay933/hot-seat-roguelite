@@ -1,4 +1,5 @@
 import type { AttributeKey, Player, Team } from '../../data/types'
+import { POSITION_ORDER } from '../../engine/matchup'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 
 /** The single focused attribute this UI wrote for a player, if any -- setTrainingFocus (RunProvider)
@@ -10,19 +11,24 @@ function currentFocus(team: Team, playerId: string): AttributeKey | null {
   return keys[0] ?? null
 }
 
-export function RosterAdjustmentPanel({
+function RosterAdjustmentGroup({
+  label,
+  players,
   team,
-  roster,
   onSetMinutes,
   onSetFocus,
 }: {
+  label: string
+  players: Player[]
   team: Team
-  roster: Player[]
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
+  if (players.length === 0) return null
+
   return (
     <div className="table-scroll">
+      <h3>{label}</h3>
       <table>
         <thead>
           <tr>
@@ -32,7 +38,7 @@ export function RosterAdjustmentPanel({
           </tr>
         </thead>
         <tbody>
-          {roster.map((player) => (
+          {players.map((player) => (
             <tr key={player.id}>
               <td>{player.name}</td>
               <td className="numeric">
@@ -63,5 +69,34 @@ export function RosterAdjustmentPanel({
         </tbody>
       </table>
     </div>
+  )
+}
+
+export function RosterAdjustmentPanel({
+  team,
+  roster,
+  onSetMinutes,
+  onSetFocus,
+}: {
+  team: Team
+  roster: Player[]
+  onSetMinutes: (playerId: string, minutes: number) => void
+  onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
+}) {
+  // Same starters-vs-bench split as TeamSummary -- listing all ~10-13 roster players in one
+  // undifferentiated table read as confusing (playtesting feedback); grouping under two headers
+  // matches how a GM actually thinks about the roster.
+  const starters = team.startingFive
+    .map((id) => roster.find((p) => p.id === id))
+    .filter((p): p is Player => p !== undefined)
+    .sort((a, b) => POSITION_ORDER.indexOf(a.positions[0]) - POSITION_ORDER.indexOf(b.positions[0]))
+  const starterIds = new Set(starters.map((p) => p.id))
+  const bench = roster.filter((p) => !starterIds.has(p.id))
+
+  return (
+    <>
+      <RosterAdjustmentGroup label="Starting Five" players={starters} team={team} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+      <RosterAdjustmentGroup label="Bench" players={bench} team={team} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+    </>
   )
 }
