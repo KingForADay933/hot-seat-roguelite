@@ -1,24 +1,27 @@
 import { useState } from 'react'
-import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
 import { MARKET_SIZES } from '../../run/marketSize'
 import { HOUSE_RULES, type HouseRuleId } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS, type RosterQuirkId } from '../../run/variation/rosterQuirks'
 import { DraftOptionCard } from '../components/DraftOptionCard'
 import type { PendingDraft } from '../state/runContext.core'
 
+/**
+ * Phase one of run setup: the two picks that reshape the roster itself. The system draft used to
+ * live here too, but it scores against a finished roster, so it moved to the reveal screen -- see
+ * PendingDraft's doc comment.
+ */
 export function RunDraftScreen({
   draft,
   onConfirm,
 }: {
   draft: PendingDraft
-  onConfirm: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => void
+  onConfirm: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => void
 }) {
   const [rosterQuirk, setRosterQuirk] = useState<RosterQuirkId | null>(null)
   const [houseRule, setHouseRule] = useState<HouseRuleId | null>(null)
-  const [system, setSystem] = useState<SystemId | null>(null)
   const market = MARKET_SIZES[draft.marketSize]
 
-  const canConfirm = rosterQuirk && houseRule && system
+  const canConfirm = rosterQuirk && houseRule
 
   return (
     <main>
@@ -26,7 +29,7 @@ export function RunDraftScreen({
       <p>
         <strong>{market.label}</strong> -- {market.description}
       </p>
-      <p>Three choices before the season starts. Pick one from each.</p>
+      <p>Two calls that shape the roster you inherit. You&apos;ll pick a system after you&apos;ve seen what they left you.</p>
 
       <h2>Roster Quirk</h2>
       <div className="draft-options">
@@ -54,21 +57,8 @@ export function RunDraftScreen({
         ))}
       </div>
 
-      <h2>System</h2>
-      <div className="draft-options">
-        {draft.systemOptions.map((id) => (
-          <DraftOptionCard
-            key={id}
-            label={OFFENSIVE_PLAYBOOKS[id].name}
-            description={OFFENSIVE_PLAYBOOKS[id].description}
-            selected={id === system}
-            onSelect={() => setSystem(id)}
-          />
-        ))}
-      </div>
-
-      <button className="primary" disabled={!canConfirm} onClick={() => canConfirm && onConfirm(rosterQuirk, houseRule, system)}>
-        Confirm
+      <button className="primary" disabled={!canConfirm} onClick={() => canConfirm && onConfirm(rosterQuirk, houseRule)}>
+        Meet the Team
       </button>
     </main>
   )

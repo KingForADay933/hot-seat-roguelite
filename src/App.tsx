@@ -12,11 +12,13 @@ function AppContent() {
   const {
     bundle,
     draft,
+    reveal,
     loading,
     fireAcknowledged,
     acknowledgeFired,
     beginDraft,
     confirmDraft,
+    lockSystem,
     simSeasonChunk,
     setRotationMinutes,
     setTrainingFocus,
@@ -31,12 +33,16 @@ function AppContent() {
   } = useRun()
 
   if (loading) return <p>Loading…</p>
+  // Run setup is two phases: the roster-shaping picks, then the reveal, where the system is chosen
+  // against the roster those picks produced. Neither is persisted -- the run only exists once
+  // lockSystem saves a bundle -- so both are checked before the saved-bundle branches below.
   if (draft) return <RunDraftScreen draft={draft} onConfirm={confirmDraft} />
+  if (reveal) return <TeamRevealScreen mode="draft-system" reveal={reveal} onLockSystem={lockSystem} />
   if (!bundle) return <RunStartScreen onStart={beginDraft} />
   // Nothing simulated yet in this run at all -- distinct from chunkInSeason alone, which also
   // reads 0 once a later season's chunk 4 has just wrapped up (see evaluateSeasonEnd).
   if (bundle.run.seasonsPlayed === 0 && bundle.run.chunkInSeason === 0) {
-    return <TeamRevealScreen bundle={bundle} onBeginSeason={simSeasonChunk} />
+    return <TeamRevealScreen mode="locked" bundle={bundle} onBeginSeason={simSeasonChunk} />
   }
   // The season that got the GM fired still gets its own results recap -- just no shop, since
   // there's no next season left to spend the budget in. fireAcknowledged gates it to once.

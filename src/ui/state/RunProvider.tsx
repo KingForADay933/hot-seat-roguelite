@@ -29,11 +29,12 @@ import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
 import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
 import { applyRosterQuirk, pickRandomRosterQuirks, type RosterQuirkId } from '../../run/variation/rosterQuirks'
 import { computeInitialSynergyScore, pickRandomSystems } from '../../run/variation/systemDraft'
-import { RunContext, type PendingDraft, type RunContextValue } from './runContext.core'
+import { RunContext, type PendingDraft, type PendingReveal, type RunContextValue } from './runContext.core'
 
 export function RunProvider({ children }: { children: ReactNode }) {
   const [bundle, setBundle] = useState<RunBundle | null>(null)
   const [draft, setDraft] = useState<PendingDraft | null>(null)
+  const [reveal, setReveal] = useState<PendingReveal | null>(null)
   const [loading, setLoading] = useState(true)
   const [fireAcknowledged, setFireAcknowledged] = useState(false)
 
@@ -57,6 +58,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     league.userControlledTeamId = teamId
 
     setBundle(null)
+    setReveal(null)
     setDraft({
       league,
       teams,
@@ -64,13 +66,19 @@ export function RunProvider({ children }: { children: ReactNode }) {
       teamId,
       rosterQuirkOptions: pickRandomRosterQuirks(QUIRK_DRAFT_SIZE, defaultRng),
       houseRuleOptions: pickRandomHouseRules(HOUSE_RULE_DRAFT_SIZE, defaultRng),
-      systemOptions: pickRandomSystems(SYSTEM_DRAFT_SIZE, defaultRng),
       marketSize: pickRandomMarketSize(defaultRng),
     })
   }, [])
 
+  /**
+   * Phase one of setup. Both picks here rewrite the roster -- the quirk shifts attributes and can
+   * re-age players, the house rule can swap starters or waive the back of the bench -- so they're
+   * applied in that order and the result becomes the roster the reveal screen shows. No run is
+   * created yet: without a system there's no synergy score to write, and the whole point of the
+   * split is that the system is chosen against this roster rather than ahead of it.
+   */
   const confirmDraft = useCallback(
-    async (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => {
+    async (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => {
       if (!draft) return
       const { league, teams, players, teamId, marketSize } = draft
 
@@ -84,20 +92,47 @@ export function RunProvider({ children }: { children: ReactNode }) {
 
       const userTeam = teams.find((t) => t.id === teamId)!
       const { team: teamAfterHouseRule, players: playersAfterHouseRule } = applyHouseRule(houseRule, userTeam, playersAfterQuirk)
+      const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamAfterHouseRule : t))
 
-      // Synergy is computed from the roster's FINAL state -- after both the quirk's attribute
-      // shifts and the house rule's roster cuts -- so it reflects what the team actually is, not
-      // its pre-draft starting point.
-      const finalRoster = playersAfterHouseRule.filter((p) => p.teamId === teamId)
-      const synergyScore = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[system], finalRoster)
-      const teamWithSystem = { ...teamAfterHouseRule, offensiveStrategyId: system, synergyScore }
-      const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamWithSystem : t))
+      setDraft(null)
+      setReveal({
+        league,
+        teams: teamsAfterHouseRule,
+        players: playersAfterHouseRule,
+        teamId,
+        rosterQuirk,
+        houseRule,
+        marketSize,
+        systemOptions: pickRandomSystems(SYSTEM_DRAFT_SIZE, defaultRng),
+      })
+    },
+    [draft],
+  )
+
+  /**
+   * Phase two of setup, and the first thing in a run that actually persists. Synergy is computed
+   * from the roster's FINAL state -- after both the quirk's attribute shifts and the house rule's
+   * roster cuts -- so it reflects what the team actually is, which is also exactly the roster the
+   * GM was just looking at when they picked: the number shown on the system card is the number
+   * that gets written here.
+   */
+  const lockSystem = useCallback(
+    async (system: SystemId) => {
+      if (!reveal) return
+      const { league, teams, players, teamId, rosterQuirk, houseRule, marketSize } = reveal
+      if (!reveal.systemOptions.includes(system)) return
+
+      const userTeam = teams.find((t) => t.id === teamId)
+      if (!userTeam) return
+      const finalRoster = players.filter((p) => p.teamId === teamId)
+      const synergyScore = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[system], finalRoster, userTeam.rotationMinutes)
+      const teamsWithSystem = teams.map((t) => (t.id === teamId ? { ...t, offensiveStrategyId: system, synergyScore } : t))
 
       const newBundle: RunBundle = {
         run: createRun(teamId, rosterQuirk, houseRule, marketSize),
         league,
-        teams: teamsAfterHouseRule,
-        players: playersAfterHouseRule,
+        teams: teamsWithSystem,
+        players,
         games: [],
         lastSeasonTargetHit: false,
         lastWildcardEvent: null,
@@ -107,9 +142,9 @@ export function RunProvider({ children }: { children: ReactNode }) {
       }
       await saveRunBundle(newBundle)
       setBundle(newBundle)
-      setDraft(null)
+      setReveal(null)
     },
-    [draft],
+    [reveal],
   )
 
   const simSeasonChunk = useCallback(async () => {
@@ -198,8 +233,11 @@ export function RunProvider({ children }: { children: ReactNode }) {
           ? {
               ...t,
               synergyScore:
-                computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId], updatedPlayers.filter((p) => p.teamId === t.id)) +
-                upgradeBonus,
+                computeInitialSynergyScore(
+                  OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId],
+                  updatedPlayers.filter((p) => p.teamId === t.id),
+                  t.rotationMinutes,
+                ) + upgradeBonus,
             }
           : t,
       )
@@ -361,11 +399,13 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const value: RunContextValue = {
     bundle,
     draft,
+    reveal,
     loading,
     fireAcknowledged,
     acknowledgeFired,
     beginDraft,
     confirmDraft,
+    lockSystem,
     simSeasonChunk,
     setRotationMinutes,
     setTrainingFocus,
