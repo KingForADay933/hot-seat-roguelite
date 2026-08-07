@@ -210,3 +210,188 @@ select {
   background: var(--bg);
   color: var(--text);
 }
+
+/* --- Stretch + simcast (Section 14.2's Live Playback) --- */
+
+.stretch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 24px 0;
+}
+
+.scoreboard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px 24px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-alt);
+}
+
+.scoreboard-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scoreboard-side-user {
+  font-weight: 700;
+}
+
+.scoreboard-team {
+  display: inline-flex;
+  align-items: center;
+}
+
+.scoreboard-score {
+  font-size: 32px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.scoreboard-period {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  min-width: 64px;
+  text-align: center;
+}
+
+.simcast-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.simcast-body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 700px) {
+  .simcast-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.commentary-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* Capped so a long game scrolls inside the feed instead of pushing the box score off-screen. */
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.commentary-line {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  animation: commentary-in 240ms ease-out;
+}
+
+.commentary-line-user {
+  font-weight: 600;
+}
+
+.commentary-period {
+  flex-shrink: 0;
+  width: 32px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding-top: 2px;
+}
+
+.commentary-empty {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+@keyframes commentary-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.simcast-floor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.on-court h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.on-court-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.on-court-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 60px 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.on-court-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.on-court-state {
+  font-size: 12px;
+  text-align: right;
+}
+
+.fatigue-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.fatigue-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 200ms linear;
+}
+
+/* Score ticks, the feed's entry slide, and the draining fatigue bars are all decoration -- none of
+   them carry information the numbers beside them don't. */
+@media (prefers-reduced-motion: reduce) {
+  .commentary-line {
+    animation: none;
+  }
+
+  .fatigue-bar-fill {
+    transition: none;
+  }
+}

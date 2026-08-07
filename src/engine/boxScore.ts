@@ -13,8 +13,10 @@ import type { Rng } from './rng'
 
 /** Pass-originated play calls where a make credits an assist to secondaries[0]. Other play calls
  *  (Pick-and-Roll, Isolation, Post-Up, Transition) are modeled as the primary scoring unassisted --
- *  a deliberate MVP simplification since there's no live off-ball movement model to attribute otherwise. */
-const ASSIST_ELIGIBLE_PLAY_CALLS: PlayCallType[] = ['spot-up', 'cutting']
+ *  a deliberate MVP simplification since there's no live off-ball movement model to attribute otherwise.
+ *  Exported so the simcast's running box score credits assists by the same rule this one does,
+ *  rather than a copy that could drift. */
+export const ASSIST_ELIGIBLE_PLAY_CALLS: PlayCallType[] = ['spot-up', 'cutting']
 
 /** There's no live rebound-triggered possession model in MVP, so a miss's rebound is approximated
  *  post-hoc: the offense recovers roughly as often as a real offensive-rebound rate, weighted by Rebounding. */

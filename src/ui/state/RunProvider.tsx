@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import type { AttributeKey, PlayerId } from '../../data/types'
+import type { AttributeKey, Game, GameId, PlayerId } from '../../data/types'
 import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
 import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from '../../data/persistence/runRepository'
 import { REGULATION_MINUTES } from '../../engine/constants'
@@ -7,6 +7,11 @@ import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { clamp } from '../../engine/math'
 import { pickWorstTeamId } from '../../run/assignWorstTeam'
+import { beginSeason } from '../../run/beginSeason'
+import { createChunkSimContext } from '../../run/chunkSimContext'
+import { finalizeChunk } from '../../run/finalizeChunk'
+import { resolveGame } from '../../run/resolveGame'
+import { chunkRange } from '../../run/seasonChunks'
 import { applyCoachingUpgrade, computeSynergyUpgradeBonus, pickCoachingUpgradeOffers, type CoachingUpgradeId } from '../../run/coachingUpgrades'
 import {
   COACHING_UPGRADE_COST,
@@ -29,13 +34,14 @@ import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
 import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
 import { applyRosterQuirk, pickRandomRosterQuirks, type RosterQuirkId } from '../../run/variation/rosterQuirks'
 import { computeInitialSynergyScore, pickRandomSystems } from '../../run/variation/systemDraft'
-import { RunContext, type PendingDraft, type RunContextValue } from './runContext.core'
+import { RunContext, type LiveGame, type PendingDraft, type RunContextValue } from './runContext.core'
 
 export function RunProvider({ children }: { children: ReactNode }) {
   const [bundle, setBundle] = useState<RunBundle | null>(null)
   const [draft, setDraft] = useState<PendingDraft | null>(null)
   const [loading, setLoading] = useState(true)
   const [fireAcknowledged, setFireAcknowledged] = useState(false)
+  const [liveGame, setLiveGame] = useState<LiveGame | null>(null)
 
   useEffect(() => {
     loadRunBundle().then((loaded) => {
@@ -46,6 +52,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
 
   const beginDraft = useCallback(async () => {
     setFireAcknowledged(false)
+    setLiveGame(null)
     await clearRunBundle()
     const { league, teams, players } = generateLeague({
       teamCount: RUN_TEAM_COUNT,
@@ -104,6 +111,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
         lastBudgetEarned: 0,
         shop: null,
         lastChunkInsights: [],
+        stretchInProgress: false,
+        pendingChunkInsights: [],
       }
       await saveRunBundle(newBundle)
       setBundle(newBundle)
@@ -130,6 +139,169 @@ export function RunProvider({ children }: { children: ReactNode }) {
       lastWildcardEvent: result.wildcardEvent,
       shop: null,
       lastChunkInsights: result.chunkInsights,
+      // The batch path skips the stretch screen entirely, so it never opens a stretch to close.
+      stretchInProgress: false,
+      pendingChunkInsights: [],
+    }
+    await saveRunBundle(updatedBundle)
+    setBundle(updatedBundle)
+  }, [bundle])
+
+  /**
+   * Opens the stretch screen for the next chunk: generates the season if this is its first chunk,
+   * then plays the chunk's AI-vs-AI games in bulk, leaving the GM's own games unplayed for them to
+   * sim or watch one at a time.
+   *
+   * The AI games go now rather than at the checkpoint so that finishStretch has nothing left to do
+   * but the GM's own remaining games -- and because there's nothing in them to watch anyway (see
+   * runTeamChunkGames). No standings are shown mid-stretch, so the league running slightly ahead of
+   * the GM's own results is never visible.
+   */
+  const beginStretch = useCallback(async () => {
+    if (!bundle || bundle.stretchInProgress) return
+    const { run, league, teams } = bundle
+
+    let players = bundle.players
+    let games = bundle.games
+    // Only a season's first chunk rolls an event; later chunks clear the previous reveal so it
+    // can't linger onto a second checkpoint screen.
+    let wildcardEvent = null
+    if (run.chunkInSeason === 0) {
+      const started = beginSeason(run, league, players, defaultRng)
+      players = started.players
+      games = started.games
+      wildcardEvent = started.wildcardEvent
+    }
+
+    const context = createChunkSimContext(run, league, teams, players)
+    const { start, end } = chunkRange(games.length, run.chunkInSeason)
+    const updatedGames = [...games]
+    for (let i = start; i < end; i++) {
+      const scheduled = games[i]
+      if (scheduled.homeTeamId === run.teamId || scheduled.awayTeamId === run.teamId) continue
+      updatedGames[i] = resolveGame(context, run, scheduled, defaultRng).game
+    }
+
+    const updatedBundle: RunBundle = {
+      ...bundle,
+      players,
+      games: updatedGames,
+      lastWildcardEvent: wildcardEvent,
+      stretchInProgress: true,
+      pendingChunkInsights: [],
+    }
+    await saveRunBundle(updatedBundle)
+    setBundle(updatedBundle)
+  }, [bundle])
+
+  /** Folds one just-resolved game back into the season and banks its insights for the checkpoint.
+   *  Shared by simGame and commitLiveGame, which differ only in who played the game. */
+  const applyResolvedGame = useCallback(
+    async (forBundle: RunBundle, index: number, alreadyPlayed?: Game) => {
+      const { run, league, teams, players } = forBundle
+      const context = createChunkSimContext(run, league, teams, players)
+      const resolved = resolveGame(context, run, forBundle.games[index], defaultRng, alreadyPlayed)
+
+      const games = [...forBundle.games]
+      games[index] = resolved.game
+
+      const updatedBundle: RunBundle = {
+        ...forBundle,
+        games,
+        pendingChunkInsights: [...forBundle.pendingChunkInsights, ...resolved.insights],
+      }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [],
+  )
+
+  /** Index of a stretch game that's still awaiting resolution -- -1 for an unknown id or one that's
+   *  already been played, which is how every action below no-ops on a stale click. */
+  const unplayedGameIndex = useCallback((forBundle: RunBundle, gameId: GameId): number => {
+    const index = forBundle.games.findIndex((g) => g.id === gameId)
+    return index !== -1 && !forBundle.games[index].isPlayed ? index : -1
+  }, [])
+
+  const simGame = useCallback(
+    async (gameId: GameId) => {
+      if (!bundle?.stretchInProgress) return
+      const index = unplayedGameIndex(bundle, gameId)
+      if (index === -1) return
+      await applyResolvedGame(bundle, index)
+    },
+    [bundle, applyResolvedGame, unplayedGameIndex],
+  )
+
+  /**
+   * Hands the simcast screen everything it needs to play a game out possession by possession. The
+   * in-flight game lives in React state only, never in the save: nothing is committed until the
+   * final buzzer (commitLiveGame), so closing the tab mid-game leaves it simply unplayed rather than
+   * half-recorded. The consumable-boosted context is captured here so the game the GM watches is
+   * simulated under exactly the same conditions simGame would have used.
+   */
+  const watchGame = useCallback(
+    (gameId: GameId) => {
+      if (!bundle?.stretchInProgress) return
+      const index = unplayedGameIndex(bundle, gameId)
+      if (index === -1) return
+      setLiveGame({
+        game: bundle.games[index],
+        context: createChunkSimContext(bundle.run, bundle.league, bundle.teams, bundle.players),
+      })
+    },
+    [bundle, unplayedGameIndex],
+  )
+
+  const commitLiveGame = useCallback(
+    async (played: Game) => {
+      setLiveGame(null)
+      if (!bundle?.stretchInProgress) return
+      const index = unplayedGameIndex(bundle, played.id)
+      if (index === -1) return
+      await applyResolvedGame(bundle, index, played)
+    },
+    [bundle, applyResolvedGame, unplayedGameIndex],
+  )
+
+  const abandonLiveGame = useCallback(() => setLiveGame(null), [])
+
+  /**
+   * Closes the stretch: sims whatever the GM didn't get to and runs the chunk through finalizeChunk,
+   * landing them on the checkpoint (or, on a season's last chunk, the season-end recap). Doubles as
+   * the "sim the rest, I'm done watching" button, so it's valid with any number of games left.
+   */
+  const finishStretch = useCallback(async () => {
+    if (!bundle?.stretchInProgress) return
+    const { run, league, teams, players } = bundle
+
+    const context = createChunkSimContext(run, league, teams, players)
+    const { start, end } = chunkRange(bundle.games.length, run.chunkInSeason)
+    const games = [...bundle.games]
+    const insights = [...bundle.pendingChunkInsights]
+    for (let i = start; i < end; i++) {
+      if (games[i].isPlayed) continue
+      const resolved = resolveGame(context, run, games[i], defaultRng)
+      games[i] = resolved.game
+      insights.push(...resolved.insights)
+    }
+
+    const outcome = finalizeChunk(run, league, teams, players, games, insights)
+    const updatedBundle: RunBundle = {
+      run: outcome.run,
+      league: outcome.league,
+      teams: outcome.teams,
+      players: outcome.players,
+      games: outcome.games,
+      lastSeasonTargetHit: outcome.seasonComplete ? outcome.targetHit : bundle.lastSeasonTargetHit,
+      lastBudgetEarned: outcome.seasonComplete ? outcome.budgetEarned : bundle.lastBudgetEarned,
+      // Rolled back when the stretch opened, not here -- carried through so the checkpoint screen
+      // can still reveal it.
+      lastWildcardEvent: bundle.lastWildcardEvent,
+      shop: null,
+      lastChunkInsights: outcome.chunkInsights,
+      stretchInProgress: false,
+      pendingChunkInsights: [],
     }
     await saveRunBundle(updatedBundle)
     setBundle(updatedBundle)
@@ -363,10 +535,17 @@ export function RunProvider({ children }: { children: ReactNode }) {
     draft,
     loading,
     fireAcknowledged,
+    liveGame,
     acknowledgeFired,
     beginDraft,
     confirmDraft,
     simSeasonChunk,
+    beginStretch,
+    simGame,
+    watchGame,
+    commitLiveGame,
+    abandonLiveGame,
+    finishStretch,
     setRotationMinutes,
     setTrainingFocus,
     openShop,
