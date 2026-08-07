@@ -5,7 +5,15 @@ import { HOUSE_RULES } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS } from '../../run/variation/rosterQuirks'
 import { TeamSummary } from '../components/TeamSummary'
 
-export function TeamRevealScreen({ bundle, onBeginSeason }: { bundle: RunBundle; onBeginSeason: () => void }) {
+export function TeamRevealScreen({
+  bundle,
+  onBeginSeason,
+  onSimSeason,
+}: {
+  bundle: RunBundle
+  onBeginSeason: () => void
+  onSimSeason: () => void
+}) {
   const { run, teams, players } = bundle
   const team = teams.find((t) => t.id === run.teamId)
   if (!team) return null
@@ -41,9 +49,12 @@ export function TeamRevealScreen({ bundle, onBeginSeason }: { bundle: RunBundle;
         </p>
       </div>
       <TeamSummary team={team} roster={roster} />
-      <button className="primary" onClick={onBeginSeason}>
-        Begin Season
-      </button>
+      <div className="stretch-actions">
+        <button className="primary" onClick={onBeginSeason}>
+          Begin Season
+        </button>
+        <button onClick={onSimSeason}>Sim First Stretch</button>
+      </div>
     </main>
   )
 }
