@@ -8,11 +8,13 @@ import { StandingsTable } from '../components/StandingsTable'
 export function ChunkResultsScreen({
   bundle,
   onContinue,
+  onSimStretch,
   onSetMinutes,
   onSetFocus,
 }: {
   bundle: RunBundle
   onContinue: () => void
+  onSimStretch: () => void
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
@@ -58,11 +60,12 @@ export function ChunkResultsScreen({
       <p>Respond to what the Insights above are telling you before the next stretch of games plays out.</p>
       <RosterAdjustmentPanel team={team} roster={roster} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
 
-      <p>
+      <div className="stretch-actions">
         <button className="primary" onClick={onContinue}>
           Continue Season
         </button>
-      </p>
+        <button onClick={onSimStretch}>Sim Next Stretch</button>
+      </div>
     </main>
   )
 }

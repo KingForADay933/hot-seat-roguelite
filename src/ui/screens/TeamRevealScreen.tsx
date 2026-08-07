@@ -23,8 +23,9 @@ import type { PendingReveal } from '../state/runContext.core'
 export type TeamRevealScreenProps =
   /** Setup phase two: roster final, system still open. Nothing is persisted yet. */
   | { mode: 'draft-system'; reveal: PendingReveal; onLockSystem: (system: SystemId) => void }
-  /** The same readout after the system is locked and the run is saved -- the pre-tipoff briefing. */
-  | { mode: 'locked'; bundle: RunBundle; onBeginSeason: () => void }
+  /** The same readout after the system is locked and the run is saved -- the pre-tipoff briefing.
+   *  Both stretch entry points live here: watch the games one at a time, or sim the whole stretch. */
+  | { mode: 'locked'; bundle: RunBundle; onBeginSeason: () => void; onSimSeason: () => void }
 
 /** The fields both modes need, pulled from whichever source is in play. In draft-system mode the
  *  run doesn't exist yet, so the stakes are derived the same way createRun would derive them. */
@@ -272,9 +273,12 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
               <SystemChoiceCard key={s.id} playbook={s.playbook} synergy={s.synergy} breakdown={s.breakdown} selected />
             ))}
           </div>
-          <button className="primary" onClick={props.onBeginSeason}>
-            Begin Season
-          </button>
+          <div className="stretch-actions">
+            <button className="primary" onClick={props.onBeginSeason}>
+              Begin Season
+            </button>
+            <button onClick={props.onSimSeason}>Sim First Stretch</button>
+          </div>
         </>
       )}
     </main>

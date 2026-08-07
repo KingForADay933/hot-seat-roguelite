@@ -1,7 +1,8 @@
 import { createContext } from 'react'
-import type { AttributeKey, League, Player, PlayerId, Team, TeamId } from '../../data/types'
+import type { AttributeKey, Game, GameId, League, Player, PlayerId, Team, TeamId } from '../../data/types'
 import type { SystemId } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
+import type { ChunkSimContext } from '../../run/chunkSimContext'
 import type { CoachingUpgradeId } from '../../run/coachingUpgrades'
 import type { ConsumableId } from '../../run/consumables'
 import type { MarketSizeId } from '../../run/marketSize'
@@ -43,6 +44,18 @@ export interface PendingReveal {
   systemOptions: SystemId[]
 }
 
+/** A stretch game the GM chose to watch, currently being played out possession by possession on the
+ *  simcast screen. Held only in memory (not persisted, same rationale as PendingDraft above): the
+ *  game isn't committed until its final buzzer, so losing this to a refresh leaves it unplayed and
+ *  re-watchable rather than half-recorded. */
+export interface LiveGame {
+  /** The still-unplayed scheduled game -- teams and date for the scoreboard. */
+  game: Game
+  /** Captured when the watch began so the live game simulates under exactly the same
+   *  consumable-boosted rosters simGame would have used. */
+  context: ChunkSimContext
+}
+
 export interface RunContextValue {
   bundle: RunBundle | null
   draft: PendingDraft | null
@@ -53,6 +66,8 @@ export interface RunContextValue {
    *  final Season Results screen shows once (see App.tsx), and losing this flag to a refresh just
    *  means it shows again, not a real loss of progress. Reset to false by beginDraft. */
   fireAcknowledged: boolean
+  /** Non-null only while a game is actually being watched -- what App routes the simcast screen on. */
+  liveGame: LiveGame | null
   /** Continues past a fired run's final Season Results screen to the Fired screen -- the shop-less
    *  equivalent of openShop for a run that's over. */
   acknowledgeFired: () => void
@@ -63,10 +78,31 @@ export interface RunContextValue {
   /** Resolves phase two: scores the chosen system against the now-visible roster, writes it and the
    *  resulting synergy onto the team, and persists the run for real. */
   lockSystem: (system: SystemId) => Promise<void>
-  /** Simulates the next chunk of the current season (or a fresh season's first chunk) -- Section
-   *  9. The resulting bundle tells the caller which screen comes next (chunk checkpoint vs. the
-   *  season-end results screen) via run.chunkInSeason. */
+  /** Simulates the next chunk of the current season (or a fresh season's first chunk) in one go --
+   *  Section 9. The "just sim it" path, skipping the stretch screen entirely; the resulting bundle
+   *  tells the caller which screen comes next (chunk checkpoint vs. the season-end results screen)
+   *  via run.chunkInSeason. */
   simSeasonChunk: () => Promise<void>
+  /** Opens the stretch screen for the next chunk instead of simming it outright: generates the
+   *  season if this is its first chunk, plays the chunk's AI-vs-AI games, and leaves the GM's own
+   *  games for them to resolve individually. No-ops if a stretch is already open. */
+  beginStretch: () => Promise<void>
+  /** Resolves one of the open stretch's games outright, no simcast. No-ops on an unknown id or one
+   *  that's already been played. */
+  simGame: (gameId: GameId) => Promise<void>
+  /** Opens one of the open stretch's games on the simcast screen to be played out live. Same
+   *  no-ops as simGame; commits nothing on its own. */
+  watchGame: (gameId: GameId) => void
+  /** Banks a game the GM watched to its final buzzer, exactly as simulated on the simcast screen
+   *  rather than re-rolled. Clears liveGame either way. */
+  commitLiveGame: (played: Game) => Promise<void>
+  /** Leaves a simcast before the final buzzer. Nothing is committed -- the game goes back to being
+   *  unplayed on the stretch screen, and watching again starts it over as a different game. */
+  abandonLiveGame: () => void
+  /** Closes the open stretch: sims any games the GM left unresolved, then runs the chunk through
+   *  finalizeChunk to the checkpoint. Valid with any number of games remaining, so it doubles as
+   *  "sim the rest." */
+  finishStretch: () => Promise<void>
   /** GM adjustment available at a chunk checkpoint (Section 9): overrides one player's target
    *  minutes (clamped 0-48) for the rest of the season. */
   setRotationMinutes: (playerId: PlayerId, minutes: number) => Promise<void>

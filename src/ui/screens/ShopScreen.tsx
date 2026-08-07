@@ -18,6 +18,7 @@ export function ShopScreen({
   onRerollConsumableOffers,
   onActivateConsumable,
   onContinue,
+  onSimSeason,
 }: {
   bundle: RunBundle
   onBuyPlayerCamp: (playerId: string, attribute: AttributeKey) => void
@@ -28,6 +29,7 @@ export function ShopScreen({
   onRerollConsumableOffers: () => void
   onActivateConsumable: (consumableId: ConsumableId) => void
   onContinue: () => void
+  onSimSeason: () => void
 }) {
   const { run, players, shop } = bundle
   if (!shop) return null
@@ -142,11 +144,12 @@ export function ShopScreen({
 
       {nothingLeftToBuy && <p>Nothing left to buy this visit.</p>}
 
-      <p>
+      <div className="stretch-actions">
         <button className="primary" onClick={onContinue}>
-          Sim Next Season
+          Start Next Season
         </button>
-      </p>
+        <button onClick={onSimSeason}>Sim First Stretch</button>
+      </div>
     </main>
   )
 }

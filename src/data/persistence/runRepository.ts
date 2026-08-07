@@ -30,6 +30,21 @@ export interface RunBundle {
    *  ChunkResultsScreen. Only meaningful (and only ever shown) between chunks; ignored once the
    *  season's last chunk lands on the season-end results screen instead. */
   lastChunkInsights: CoachingInsight[]
+  /** True while the GM is partway through a stretch on the stretch screen: this chunk's schedule
+   *  exists, its AI-vs-AI games are already played, and some of the GM's own games are still
+   *  waiting to be simmed or watched. Persisted (unlike the in-flight live game, which is
+   *  deliberately memory-only) so closing the tab mid-stretch drops you back on the stretch screen
+   *  with the games you've already resolved still resolved.
+   *
+   *  Also the guard on regenerating a season: beginSeason only runs when a stretch opens at
+   *  chunkInSeason 0, and this being true is what stops that from happening twice for one season. */
+  stretchInProgress: boolean
+  /** Coaching Insights harvested so far from the in-progress chunk's resolved games, in resolution
+   *  order and not yet deduped -- finalizeChunk does that when the stretch closes. Has to be
+   *  persisted rather than recomputed at the checkpoint because resolveGame strips each game's
+   *  possession log as it goes, so by then there's nothing left to derive them from. Empty
+   *  whenever stretchInProgress is false. */
+  pendingChunkInsights: CoachingInsight[]
 }
 
 function isValidBundleShape(data: unknown): data is RunBundle {
@@ -37,6 +52,11 @@ function isValidBundleShape(data: unknown): data is RunBundle {
   const b = data as Record<string, unknown>
   if (!b.run || typeof b.run !== 'object' || !b.league || typeof b.league !== 'object') return false
   if (!Array.isArray(b.teams) || !Array.isArray(b.players) || !Array.isArray(b.games)) return false
+
+  // stretchInProgress/pendingChunkInsights arrived with per-game stretch resolution. A save from
+  // before them would land on the checkpoint screen with a half-played chunk it can't describe, so
+  // reject it here rather than let a screen read undefined later.
+  if (typeof b.stretchInProgress !== 'boolean' || !Array.isArray(b.pendingChunkInsights)) return false
 
   // run.rosterQuirk/houseRule/marketSize were added across Phases 3-5, coachingUpgrades in Phase 8,
   // consumableInventory/activeConsumablesThisSeason in Phase 9 -- reject (rather than silently
