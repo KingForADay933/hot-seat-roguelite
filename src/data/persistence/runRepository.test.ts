@@ -95,6 +95,14 @@ describe('saveRunBundle / loadRunBundle', () => {
     await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
     expect(await loadRunBundle(adapter)).toBeNull()
   })
+
+  it('returns null (not a throw) for a pre-consumables save missing consumableInventory/activeConsumablesThisSeason', async () => {
+    const adapter = makeMemoryAdapter()
+    const legacyBundle = makeTestBundle()
+    const { consumableInventory: _consumableInventory, activeConsumablesThisSeason: _activeConsumablesThisSeason, ...legacyRun } = legacyBundle.run
+    await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
+    expect(await loadRunBundle(adapter)).toBeNull()
+  })
 })
 
 describe('clearRunBundle', () => {

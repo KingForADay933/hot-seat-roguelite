@@ -58,8 +58,8 @@ export const STRETCH_CLEAR_BUDGET_BONUS = 150
 // expanded tier (run/shop/shopVisit.ts's openShopVisit picks which from lastSeasonTargetHit).
 // A tier grants *purchase power* -- how many camp buys this visit -- not a pre-rolled, fixed
 // player list: the GM freely picks who (any active roster player) and, for the boost itself,
-// which attribute (see run/shop/campEffect.ts). Coaching upgrades (Phase 8) and consumables
-// (Phase 9) aren't built yet.
+// which attribute (see run/shop/campEffect.ts). Coaching upgrades (Phase 8, below) and
+// consumables (Phase 9, further below) both roll offers on this same visit.
 
 /** Single-player camp purchases allowed on the every-season condensed tier. */
 export const SHOP_CONDENSED_PLAYER_CAMP_LIMIT = 1
@@ -149,3 +149,59 @@ export const BENCH_MOB_ATTRIBUTE_SHIFT = 6
  *  reflecting deeper system mastery vs. Players' Coach's general chemistry bump. */
 export const PLAYERS_COACH_SYNERGY_BONUS = 6
 export const SYSTEM_GURU_SYNERGY_BONUS = 10
+
+// --- Consumables (Section 8.7), Phase 9 -- first-pass numbers, needs playtesting to tune ---
+// Cheap, single-season cards held in a capped inventory instead of applied instantly (unlike
+// coaching upgrades' permanent effect) -- a GM burns 0-3 of what they're holding before a season,
+// so hoarding for a do-or-die last chance is a real strategy. Also rolled offers on the shop visit
+// (run/consumables/catalog.ts), reusing the same rolled-offer-plus-reroll flow as coaching
+// upgrades, just without the "exclude already owned" filter -- duplicates in inventory are fine.
+// Activated effects are applied to TRANSIENT roster/team copies for the season they're burned on
+// (see run/simulateSeasonChunk.ts), never mutating persisted Player/Team state, so there's nothing
+// to revert when the season ends -- the effect just stops existing once that season's local copies
+// go out of scope.
+
+/** Flat cost to buy any one consumable card -- cheaper than a coaching upgrade
+ *  (COACHING_UPGRADE_COST), matching the doc's "cheap" framing. */
+export const CONSUMABLE_COST = 100
+
+/** Max consumables a GM can hold at once -- the doc's "3-slot inventory." Buying is blocked once
+ *  full, regardless of budget. */
+export const CONSUMABLE_INVENTORY_CAPACITY = 3
+
+/** Candidates rolled each shop visit -- same condensed/expanded split as coaching upgrades. */
+export const CONSUMABLE_DRAFT_SIZE_CONDENSED = 1
+export const CONSUMABLE_DRAFT_SIZE_EXPANDED = 2
+
+/** Free rerolls granted on the expanded tier only -- consumables get their own independent reroll
+ *  count from coaching upgrades' COACHING_UPGRADE_REROLLS_EXPANDED, not a shared one. */
+export const CONSUMABLE_REROLLS_EXPANDED = 1
+
+/** Season-only hidden.clutch boost (Sports Psych Session) -- half of Clutch Gene's permanent
+ *  CLUTCH_GENE_CLUTCH_SHIFT, reflecting a one-season rental vs. a career investment. */
+export const SPORTS_PSYCH_SESSION_CLUTCH_SHIFT = 6
+
+/** Season-only hidden.durability boost (Load Management) -- half of Iron Man Program's permanent
+ *  IRON_MAN_DURABILITY_SHIFT. */
+export const LOAD_MANAGEMENT_DURABILITY_SHIFT = 6
+
+/** Season-only ballHandling boost (Film Room Marathon) -- smaller than Film Study's permanent
+ *  FILM_STUDY_BALL_HANDLING_SHIFT. */
+export const FILM_ROOM_MARATHON_BALL_HANDLING_SHIFT = 4
+
+/** Season-only insideShot/outsideShot boost, applied to both (Extra Shootaround) -- the one
+ *  consumable with no permanent coaching-upgrade counterpart. */
+export const EXTRA_SHOOTAROUND_SHOOTING_SHIFT = 4
+
+/** Season-only interiorDefense/perimeterDefense boost, applied to both (Defensive Bootcamp) --
+ *  smaller than Defensive Coordinator's permanent DEFENSIVE_COORDINATOR_DEFENSE_SHIFT. */
+export const DEFENSIVE_BOOTCAMP_DEFENSE_SHIFT = 4
+
+/** Season-only all-attribute boost (Lucky Jersey) -- the consumable counterpart to roster quirks'
+ *  uniform shiftPlayerAttributes bump, kept small since it touches every attribute at once. */
+export const LUCKY_JERSEY_ATTRIBUTE_SHIFT = 3
+
+/** Flat one-time run.budget bonus (Energy Drink Sponsorship) -- applied immediately when
+ *  activated, not simulation-scoped like the other 6 cards (see run/consumables/
+ *  applyConsumableEffect.ts's doc comment on why it's a no-op there). */
+export const ENERGY_DRINK_SPONSORSHIP_BUDGET_BONUS = 150

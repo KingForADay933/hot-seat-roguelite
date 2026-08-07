@@ -22,6 +22,8 @@ export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule:
     budget: 0,
     chunkInSeason: 0,
     coachingUpgrades: [],
+    consumableInventory: [],
+    activeConsumablesThisSeason: [],
   }
 }
 
@@ -30,7 +32,9 @@ export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule:
  * escalates (new stretch, harder target, season count resets); missing it burns one of the
  * stretch's run.seasonsPerStretch chances (market-size-dependent, Section 8.1); running out of
  * chances without ever hitting it fires the GM. Only called once a season's last chunk has played
- * (Section 9) -- every branch resets chunkInSeason to 0 since the (next) season hasn't started yet.
+ * (Section 9) -- every branch resets chunkInSeason to 0 since the (next) season hasn't started yet,
+ * and activeConsumablesThisSeason to [] (Section 8.7) since whatever was burned for the season that
+ * just ended is spent -- a fresh loadout choice (or none) is made before the next one.
  */
 export function evaluateSeasonEnd(run: RunState, standings: StandingsRow[]): RunState {
   if (run.status === 'fired') return run
@@ -48,12 +52,13 @@ export function evaluateSeasonEnd(run: RunState, standings: StandingsRow[]): Run
       target: targetForStretch(stretchNumber),
       status: 'active',
       chunkInSeason: 0,
+      activeConsumablesThisSeason: [],
     }
   }
 
   if (run.seasonInStretch < run.seasonsPerStretch) {
-    return { ...run, seasonsPlayed, seasonInStretch: run.seasonInStretch + 1, chunkInSeason: 0 }
+    return { ...run, seasonsPlayed, seasonInStretch: run.seasonInStretch + 1, chunkInSeason: 0, activeConsumablesThisSeason: [] }
   }
 
-  return { ...run, seasonsPlayed, status: 'fired', chunkInSeason: 0 }
+  return { ...run, seasonsPlayed, status: 'fired', chunkInSeason: 0, activeConsumablesThisSeason: [] }
 }

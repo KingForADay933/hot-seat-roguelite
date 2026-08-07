@@ -1,5 +1,6 @@
 import type { TeamId } from '../data/types'
 import type { CoachingUpgradeId } from './coachingUpgrades/catalog'
+import type { ConsumableId } from './consumables/catalog'
 import type { MarketSizeId } from './marketSize'
 import type { HouseRuleId } from './variation/houseRules'
 import type { RosterQuirkId } from './variation/rosterQuirks'
@@ -42,4 +43,12 @@ export interface RunState {
    *  reset mid-run. Each id can only appear once (run/coachingUpgrades/catalog.ts's pool is
    *  exclusion-filtered by this list when rolling shop offers). */
   coachingUpgrades: CoachingUpgradeId[]
+  /** Section 8.7's consumables currently held, unspent -- capped at CONSUMABLE_INVENTORY_CAPACITY.
+   *  Unlike coachingUpgrades, duplicates are allowed (an item stash, not a one-per-run pool). */
+  consumableInventory: ConsumableId[]
+  /** Consumables burned for the season currently in progress (or about to start) -- read by every
+   *  chunk of that season (simulateSeasonChunk.ts) to build transient, boosted roster/team copies
+   *  for that season's games only. Cleared back to [] by evaluateSeasonEnd once the season
+   *  completes, so nothing leaks into a season where the GM activated nothing new. */
+  activeConsumablesThisSeason: ConsumableId[]
 }

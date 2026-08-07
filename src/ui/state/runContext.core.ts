@@ -3,6 +3,7 @@ import type { AttributeKey, League, Player, PlayerId, Team, TeamId } from '../..
 import type { SystemId } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import type { CoachingUpgradeId } from '../../run/coachingUpgrades'
+import type { ConsumableId } from '../../run/consumables'
 import type { MarketSizeId } from '../../run/marketSize'
 import type { HouseRuleId } from '../../run/variation/houseRules'
 import type { RosterQuirkId } from '../../run/variation/rosterQuirks'
@@ -63,6 +64,18 @@ export interface RunContextValue {
   /** Reshuffles the visit's coaching-upgrade offers, consuming one of upgradeRerollsRemaining
    *  (expanded tier only). No-ops at 0 remaining. */
   rerollUpgradeOffers: () => Promise<void>
+  /** Buys one consumable card (Section 8.7) from the visit's rolled consumableOffers into
+   *  run.consumableInventory: spends CONSUMABLE_COST. Unlike buyCoachingUpgrade, the bought id
+   *  stays offered (duplicates in inventory are fine) and this no-ops once the 3-slot inventory
+   *  (CONSUMABLE_INVENTORY_CAPACITY) is full, regardless of budget. */
+  buyConsumable: (consumableId: ConsumableId) => Promise<void>
+  /** Reshuffles the visit's consumable offers, consuming one of consumableRerollsRemaining
+   *  (expanded tier only, independent of upgradeRerollsRemaining). No-ops at 0 remaining. */
+  rerollConsumableOffers: () => Promise<void>
+  /** Burns one held consumable for the upcoming season (Section 8.7's pre-season "loadout" step):
+   *  moves one instance from run.consumableInventory to run.activeConsumablesThisSeason, where
+   *  simulateSeasonChunk picks it up for every chunk of that season. No-ops if none are held. */
+  activateConsumable: (consumableId: ConsumableId) => Promise<void>
 }
 
 export const RunContext = createContext<RunContextValue | null>(null)

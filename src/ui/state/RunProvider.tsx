@@ -10,6 +10,9 @@ import { pickWorstTeamId } from '../../run/assignWorstTeam'
 import { applyCoachingUpgrade, computeSynergyUpgradeBonus, pickCoachingUpgradeOffers, type CoachingUpgradeId } from '../../run/coachingUpgrades'
 import {
   COACHING_UPGRADE_COST,
+  CONSUMABLE_COST,
+  CONSUMABLE_INVENTORY_CAPACITY,
+  ENERGY_DRINK_SPONSORSHIP_BUDGET_BONUS,
   HOUSE_RULE_DRAFT_SIZE,
   PLAYER_CAMP_COST,
   QUIRK_DRAFT_SIZE,
@@ -18,6 +21,7 @@ import {
   SYSTEM_DRAFT_SIZE,
   TEAM_CAMP_COST,
 } from '../../run/constants'
+import { pickConsumableOffers, type ConsumableId } from '../../run/consumables'
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { createRun } from '../../run/runState'
 import { applyPlayerCamp, applyTeamCamp, openShopVisit, type ShopTier } from '../../run/shop'
@@ -286,6 +290,72 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setBundle(updatedBundle)
   }, [bundle])
 
+  const buyConsumable = useCallback(
+    async (consumableId: ConsumableId) => {
+      if (!bundle?.shop) return
+      if (!bundle.shop.consumableOffers.includes(consumableId)) return
+      if (bundle.run.consumableInventory.length >= CONSUMABLE_INVENTORY_CAPACITY) return
+      if (bundle.run.budget < CONSUMABLE_COST) return
+
+      // Offers aren't removed after a buy (unlike coaching upgrades) -- duplicates in inventory
+      // are fine, so the same rolled card can be bought more than once in a visit.
+      const updatedBundle: RunBundle = {
+        ...bundle,
+        run: {
+          ...bundle.run,
+          budget: bundle.run.budget - CONSUMABLE_COST,
+          consumableInventory: [...bundle.run.consumableInventory, consumableId],
+        },
+      }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
+
+  const rerollConsumableOffers = useCallback(async () => {
+    if (!bundle?.shop) return
+    if (bundle.shop.consumableRerollsRemaining <= 0) return
+
+    const consumableOffers = pickConsumableOffers(bundle.shop.consumableOffers.length, defaultRng)
+    const updatedBundle: RunBundle = {
+      ...bundle,
+      shop: { ...bundle.shop, consumableOffers, consumableRerollsRemaining: bundle.shop.consumableRerollsRemaining - 1 },
+    }
+    await saveRunBundle(updatedBundle)
+    setBundle(updatedBundle)
+  }, [bundle])
+
+  /** Burns one held consumable for the season about to start (Section 8.7's "loadout" step) --
+   *  moves one instance from consumableInventory to activeConsumablesThisSeason, which
+   *  simulateSeasonChunk reads on every chunk of the upcoming season. Energy Drink Sponsorship is
+   *  the one card whose effect fires here immediately (a budget bump) rather than at sim time --
+   *  see applyConsumableEffect's doc comment. */
+  const activateConsumable = useCallback(
+    async (consumableId: ConsumableId) => {
+      if (!bundle) return
+      const inventoryIndex = bundle.run.consumableInventory.indexOf(consumableId)
+      if (inventoryIndex === -1) return
+
+      const consumableInventory = [...bundle.run.consumableInventory]
+      consumableInventory.splice(inventoryIndex, 1)
+      const budgetBonus = consumableId === 'energy-drink-sponsorship' ? ENERGY_DRINK_SPONSORSHIP_BUDGET_BONUS : 0
+
+      const updatedBundle: RunBundle = {
+        ...bundle,
+        run: {
+          ...bundle.run,
+          budget: bundle.run.budget + budgetBonus,
+          consumableInventory,
+          activeConsumablesThisSeason: [...bundle.run.activeConsumablesThisSeason, consumableId],
+        },
+      }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
+
   const acknowledgeFired = useCallback(() => setFireAcknowledged(true), [])
 
   const value: RunContextValue = {
@@ -304,6 +374,9 @@ export function RunProvider({ children }: { children: ReactNode }) {
     buyTeamCamp,
     buyCoachingUpgrade,
     rerollUpgradeOffers,
+    buyConsumable,
+    rerollConsumableOffers,
+    activateConsumable,
   }
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>

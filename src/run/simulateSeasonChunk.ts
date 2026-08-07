@@ -6,12 +6,36 @@ import { computeStandings } from '../engine/schedule/standings'
 import type { Rng } from '../engine/rng'
 import { simulateGame } from '../engine/simulateGame'
 import { computeSeasonBudgetEarnings } from './budget'
+import { applyConsumableEffect } from './consumables/applyConsumableEffect'
 import { RUN_SEASON_LENGTH, SEASON_CHUNK_COUNT } from './constants'
 import { evaluateSeasonEnd } from './runState'
 import { seasonChunkBoundaries } from './seasonChunks'
 import { hasHitTarget } from './target'
 import type { RunState } from './types'
 import { rollWildcardEvent, type WildcardEventOutcome } from './variation/wildcardEvents'
+
+/**
+ * Folds every consumable in run.activeConsumablesThisSeason (Section 8.7) into local roster/team
+ * copies, one card at a time. Deliberately separate from `players`/`teams` -- the caller uses this
+ * result ONLY for that chunk's simulateGame calls, never for what gets returned/persisted, so a
+ * consumable's effect exists exactly as long as these local copies do and never needs to be
+ * reverted. Energy Drink Sponsorship is a no-op here (see applyConsumableEffect's doc comment) --
+ * its budget bonus already landed on run.budget back when it was activated.
+ */
+function applyActiveConsumables(run: RunState, teams: Team[], players: Player[]): { teams: Team[]; players: Player[] } {
+  let simTeams = teams
+  let simPlayers = players
+
+  for (const consumableId of run.activeConsumablesThisSeason) {
+    const team = simTeams.find((t) => t.id === run.teamId)
+    if (!team) continue
+    const { team: updatedTeam, players: updatedPlayers } = applyConsumableEffect(consumableId, team, simPlayers)
+    simPlayers = updatedPlayers
+    simTeams = simTeams.map((t) => (t.id === team.id ? updatedTeam : t))
+  }
+
+  return { teams: simTeams, players: simPlayers }
+}
 
 export interface SeasonChunkResult {
   run: RunState
@@ -77,8 +101,14 @@ export function simulateSeasonChunk(run: RunState, league: League, teams: Team[]
 
   const { start, end } = seasonChunkBoundaries(seasonGames.length, SEASON_CHUNK_COUNT)[run.chunkInSeason]
 
-  const playersById = new Map(seasonPlayers.map((p) => [p.id, p]))
-  const teamsById = new Map(teams.map((t) => [t.id, t]))
+  // Recomputed every chunk (not just isNewSeason) since simulateSeasonChunk is called once per
+  // chunk with fresh copies of teams/seasonPlayers each time -- this is what makes an activated
+  // consumable's effect last the whole season (Section 8.7) rather than just its first chunk.
+  // playersById/teamsById below are ONLY used for this chunk's simulateGame/insights calls; the
+  // return statements further down keep using the original (unboosted) seasonPlayers/teams.
+  const { teams: simTeams, players: simPlayers } = applyActiveConsumables(run, teams, seasonPlayers)
+  const playersById = new Map(simPlayers.map((p) => [p.id, p]))
+  const teamsById = new Map(simTeams.map((t) => [t.id, t]))
   const possessionsPerGame = league.pacePresets.possessionsPerGame
 
   const chunkInsights: CoachingInsight[] = []
