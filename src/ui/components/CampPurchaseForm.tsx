@@ -4,8 +4,11 @@ import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 
 /**
  * One camp purchase action (Section 8.5) -- the GM picks both the target (a specific roster
- * player, via `players`; omit `players` for a team-wide camp with no per-player target) and
- * which attribute the camp boosts, replacing the old rolled-offer-card flow.
+ * player, via `playerGroups`; omit `playerGroups` for a team-wide camp with no per-player target)
+ * and which attribute the camp boosts, replacing the old rolled-offer-card flow.
+ *
+ * Targets arrive pre-grouped (starters, then bench) rather than as one flat roster so the
+ * dropdown leads with the players a GM is most likely to invest in.
  */
 export function CampPurchaseForm({
   title,
@@ -13,7 +16,7 @@ export function CampPurchaseForm({
   cost,
   remaining,
   budget,
-  players,
+  playerGroups,
   onBuy,
 }: {
   title: string
@@ -21,16 +24,16 @@ export function CampPurchaseForm({
   cost: number
   remaining: number
   budget: number
-  players?: Player[]
+  playerGroups?: { label: string; players: Player[] }[]
   onBuy: (attribute: AttributeKey, playerId?: string) => void
 }) {
   const [attribute, setAttribute] = useState<AttributeKey>(ATTRIBUTE_COLUMNS[0].key)
-  const [playerId, setPlayerId] = useState<string>(players?.[0]?.id ?? '')
+  const [playerId, setPlayerId] = useState<string>(playerGroups?.flatMap((g) => g.players)[0]?.id ?? '')
 
   if (remaining <= 0) return null
 
   const affordable = budget >= cost
-  const canBuy = affordable && (!players || playerId !== '')
+  const canBuy = affordable && (!playerGroups || playerId !== '')
 
   return (
     <div className="team-summary">
@@ -39,15 +42,21 @@ export function CampPurchaseForm({
       <p>
         ${cost} -- {remaining} left this visit
       </p>
-      {players && (
+      {playerGroups && (
         <label>
           Player
           <select value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
-            {players.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.positions[0]} {p.name}
-              </option>
-            ))}
+            {playerGroups
+              .filter((group) => group.players.length > 0)
+              .map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.players.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.positions[0]} {p.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
           </select>
         </label>
       )}
@@ -65,7 +74,7 @@ export function CampPurchaseForm({
         type="button"
         className="primary"
         disabled={!canBuy}
-        onClick={() => onBuy(attribute, players ? playerId : undefined)}
+        onClick={() => onBuy(attribute, playerGroups ? playerId : undefined)}
       >
         Send to Camp
       </button>
