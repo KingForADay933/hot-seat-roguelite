@@ -25,6 +25,9 @@ function AppContent() {
     buyTeamCamp,
     buyCoachingUpgrade,
     rerollUpgradeOffers,
+    buyConsumable,
+    rerollConsumableOffers,
+    activateConsumable,
   } = useRun()
 
   if (loading) return <p>Loading…</p>
@@ -46,6 +49,9 @@ function AppContent() {
         onBuyTeamCamp={buyTeamCamp}
         onBuyCoachingUpgrade={buyCoachingUpgrade}
         onRerollUpgradeOffers={rerollUpgradeOffers}
+        onBuyConsumable={buyConsumable}
+        onRerollConsumableOffers={rerollConsumableOffers}
+        onActivateConsumable={activateConsumable}
         onContinue={simSeasonChunk}
       />
     )

@@ -3,6 +3,7 @@ import type { StandingsRow } from '../data/types'
 import { STARTING_TARGET_RANK_FRACTION, TARGET_RANK_FRACTION_STEP } from './constants'
 import { MARKET_SIZES } from './marketSize'
 import { createRun, evaluateSeasonEnd } from './runState'
+import type { RunState } from './types'
 
 function row(teamId: string): StandingsRow {
   return { teamId, wins: 0, losses: 0, winPct: 0, pointsFor: 0, pointsAgainst: 0, pointDiff: 0 }
@@ -25,6 +26,8 @@ describe('createRun', () => {
       budget: 0,
       chunkInSeason: 0,
       coachingUpgrades: [],
+      consumableInventory: [],
+      activeConsumablesThisSeason: [],
     })
   })
 
@@ -35,30 +38,32 @@ describe('createRun', () => {
 })
 
 describe('evaluateSeasonEnd', () => {
-  it('hitting the target escalates to a new stretch with a harder target and resets seasonInStretch/chunkInSeason', () => {
-    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3 }
+  it('hitting the target escalates to a new stretch with a harder target and resets seasonInStretch/chunkInSeason/activeConsumablesThisSeason', () => {
+    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3, activeConsumablesThisSeason: ['lucky-jersey' as const] }
     const next = evaluateSeasonEnd(run, HIT)
     expect(next.status).toBe('active')
     expect(next.stretchNumber).toBe(2)
     expect(next.seasonInStretch).toBe(1)
     expect(next.seasonsPlayed).toBe(1)
     expect(next.chunkInSeason).toBe(0)
+    expect(next.activeConsumablesThisSeason).toEqual([])
     expect(next.target.rankFraction).toBeCloseTo(STARTING_TARGET_RANK_FRACTION - TARGET_RANK_FRACTION_STEP)
   })
 
-  it('missing the target with chances left burns a season, stays in the same stretch, and resets chunkInSeason', () => {
-    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3 }
+  it('missing the target with chances left burns a season, stays in the same stretch, and resets chunkInSeason/activeConsumablesThisSeason', () => {
+    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3, activeConsumablesThisSeason: ['lucky-jersey' as const] }
     const next = evaluateSeasonEnd(run, MISS)
     expect(next.status).toBe('active')
     expect(next.stretchNumber).toBe(1)
     expect(next.seasonInStretch).toBe(2)
     expect(next.seasonsPlayed).toBe(1)
     expect(next.chunkInSeason).toBe(0)
+    expect(next.activeConsumablesThisSeason).toEqual([])
     expect(next.target).toEqual(run.target)
   })
 
-  it('missing the target on the final season of a stretch fires the GM and resets chunkInSeason', () => {
-    let run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3 }
+  it('missing the target on the final season of a stretch fires the GM and resets chunkInSeason/activeConsumablesThisSeason', () => {
+    let run: RunState = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), chunkInSeason: 3, activeConsumablesThisSeason: ['lucky-jersey'] }
     for (let i = 0; i < run.seasonsPerStretch - 1; i++) {
       run = evaluateSeasonEnd(run, MISS)
       expect(run.status).toBe('active')
@@ -66,6 +71,7 @@ describe('evaluateSeasonEnd', () => {
     run = evaluateSeasonEnd(run, MISS)
     expect(run.status).toBe('fired')
     expect(run.chunkInSeason).toBe(0)
+    expect(run.activeConsumablesThisSeason).toEqual([])
     expect(run.seasonsPlayed).toBe(MARKET_SIZES.mid.seasonsPerStretch)
   })
 

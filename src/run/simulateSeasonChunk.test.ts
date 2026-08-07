@@ -129,4 +129,30 @@ describe('simulateSeasonChunk', () => {
     expect(resultA.standings).toEqual(resultB.standings)
     expect(resultA.targetHit).toBe(resultB.targetHit)
   })
+
+  it('an active consumable never leaks into the returned/persisted players -- its effect is transient, sim-only', () => {
+    const { rng, league, teams, players, run } = setUpRun(9)
+    const runWithConsumable = { ...run, activeConsumablesThisSeason: ['lucky-jersey' as const] }
+
+    const result = simulateSeasonChunk(runWithConsumable, league, teams, players, [], rng)
+
+    const originalById = new Map(players.map((p) => [p.id, p]))
+    for (const player of result.players) {
+      expect(player.attributes).toEqual(originalById.get(player.id)!.attributes)
+      expect(player.hidden).toEqual(originalById.get(player.id)!.hidden)
+    }
+  })
+
+  it('an active consumable actually changes what happens in the games (standings differ from an identical unboosted seed)', () => {
+    const { league, teams, players, run } = setUpRun(10)
+    // Shifts every attribute of every roster player -- virtually certain to flip at least one
+    // possession's outcome somewhere across a full season, proving the transient boost is actually
+    // reaching simulateGame rather than just being wired up inertly.
+    const boostedRun = { ...run, activeConsumablesThisSeason: ['lucky-jersey' as const] }
+
+    const unboosted = simulateFullSeason(run, league, teams, players, createSeededRng(99))
+    const boosted = simulateFullSeason(boostedRun, league, teams, players, createSeededRng(99))
+
+    expect(boosted.standings).not.toEqual(unboosted.standings)
+  })
 })

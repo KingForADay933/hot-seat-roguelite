@@ -1,9 +1,12 @@
 import type { AttributeKey } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { COACHING_UPGRADES, type CoachingUpgradeId } from '../../run/coachingUpgrades'
-import { COACHING_UPGRADE_COST, PLAYER_CAMP_COST, TEAM_CAMP_COST } from '../../run/constants'
+import { COACHING_UPGRADE_COST, CONSUMABLE_COST, CONSUMABLE_INVENTORY_CAPACITY, PLAYER_CAMP_COST, TEAM_CAMP_COST } from '../../run/constants'
+import { CONSUMABLES, type ConsumableId } from '../../run/consumables'
 import { CampPurchaseForm } from '../components/CampPurchaseForm'
 import { CoachingUpgradeCard } from '../components/CoachingUpgradeCard'
+import { ConsumableCard } from '../components/ConsumableCard'
+import { ConsumableInventoryRow } from '../components/ConsumableInventoryRow'
 
 export function ShopScreen({
   bundle,
@@ -11,6 +14,9 @@ export function ShopScreen({
   onBuyTeamCamp,
   onBuyCoachingUpgrade,
   onRerollUpgradeOffers,
+  onBuyConsumable,
+  onRerollConsumableOffers,
+  onActivateConsumable,
   onContinue,
 }: {
   bundle: RunBundle
@@ -18,13 +24,19 @@ export function ShopScreen({
   onBuyTeamCamp: (attribute: AttributeKey) => void
   onBuyCoachingUpgrade: (upgradeId: CoachingUpgradeId) => void
   onRerollUpgradeOffers: () => void
+  onBuyConsumable: (consumableId: ConsumableId) => void
+  onRerollConsumableOffers: () => void
+  onActivateConsumable: (consumableId: ConsumableId) => void
   onContinue: () => void
 }) {
   const { run, players, shop } = bundle
   if (!shop) return null
 
   const roster = players.filter((p) => p.teamId === run.teamId)
-  const nothingLeftToBuy = shop.playerCampsRemaining <= 0 && shop.teamCampsRemaining <= 0 && shop.upgradeOffers.length === 0
+  const inventoryFull = run.consumableInventory.length >= CONSUMABLE_INVENTORY_CAPACITY
+  const canBuyConsumable = !inventoryFull && run.budget >= CONSUMABLE_COST
+  const nothingLeftToBuy =
+    shop.playerCampsRemaining <= 0 && shop.teamCampsRemaining <= 0 && shop.upgradeOffers.length === 0 && shop.consumableOffers.length === 0
 
   return (
     <main>
@@ -80,6 +92,51 @@ export function ShopScreen({
         <div className="team-summary">
           <strong>Coaching Staff</strong>
           <p>{run.coachingUpgrades.map((id) => COACHING_UPGRADES[id].label).join(', ')}</p>
+        </div>
+      )}
+
+      {shop.consumableOffers.length > 0 && (
+        <div className="team-summary">
+          <strong>Consumables</strong>
+          <p>
+            Cheap, single-season boosts -- held in inventory ({run.consumableInventory.length}/{CONSUMABLE_INVENTORY_CAPACITY}) until you burn
+            them for a season below.
+          </p>
+          <div className="draft-options">
+            {shop.consumableOffers.map((consumableId, i) => (
+              <ConsumableCard
+                key={`${consumableId}-${i}`}
+                consumable={CONSUMABLES[consumableId]}
+                cost={CONSUMABLE_COST}
+                canBuy={canBuyConsumable}
+                onBuy={() => onBuyConsumable(consumableId)}
+              />
+            ))}
+          </div>
+          {shop.consumableRerollsRemaining > 0 && (
+            <button onClick={onRerollConsumableOffers}>Reroll Consumable Offers ({shop.consumableRerollsRemaining} left)</button>
+          )}
+        </div>
+      )}
+
+      {run.consumableInventory.length > 0 && (
+        <div className="team-summary">
+          <strong>Loadout -- Burn Before Next Season</strong>
+          <p>Pick 0-3 to activate for the upcoming season. Whatever's left stays banked for later.</p>
+          {run.consumableInventory.map((consumableId, i) => (
+            <ConsumableInventoryRow
+              key={`${consumableId}-${i}`}
+              consumable={CONSUMABLES[consumableId]}
+              onActivate={() => onActivateConsumable(consumableId)}
+            />
+          ))}
+        </div>
+      )}
+
+      {run.activeConsumablesThisSeason.length > 0 && (
+        <div className="team-summary">
+          <strong>Active Next Season</strong>
+          <p>{run.activeConsumablesThisSeason.map((id) => CONSUMABLES[id].label).join(', ')}</p>
         </div>
       )}
 
