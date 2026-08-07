@@ -23,8 +23,10 @@ export const MIN_TARGET_RANK_FRACTION = 0.1
 export const QUIRK_DRAFT_SIZE = 2
 export const HOUSE_RULE_DRAFT_SIZE = 2
 
-/** Wider hand for the system draft -- framed as a real build choice, not a constraint. */
-export const SYSTEM_DRAFT_SIZE = 3
+/** Wider hand for the system draft -- framed as a real build choice, not a constraint. Four rather
+ *  than three: the system is now chosen with the roster already on screen, so a wider hand is more
+ *  freedom rather than more guesswork, and four cards fill the reveal screen's grid evenly. */
+export const SYSTEM_DRAFT_SIZE = 4
 
 /** A season is split into this many checkpoints (Section 9) -- 32 games / 4 = an even split,
  *  landing checkpoints after games 8/16/24 plus the real season end after 32. Each checkpoint
@@ -149,6 +151,27 @@ export const BENCH_MOB_ATTRIBUTE_SHIFT = 6
  *  reflecting deeper system mastery vs. Players' Coach's general chemistry bump. */
 export const PLAYERS_COACH_SYNERGY_BONUS = 6
 export const SYSTEM_GURU_SYNERGY_BONUS = 10
+
+/** Converts a roster's system affinity (see run/variation/systemDraft.ts) into
+ *  SYNERGY_NEUTRAL-relative points. Affinity is a small signed number by construction: it measures
+ *  how much better a system's play diet is than an even one, and a full roster mixes archetypes
+ *  whose leans partly cancel, so even a clearly-built team lands only a couple of points off zero.
+ *  It needs amplifying to reach a range the +-10% multiplier can express.
+ *
+ *  Measured over 75 generated run-start rosters (25 seeds x 3 quirks), this value puts the best and
+ *  worst of the nine systems ~23 synergy points apart: x1.046 offense for a well-matched roster
+ *  against x0.954 for a mismatched one. Across 120 rolled four-system hands, the spread a GM
+ *  actually chooses between averages 12 points (~4.8% offense, p90 ~9%), and no score in that
+ *  sample reached SYNERGY_SCORE_FLOOR/CEILING -- the clamps stay guard rails rather than the usual
+ *  outcome. That is the "nudges games rather than deciding them outright" band the multiplier's own
+ *  clamp was written for, with the pick clearly worth thinking about. */
+export const SYNERGY_AFFINITY_AMPLIFICATION = 8
+
+/** Bounds on the drafted-system synergy score, matching Team.synergyScore's documented
+ *  "attribute-scale (40-99ish)" contract. The multiplier saturates well inside these (SYNERGY_NEUTRAL
+ *  +-25), so they only ever bite on a pathologically lopsided roster. */
+export const SYNERGY_SCORE_FLOOR = 40
+export const SYNERGY_SCORE_CEILING = 99
 
 // --- Consumables (Section 8.7), Phase 9 -- first-pass numbers, needs playtesting to tune ---
 // Cheap, single-season cards held in a capped inventory instead of applied instantly (unlike

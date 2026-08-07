@@ -9,10 +9,15 @@ import type { MarketSizeId } from '../../run/marketSize'
 import type { HouseRuleId } from '../../run/variation/houseRules'
 import type { RosterQuirkId } from '../../run/variation/rosterQuirks'
 
-/** A league/team has been generated and the user's team picked, but the roster-quirk/house-rule/
- *  system draft hasn't been resolved yet -- not a real run until confirmDraft applies the choices.
+/** A league/team has been generated and the user's team picked, but the roster-quirk/house-rule
+ *  draft hasn't been resolved yet -- not a real run until confirmDraft applies the choices.
  *  Held only in memory (not persisted): losing an in-progress draft to a refresh just means
- *  re-rolling, same cost as clicking "Start New Run" again. */
+ *  re-rolling, same cost as clicking "Start New Run" again.
+ *
+ *  The system draft deliberately is NOT here: quirk and house rule *mutate* the roster (attribute
+ *  shifts, roster cuts), so they have to be locked in before the roster can be shown, whereas a
+ *  system only ever scores against a finished roster. Choosing one blind was asking the GM to bet
+ *  on a team they hadn't seen -- it now happens on the reveal screen instead (see PendingReveal). */
 export interface PendingDraft {
   league: League
   teams: Team[]
@@ -20,9 +25,23 @@ export interface PendingDraft {
   teamId: TeamId
   rosterQuirkOptions: RosterQuirkId[]
   houseRuleOptions: HouseRuleId[]
-  systemOptions: SystemId[]
   /** Rolled (not drafted) alongside the league -- Section 8.1 is imposed, no player choice. */
   marketSize: MarketSizeId
+}
+
+/** Phase two of run setup: the roster is final (quirk and house rule already applied to `teams`/
+ *  `players`) and on display, but no system has been chosen, so there's still no run to persist.
+ *  Held only in memory for the same reason as PendingDraft -- a refresh here costs the two picks
+ *  already made, not simulated progress. */
+export interface PendingReveal {
+  league: League
+  teams: Team[]
+  players: Player[]
+  teamId: TeamId
+  rosterQuirk: RosterQuirkId
+  houseRule: HouseRuleId
+  marketSize: MarketSizeId
+  systemOptions: SystemId[]
 }
 
 /** A stretch game the GM chose to watch, currently being played out possession by possession on the
@@ -40,6 +59,7 @@ export interface LiveGame {
 export interface RunContextValue {
   bundle: RunBundle | null
   draft: PendingDraft | null
+  reveal: PendingReveal | null
   loading: boolean
   /** Whether the results screen for the season that ended a fired run has been continued past yet.
    *  Held only in memory (not persisted, same rationale as PendingDraft above): the fired run's
@@ -52,7 +72,12 @@ export interface RunContextValue {
    *  equivalent of openShop for a run that's over. */
   acknowledgeFired: () => void
   beginDraft: () => Promise<void>
-  confirmDraft: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId, system: SystemId) => Promise<void>
+  /** Resolves phase one of setup: applies the chosen quirk and house rule to the roster and rolls
+   *  the system candidates, moving to the reveal (still nothing persisted -- see PendingReveal). */
+  confirmDraft: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => Promise<void>
+  /** Resolves phase two: scores the chosen system against the now-visible roster, writes it and the
+   *  resulting synergy onto the team, and persists the run for real. */
+  lockSystem: (system: SystemId) => Promise<void>
   /** Simulates the next chunk of the current season (or a fresh season's first chunk) in one go --
    *  Section 9. The "just sim it" path, skipping the stretch screen entirely; the resulting bundle
    *  tells the caller which screen comes next (chunk checkpoint vs. the season-end results screen)

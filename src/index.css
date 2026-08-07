@@ -211,6 +211,245 @@ select {
   color: var(--text);
 }
 
+h3 {
+  font-size: 15px;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.section-note {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+/* --- Team reveal: per-player scouting cards --- */
+
+.player-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.player-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-alt);
+  padding: 10px 12px;
+}
+
+.player-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.player-card-name {
+  font-weight: 600;
+}
+
+.player-pos {
+  display: inline-block;
+  min-width: 2.2em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.starter-pip {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.player-card-meta {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.player-card-ovr {
+  margin-left: auto;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.attr-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.attr-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3px 0;
+  border-radius: 3px;
+  background: var(--bg);
+  font-variant-numeric: tabular-nums;
+}
+
+.attr-key {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.attr-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.attr-cell.attr-elite {
+  background: color-mix(in srgb, var(--positive) 30%, var(--bg));
+}
+
+.attr-cell.attr-good {
+  background: color-mix(in srgb, var(--positive) 14%, var(--bg));
+}
+
+.attr-cell.attr-weak {
+  background: color-mix(in srgb, var(--negative) 18%, var(--bg));
+}
+
+.player-card-line {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.player-card-line strong {
+  color: var(--text);
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  cursor: help;
+}
+
+.tag-positive {
+  border-color: var(--positive);
+  color: var(--positive);
+}
+
+.tag-negative {
+  border-color: var(--negative);
+  color: var(--negative);
+}
+
+.tag-neutral {
+  color: var(--text-muted);
+}
+
+.player-card-fits {
+  margin-bottom: 0;
+}
+
+/* Keeps each system's name and its score on the same line -- the pair is the unit being read, and
+   a wrap between them turns the row into a puzzle. */
+.player-card-fits > span > span {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.fit-selected {
+  background: var(--user-row-bg);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+/* --- Team reveal: system choice cards --- */
+
+/* Grid rather than the flex .draft-options default: with three cards, flex-grow stretches the odd
+   one out to full width and its play-call bars stop being comparable to the other two. auto-fill
+   leaves the empty slot empty instead, keeping every card the same width. */
+.system-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-items: start;
+}
+
+.system-option {
+  height: 100%;
+}
+
+.system-option-locked {
+  cursor: default;
+}
+
+.system-option-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.system-synergy {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.system-verdict {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.playcall-bars {
+  display: grid;
+  gap: 3px;
+}
+
+.playcall-row {
+  display: grid;
+  grid-template-columns: 5.5em 2.5em 1fr 1.8em;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.playcall-weight,
+.playcall-quality {
+  text-align: right;
+}
+
+.playcall-track {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.playcall-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
 /* --- Stretch + simcast (Section 14.2's Live Playback) --- */
 
 .stretch-actions {
