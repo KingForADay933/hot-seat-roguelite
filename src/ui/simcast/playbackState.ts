@@ -1,7 +1,7 @@
 ﻿import type { OnCourtRecord, Player, PlayerBoxScoreLine, PlayerId, TeamId } from '../../data/types'
 import { ASSIST_ELIGIBLE_PLAY_CALLS } from '../../engine/boxScore'
 import { generateCommentaryLine } from '../../engine/commentary/generateCommentaryLine'
-import { PERIOD_SECONDS, SECONDS_PER_MINUTE } from '../../engine/constants'
+import { PERIOD_SECONDS, REGULATION_PERIODS, SECONDS_PER_MINUTE } from '../../engine/constants'
 import { fatigueGainPerSecond, fatigueRecoveryPerSecond } from '../../engine/rotation/fatigue'
 import { formatGameClock, getPeriodLabel, type SimulationStep } from '../../engine/simulateGame'
 
@@ -30,6 +30,10 @@ export interface PlaybackState {
   possessionsPlayed: number
   homeScore: number
   awayScore: number
+  /** Raw period number behind periodLabel -- what useSimcastPlayback compares against to detect an
+   *  overtime period actually starting (rotation-charts.md Decision 5), rather than parsing/diffing
+   *  the display label. */
+  period: number
   periodLabel: string
   /** mm:ss left in the current period -- a real scoreboard clock now that the sim keeps one. */
   clockLabel: string
@@ -76,6 +80,16 @@ function emptyLine(playerId: PlayerId): LiveBoxScoreLine {
   }
 }
 
+/**
+ * True exactly when advancing from `previousPeriod` to `nextPeriod` crosses into a *new* overtime
+ * period -- the moment Decision 5's substitution prompt fires (rotation-charts.md Phase H).
+ * Not true advancing within the same period (most possessions), and not true anywhere in regulation
+ * -- periods 1-4 just play on with no prompt, exactly as before.
+ */
+export function entersNewOvertimePeriod(previousPeriod: number, nextPeriod: number): boolean {
+  return nextPeriod > REGULATION_PERIODS && nextPeriod !== previousPeriod
+}
+
 export function createPlaybackState(context: PlaybackContext): PlaybackState {
   const roster = [...context.homeRoster, ...context.awayRoster]
 
@@ -83,6 +97,7 @@ export function createPlaybackState(context: PlaybackContext): PlaybackState {
     possessionsPlayed: 0,
     homeScore: 0,
     awayScore: 0,
+    period: 1,
     periodLabel: getPeriodLabel(1),
     clockLabel: formatGameClock(PERIOD_SECONDS),
     feed: [],
@@ -194,6 +209,7 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
     possessionsPlayed: state.possessionsPlayed + 1,
     homeScore: step.homeScore,
     awayScore: step.awayScore,
+    period: entry.period,
     periodLabel,
     clockLabel: formatGameClock(entry.clockSecondsRemaining),
     feed: [feedEntry, ...state.feed].slice(0, FEED_LENGTH),

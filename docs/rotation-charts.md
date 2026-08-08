@@ -408,9 +408,74 @@ and assigning an out-of-position player lights up the `!` badge and the summary 
 player -- zero console errors through all of it. `run/rotationChart.ts` and
 `run/rotationChartValidation.ts` additionally carry 32 unit tests of their own.
 
-### Phase H — Deviation and edge rules
-Overtime (Decision 5), exhausted charted players, later foul trouble and injuries. Deviations surface
-through Coaching Insights, which already exists as that channel.
+### Phase H — Deviation and edge rules — **done** (except what's explicitly deferred below)
+
+**Exhausted charted players.** Phase F made a charted segment absolute -- even a player at 100
+fatigue stayed in if the chart said so. `checkSubstitutions` (`substitution.ts`) now carves out one
+exception: once the charted player's own fatigue reaches `FATIGUE_EMERGENCY_THRESHOLD`, the slot
+falls through to the ordinary heuristic instead of honoring the chart, which pulls them (the
+emergency threshold already bypasses the heuristic's own shift cooldown) for the best rested
+same-position bench player. The deviation isn't a one-shot event -- it's re-derived from current
+fatigue on every possession, which gives it a natural lifecycle with no new state needed:
+
+- While the charted player's fatigue stays above `FATIGUE_SUB_OUT_THRESHOLD` (80), the slot keeps
+  running on the heuristic, which manages the deputy on their own fatigue/pace terms (including
+  subbing the deputy again if *they* get tired -- the slot doesn't get stuck on one deputy).
+- Once the charted player actually recovers down to 80, the chart resumes and swaps them back in.
+
+The resume threshold is deliberately 80, not "the instant fatigue dips under 95" -- fatigue recovers
+fast enough on the bench that a same-threshold resume would yank the deputy back out after a single
+possession of rest, handing the slot right back to someone still nearly as gassed as when they left.
+The 15-point gap is real hysteresis, sized off two constants that already existed rather than a new
+tunable.
+
+**Surfaced through Coaching Insights, as planned.** `generateCoachingInsights.ts`'s existing
+fatigue-substitution replay (it already reconstructs every sub-out from the possession log to build
+today's plain "pulled with heavy fatigue" insight) now also checks, for each pull, whether the
+outgoing player was actually charted into that slot at that moment (`chartedPlayerId`, the same
+Phase F function). When they were, the insight reads distinctly -- "was charted to stay on the floor
+but got pulled with emergency fatigue" -- rather than the generic message, so a GM can tell an
+ordinary rotation sub from their own chart getting overridden.
+
+**Overtime (Decision 5).** "The normal sim carries the Q4 closing five" needed no engine change at
+all -- `RotationState` already persists unchanged across periods, regulation or overtime, so the
+closing five was always the default. What Phase H adds is purely the simcast side: a genuine
+pause-and-acknowledge moment at the start of each overtime period, per §5's own plan.
+`PlaybackState` gained a raw `period` field (`playbackState.ts`) so the transition can be detected
+by number instead of diffing the display label, and a new pure `entersNewOvertimePeriod(previous,
+next)` says exactly when that transition is a *new* overtime period starting. `useSimcastPlayback`
+pulls a step as before, but if it crosses into a new overtime period, holds it in a ref instead of
+folding it in and sets status to `'awaiting-substitutions'` -- which stops the interval the same way
+`'paused'` does, exactly as §5 anticipated. `acknowledgeOvertimePrompt` folds the held step in and
+resumes. `skipToEnd` was patched to fold in a held step first if one exists, rather than silently
+losing that possession -- the second of the two gotchas §5 flagged in advance (a prompt requiring
+input would have deadlocked skipToEnd's synchronous drain); the fix works because this prompt
+requires no input, only acknowledgement.
+
+**Deliberately not built: live lineup editing during the overtime pause.** §5 described the pause
+mechanism in detail but never fully specified how a substitution decision made there would reach the
+engine, and building that -- a way to inject a GM's edit into a `RotationState` owned by a running
+generator's closure -- is a materially bigger, riskier change than the prompt itself: it would mean
+threading a live mutable channel into what is otherwise a pure, seed-deterministic simulation (the
+same `simulateGameSteps` that also runs every AI-vs-AI game with no UI involved at all), plus real UI
+for picking a five mid-broadcast. Since Decision 5's default (closing five carries over) is already
+what happens with zero intervention, the prompt's job is only to give the GM a beat to notice
+overtime started, not to block on a decision the sim can't proceed without -- which is exactly what
+got built. Revisit if a real want for in-the-moment overtime substitutions shows up.
+
+**Explicitly out of scope, per this section's own "later":** foul trouble and injuries. Neither
+system exists in the engine at all yet -- there's no personal-foul accumulation or foul-out state,
+and no injury model -- so there is no existing behavior to add a deviation rule on top of. This is a
+separate, materially larger feature (or two), not a follow-on to what's built here.
+
+Verified: `checkSubstitutions`'s emergency-deviation lifecycle (trigger, hold through the hysteresis
+band, resume) and the Coaching Insights message split are covered by new unit tests. The overtime
+prompt was verified against a real random game reaching overtime in a live browser session (not
+forced -- found by retrying the normal draft-to-watch flow until one occurred): the pause fires with
+the score/clock frozen at the Q4 buzzer, the banner and both buttons render, and "Continue to
+Overtime" correctly resumes into a ticking OT clock with the right score. `Skip to Final` from that
+same paused state was exercised via the pending-step fix's unit coverage rather than re-triggering
+another live overtime game for it specifically.
 
 ---
 

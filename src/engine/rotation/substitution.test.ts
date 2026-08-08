@@ -204,8 +204,21 @@ describe('checkSubstitutions', () => {
       expect(state.shiftEnteredAtSeconds.get(bench.id)).toBe(100)
     })
 
-    it('keeps a charted player in even past the emergency fatigue threshold -- charted spans are law', () => {
+    it('keeps a charted player in while merely tired, short of the emergency threshold', () => {
       const { starter, state, team, playersById } = buildFixture({
+        starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
+        benchFatigue: 0,
+        shiftEnteredAtSeconds: 0,
+      })
+      team.rotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: 720, fill: { kind: 'player', playerId: starter.id } }] } }
+
+      checkSubstitutions(state, team, [], playersById, 500, 1, 500)
+
+      expect(state.onCourt[0].player).toBe(starter)
+    })
+
+    it('deviates from the chart once the charted player is actually exhausted (rotation-charts.md Phase H)', () => {
+      const { starter, bench, state, team, playersById } = buildFixture({
         starterFatigue: FATIGUE_EMERGENCY_THRESHOLD,
         benchFatigue: 0,
         shiftEnteredAtSeconds: 0,
@@ -214,6 +227,32 @@ describe('checkSubstitutions', () => {
 
       checkSubstitutions(state, team, [], playersById, 500, 1, 500)
 
+      expect(state.onCourt[0].player).toBe(bench)
+    })
+
+    it('the deviation persists through recovery until the charted player is actually rested enough, then resumes', () => {
+      const { starter, bench, state, team, playersById } = buildFixture({
+        starterFatigue: FATIGUE_EMERGENCY_THRESHOLD,
+        benchFatigue: 0,
+        shiftEnteredAtSeconds: 0,
+      })
+      team.rotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: 720, fill: { kind: 'player', playerId: starter.id } }] } }
+
+      // Moment 1: starter is exhausted -- deviates, bench comes in.
+      checkSubstitutions(state, team, [], playersById, 100, 1, 100)
+      expect(state.onCourt[0].player).toBe(bench)
+
+      // Moment 2: starter has recovered some off the bench, but only into the hysteresis band
+      // (still above FATIGUE_SUB_OUT_THRESHOLD) -- the chart does not yank bench back out for
+      // someone still nearly as gassed as when they left. Bench's own fatigue is untouched and low,
+      // so the ordinary heuristic (which this now falls through to) has no reason to move either.
+      state.fatigue.set(starter.id, FATIGUE_SUB_OUT_THRESHOLD + 1)
+      checkSubstitutions(state, team, [], playersById, 200, 1, 200)
+      expect(state.onCourt[0].player).toBe(bench)
+
+      // Moment 3: starter has actually recovered to the resume threshold -- the chart takes back over.
+      state.fatigue.set(starter.id, FATIGUE_SUB_OUT_THRESHOLD)
+      checkSubstitutions(state, team, [], playersById, 300, 1, 300)
       expect(state.onCourt[0].player).toBe(starter)
     })
 

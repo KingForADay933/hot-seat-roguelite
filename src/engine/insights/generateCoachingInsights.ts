@@ -5,9 +5,13 @@ import {
   FATIGUE_SUB_OUT_THRESHOLD,
   INSIGHT_MAX_FATIGUE_EVENTS,
   INSIGHT_WEAK_LINK_MIN_TARGETING_COUNT,
+  OVERTIME_SECONDS,
+  PERIOD_SECONDS,
+  REGULATION_PERIODS,
 } from '../constants'
 import { worstInteriorDefender, worstPerimeterDefender } from '../possession/playerSelector'
 import { tickFatigue } from '../rotation/fatigue'
+import { chartedPlayerId } from '../rotation/rotationPlan'
 import type { RotationState } from '../rotation/rotationState'
 import { getPeriodLabel } from '../simulateGame'
 
@@ -110,6 +114,18 @@ interface FatigueSubEvent {
   inPlayerId: PlayerId
   reason: 'emergency' | 'fatigue'
   teamId: TeamId
+  /** True when the outgoing player was actually charted into this slot at the moment they were
+   *  pulled (rotation-charts.md Phase H) -- i.e. this wasn't just the ordinary fatigue/pace
+   *  heuristic doing its job, it's the deviation rule overriding the GM's own chart because the
+   *  charted player was genuinely exhausted. */
+  wasChartedDeviation: boolean
+}
+
+/** Seconds elapsed into a period is measured against that period's own length -- regulation and
+ *  overtime periods aren't the same length, so getting this wrong would misjudge every charted
+ *  lookup once a game reaches overtime. */
+function periodLengthSeconds(period: number): number {
+  return period <= REGULATION_PERIODS ? PERIOD_SECONDS : OVERTIME_SECONDS
 }
 
 /**
@@ -155,16 +171,27 @@ function detectFatigueSubstitutionEvents(
     const outIds = onCourtIds.filter((id) => !nextSet.has(id))
     const inIds = nextOnCourtIds.filter((id) => !onCourtSet.has(id))
 
+    // The moment the substitution decision for `next` was made -- same period-relative clock
+    // simulateGame.ts's checkSubstitutions itself used -- so a chart lookup here matches exactly
+    // what the live sim would have consulted.
+    const secondsIntoPeriodAtSub = next.period === entry.period ? periodLengthSeconds(entry.period) - entry.clockSecondsRemaining : 0
+
     outIds.forEach((outId, idx) => {
       const fatigueLevel = state.fatigue.get(outId) ?? 0
       if (fatigueLevel < FATIGUE_SUB_OUT_THRESHOLD) return
+      const isEmergency = fatigueLevel >= FATIGUE_EMERGENCY_THRESHOLD
+      const outSlot = onCourt.find((o) => o.playerId === outId)?.slot
+      const wasChartedDeviation =
+        isEmergency && outSlot !== undefined && chartedPlayerId(team.rotationPlan, next.period, outSlot, secondsIntoPeriodAtSub) === outId
+
       events.push({
         possessionNumber: entry.possessionNumber,
         period: entry.period,
         outPlayerId: outId,
         inPlayerId: inIds[idx] ?? outId,
-        reason: fatigueLevel >= FATIGUE_EMERGENCY_THRESHOLD ? 'emergency' : 'fatigue',
+        reason: isEmergency ? 'emergency' : 'fatigue',
         teamId: team.id,
+        wasChartedDeviation,
       })
     })
   }
@@ -202,7 +229,10 @@ export function generateCoachingInsights(
     const outName = resolvePlayer(event.outPlayerId, playersById).name
     const inName = resolvePlayer(event.inPlayerId, playersById).name
     const period = getPeriodLabel(event.period)
-    insights.push({ teamId: event.teamId, text: `${outName} was pulled with heavy fatigue in the ${period}, ${inName} checked in.` })
+    const text = event.wasChartedDeviation
+      ? `${outName} was charted to stay on the floor but got pulled with emergency fatigue in the ${period} -- ${inName} covered instead.`
+      : `${outName} was pulled with heavy fatigue in the ${period}, ${inName} checked in.`
+    insights.push({ teamId: event.teamId, text })
   }
 
   return insights

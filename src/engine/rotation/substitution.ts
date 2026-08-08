@@ -63,11 +63,19 @@ function shouldConsiderSubOut(
  * free-form lineups will do.
  *
  * `team.rotationPlan` (rotation-charts.md Phase F) is consulted first, per slot: a charted segment
- * is law (Decision 3) and wins outright, bypassing the fatigue/pace heuristic below entirely --
- * including bringing in an exhausted charted player, since deviation handling for that case is
- * Phase H, not this function. Only a slot with no active charted instruction (no plan, no segment
- * for this period, or an explicit `auto` segment) falls through to the heuristic, which is every
- * slot for every AI team and for a user team before a chart exists.
+ * is law (Decision 3) and wins outright, bypassing the fatigue/pace heuristic below entirely.
+ *
+ * The one exception is Phase H's deviation rule: a charted player who has actually hit
+ * FATIGUE_EMERGENCY_THRESHOLD is not brought in or kept in -- the slot falls through to the
+ * heuristic below instead, which pulls them (the emergency threshold already bypasses its own
+ * shift cooldown) and manages whoever deputizes on ordinary fatigue/pace terms, including further
+ * subs among the bench if the deputy tires too. The deviation clears itself once the charted
+ * player has actually recovered (down to FATIGUE_SUB_OUT_THRESHOLD, not merely under the emergency
+ * line) rather than the instant they dip under 95 -- otherwise the chart would yank a deputy back
+ * out after one possession of rest, right back to someone still nearly as gassed as when they left.
+ * Every other charted case is untouched: no plan, no segment for this period, an explicit `auto`
+ * segment, or a charted player who is merely tired but not exhausted, all still fall through to (or
+ * bypass) the heuristic exactly as Phase F left them.
  */
 export function checkSubstitutions(
   state: RotationState,
@@ -85,14 +93,21 @@ export function checkSubstitutions(
 
     const chartedId = chartedPlayerId(team.rotationPlan, period, slot, secondsIntoPeriod)
     if (chartedId !== null) {
-      if (chartedId !== outgoing.id) {
-        const incoming = playersById.get(chartedId)
-        if (incoming) {
-          nextFive[i] = { player: incoming, slot }
-          state.shiftEnteredAtSeconds.set(incoming.id, elapsedSeconds)
+      const chartedFatigue = state.fatigue.get(chartedId) ?? 0
+      const deputyIsIn = outgoing.id !== chartedId
+      const deviating = chartedFatigue >= FATIGUE_EMERGENCY_THRESHOLD || (deputyIsIn && chartedFatigue > FATIGUE_SUB_OUT_THRESHOLD)
+
+      if (!deviating) {
+        if (chartedId !== outgoing.id) {
+          const incoming = playersById.get(chartedId)
+          if (incoming) {
+            nextFive[i] = { player: incoming, slot }
+            state.shiftEnteredAtSeconds.set(incoming.id, elapsedSeconds)
+          }
         }
+        continue // charted spans are law
       }
-      continue // charted: never falls through to the heuristic below, matched or not
+      // else fall through to the heuristic below -- see this function's doc comment.
     }
 
     if (!shouldConsiderSubOut(state, outgoing, elapsedSeconds, team.rotationMinutes)) continue
