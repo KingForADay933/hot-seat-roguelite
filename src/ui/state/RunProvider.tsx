@@ -359,18 +359,64 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setBundle(updatedBundle)
   }, [bundle])
 
+  /**
+   * Recomputes synergy from the roster's fit to the team's drafted system -- same computation the
+   * initial draft-time score used, not a parallel invented bump (Team.synergyScore's doc comment
+   * flags camps as feeding back into it) -- plus computeSynergyUpgradeBonus's flat bonus from any
+   * owned Players' Coach / System Guru. The bonus has to be re-added here, every time, rather than
+   * applied as a one-time mutation at purchase time: since this full recompute discards
+   * synergyScore's previous value, a one-time mutation would get silently erased by the next
+   * recompute that runs through this same function.
+   *
+   * Called by camp purchases, coaching-upgrade purchases, and rotation changes. That last one is
+   * easy to miss: computeInitialSynergyScore is minutes-weighted (systemDraft's `availability`
+   * turns rotation minutes into each player's share of every role), so who plays how much genuinely
+   * moves the score -- inverting a depth chart swings it several points, which is a real chunk of
+   * the offense multiplier. Leaving it out is what made the number on My Team go stale the moment
+   * a GM touched a minutes box.
+   *
+   * `baseTeams` defaults to forBundle.teams but can be overridden to recompute on top of a team
+   * object that already carries another pending change this same action made (e.g. a coaching
+   * upgrade's own roster/rating mutation, or the rotation edit below) rather than the stale
+   * pre-mutation bundle.teams.
+   */
+  const teamsWithRecomputedSynergy = useCallback(
+    (forBundle: RunBundle, updatedPlayers: RunBundle['players'], baseTeams: RunBundle['teams'] = forBundle.teams) => {
+      const team = baseTeams.find((t) => t.id === forBundle.run.teamId)
+      if (!team) return baseTeams
+      const upgradeBonus = computeSynergyUpgradeBonus(forBundle.run.coachingUpgrades)
+      return baseTeams.map((t) =>
+        t.id === team.id
+          ? {
+              ...t,
+              synergyScore:
+                computeInitialSynergyScore(
+                  OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId],
+                  updatedPlayers.filter((p) => p.teamId === t.id),
+                  t.rotationMinutes,
+                ) + upgradeBonus,
+            }
+          : t,
+      )
+    },
+    [],
+  )
+
   const setRotationMinutes = useCallback(
     async (playerId: PlayerId, minutes: number) => {
       if (!bundle) return
       const clamped = clamp(Math.round(minutes), 0, REGULATION_MINUTES)
-      const teams = bundle.teams.map((t) =>
+      const withNewMinutes = bundle.teams.map((t) =>
         t.id === bundle.run.teamId ? { ...t, rotationMinutes: { ...t.rotationMinutes, [playerId]: clamped } } : t,
       )
+      // Recomputed on top of the just-edited teams, not bundle.teams -- the new minutes are the
+      // whole input that changed.
+      const teams = teamsWithRecomputedSynergy(bundle, bundle.players, withNewMinutes)
       const updatedBundle: RunBundle = { ...bundle, teams }
       await saveRunBundle(updatedBundle)
       setBundle(updatedBundle)
     },
-    [bundle],
+    [bundle, teamsWithRecomputedSynergy],
   )
 
   const setTrainingFocus = useCallback(
@@ -397,42 +443,6 @@ export function RunProvider({ children }: { children: ReactNode }) {
     await saveRunBundle(updatedBundle)
     setBundle(updatedBundle)
   }, [bundle])
-
-  /**
-   * Shared by both camp purchases and coaching-upgrade purchases: recomputes synergy from the
-   * (now boosted) roster's fit to the team's drafted system -- same computation the initial
-   * draft-time score used, not a parallel invented bump (Team.synergyScore's doc comment flags
-   * camps as feeding back into it) -- plus computeSynergyUpgradeBonus's flat bonus from any owned
-   * Players' Coach / System Guru. The bonus has to be re-added here, every time, rather than
-   * applied as a one-time mutation at purchase time: since this full recompute discards
-   * synergyScore's previous value, a one-time mutation would get silently erased by the next camp
-   * (or coaching-upgrade) purchase that runs through this same function.
-   *
-   * `baseTeams` defaults to forBundle.teams but can be overridden to recompute on top of a team
-   * object that already carries another pending change this same action made (e.g. a coaching
-   * upgrade's own roster/rating mutation) rather than the stale pre-mutation bundle.teams.
-   */
-  const teamsWithRecomputedSynergy = useCallback(
-    (forBundle: RunBundle, updatedPlayers: RunBundle['players'], baseTeams: RunBundle['teams'] = forBundle.teams) => {
-      const team = baseTeams.find((t) => t.id === forBundle.run.teamId)
-      if (!team) return baseTeams
-      const upgradeBonus = computeSynergyUpgradeBonus(forBundle.run.coachingUpgrades)
-      return baseTeams.map((t) =>
-        t.id === team.id
-          ? {
-              ...t,
-              synergyScore:
-                computeInitialSynergyScore(
-                  OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId],
-                  updatedPlayers.filter((p) => p.teamId === t.id),
-                  t.rotationMinutes,
-                ) + upgradeBonus,
-            }
-          : t,
-      )
-    },
-    [],
-  )
 
   const buyPlayerCamp = useCallback(
     async (playerId: PlayerId, attribute: AttributeKey) => {
