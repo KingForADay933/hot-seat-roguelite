@@ -273,9 +273,21 @@ Countdown instead of a possession count. Fatigue in seconds. Minutes summed from
 in **both** `deriveBoxScore` and `playbackState`. Retune `BASE_POSSESSION_MS`. Heaviest phase;
 expect a full pass over `constants.ts` and the sim tests.
 
-### Phase D — Slot-assigned on-court state
-The `onCourt: Player[]` → `{ player, slot }[]` refactor (§3). Pure plumbing, no behavior change while
-every slot still matches `positions[0]`. Standalone so the diff stays reviewable.
+### Phase D — Slot-assigned on-court state — **done**
+`RotationState.onCourt` is now `OnCourtPlayer[]` (`{ player, slot }`). `buildMatchups` pairs slot
+against slot, `findAtSlot` replaces `findAtPosition`, and a substitution hands the *slot* to the
+incoming player rather than re-deriving it from them. `slotByPosition` builds the assignment from
+each player's own position — the fallback every chartless team, including all seven AI teams, will
+keep using.
+
+Verified behavior-neutral by fingerprinting a seeded 12-game slate before and after: identical
+scores and identical play count.
+
+**One thing deferred.** The possession log still records on-court *ids*, not slots, so
+`generateCoachingInsights` reconstructs slots from `positions[0]` when it replays fatigue. That is
+exactly what the live sim did, and it only reads ids anyway — but a log that has to survive
+out-of-position assignments will need the slots stored. Worth doing whenever the log next changes
+shape rather than as its own save-breaking migration.
 
 ### Phase E — Positional versatility
 The penalty model and derived quirks (§4). Independent of the clock, depends on D for the notion of a

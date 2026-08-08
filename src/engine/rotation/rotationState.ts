@@ -1,8 +1,11 @@
 import type { Player, PlayerId, Team } from '../../data/types'
+import type { OnCourtPlayer } from '../matchup'
 
 export interface RotationState {
-  /** Current on-court five; length always 5, replaced (not mutated in place) as substitutions happen. */
-  onCourt: Player[]
+  /** Current on-court five, each paired with the slot they're filling; length always 5, replaced
+   *  (not mutated in place) as substitutions happen. Slot-assigned rather than a bare list because
+   *  the slot is what matchups pair on -- see OnCourtPlayer. */
+  onCourt: OnCourtPlayer[]
   /** 0-100, keyed by every rostered player (bench included). */
   fatigue: Map<PlayerId, number>
   /** Game seconds this player has been on court for, so far this game. Keyed by every rostered
@@ -24,11 +27,13 @@ export function createRotationState(team: Team, playersById: Map<PlayerId, Playe
     secondsPlayed.set(id, 0)
   })
 
+  // Slots come from each starter's own first listed position, which is how generateTeam builds a
+  // starting five -- exactly one player per position. A rotation chart will supply them instead.
   const onCourt = team.startingFive.map((id) => {
     const player = playersById.get(id)
     if (!player) throw new Error(`Player ${id} in ${team.name}'s starting five was not found`)
     shiftEnteredAtSeconds.set(id, 0)
-    return player
+    return { player, slot: player.positions[0] }
   })
 
   return { onCourt, fatigue, secondsPlayed, shiftEnteredAtSeconds }

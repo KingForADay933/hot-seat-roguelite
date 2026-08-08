@@ -9,18 +9,58 @@ export function sortByPosition(players: Player[]): Player[] {
   )
 }
 
-/** Fixed position-to-position matchups (PG guards PG, etc.), matched by each player's first listed position. */
-export function buildMatchups(offense: Player[], defense: Player[]): Map<PlayerId, Player> {
-  const sortedOffense = sortByPosition(offense)
-  const sortedDefense = sortByPosition(defense)
+/**
+ * A player and the slot they are filling right now.
+ *
+ * The slot -- not `Player.positions` -- is what the simulation pairs matchups on and evaluates a
+ * player as. Today every slot is filled by someone whose first listed position matches it, so the
+ * two are always the same; separating them is what will let a GM put a player somewhere they don't
+ * belong and have the engine understand what that means.
+ */
+export interface OnCourtPlayer {
+  player: Player
+  slot: Position
+}
+
+/**
+ * Slot-assigns a five from each player's own first listed position.
+ *
+ * The assignment every five uses today, and the standing fallback for any team without a rotation
+ * chart -- which will always include the seven AI teams.
+ */
+export function slotByPosition(players: Player[]): OnCourtPlayer[] {
+  return players.map((player) => ({ player, slot: player.positions[0] }))
+}
+
+/** A five in slot order, PG through C. */
+export function sortBySlot(five: OnCourtPlayer[]): OnCourtPlayer[] {
+  return [...five].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot))
+}
+
+/**
+ * Fixed slot-to-slot matchups: whoever is filling PG guards whoever is filling PG.
+ *
+ * Pairs on the slot rather than on each player's listed position, so an out-of-position assignment
+ * produces the matchup the GM actually asked for instead of silently re-sorting itself back into
+ * position order.
+ */
+export function buildMatchups(offense: OnCourtPlayer[], defense: OnCourtPlayer[]): Map<PlayerId, Player> {
+  const sortedOffense = sortBySlot(offense)
+  const sortedDefense = sortBySlot(defense)
   const map = new Map<PlayerId, Player>()
-  sortedOffense.forEach((player, i) => map.set(player.id, sortedDefense[i]))
+  sortedOffense.forEach((entry, i) => map.set(entry.player.id, sortedDefense[i]?.player))
   return map
 }
 
-/** The player occupying a given position (by first listed position) within a five, if any. */
-export function findAtPosition(position: Position, players: Player[]): Player | undefined {
-  return players.find((p) => p.positions[0] === position)
+/** Whoever is filling a given slot within a five, if anyone. */
+export function findAtSlot(slot: Position, five: OnCourtPlayer[]): Player | undefined {
+  return five.find((entry) => entry.slot === slot)?.player
+}
+
+/** The plain players behind a five, for the team-average terms in strength/resistance that don't
+ *  care who is filling which slot. */
+export function playersOf(five: OnCourtPlayer[]): Player[] {
+  return five.map((entry) => entry.player)
 }
 
 export const avgPerimeterDefense = (p: Player) => (p.attributes.lateralQuickness + p.attributes.perimeterDefense) / 2

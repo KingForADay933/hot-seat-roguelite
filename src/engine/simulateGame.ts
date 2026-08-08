@@ -2,6 +2,7 @@ import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
 import type { Game, Player, PossessionLogEntry, Team } from '../data/types'
 import { deriveBoxScore } from './boxScore'
 import { OVERTIME_SECONDS, PERIOD_SECONDS, REGULATION_PERIODS } from './constants'
+import { playersOf } from './matchup'
 import { computeOffenseStrength, synergyMultiplier } from './possession/possessionStrength'
 import { getInvolvedPlayerIds, selectPlayers } from './possession/playerSelector'
 import { selectPlayCall } from './possession/playCallSelector'
@@ -139,15 +140,19 @@ export function* simulateGameSteps(
       checkSubstitutions(awayRotation, awayTeam, homeOnCourtBefore, playersById, elapsedSeconds)
 
       const offenseTeam = homeIsOffense ? homeTeam : awayTeam
-      const offenseOnCourt = homeIsOffense ? homeRotation.onCourt : awayRotation.onCourt
-      const defenseOnCourt = homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt
+      const offenseFive = homeIsOffense ? homeRotation.onCourt : awayRotation.onCourt
+      const defenseFive = homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt
+      // Slot assignment matters to defender pairing; the team-average terms in strength, resistance
+      // and rebounding only care who is out there, so they take the plain fives.
+      const offenseOnCourt = playersOf(offenseFive)
+      const defenseOnCourt = playersOf(defenseFive)
       const playbook = homeIsOffense ? homePlaybook : awayPlaybook
       const scheme = homeIsOffense ? awayScheme : homeScheme
       const synergy = homeIsOffense ? homeSynergy : awaySynergy
       const scoreMargin = homeIsOffense ? homeScore - awayScore : awayScore - homeScore
 
       const playCall = selectPlayCall(playbook, rng)
-      const selection = selectPlayers(playCall, offenseOnCourt, defenseOnCourt, scheme, rng)
+      const selection = selectPlayers(playCall, offenseFive, defenseFive, scheme, rng)
       const strength = computeOffenseStrength(playCall, selection, playbook, offenseOnCourt, synergy)
       const resistance = computeResistance(playCall, selection, scheme, offenseOnCourt, defenseOnCourt)
       const resolved = resolvePossession(playCall, selection, strength, resistance, clock, isFinalPeriod, scoreMargin, rng)
@@ -190,8 +195,8 @@ export function* simulateGameSteps(
         offensiveRebound,
         isSecondChance,
         playersInvolved: getInvolvedPlayerIds(selection),
-        homeOnCourtIds: homeRotation.onCourt.map((p) => p.id),
-        awayOnCourtIds: awayRotation.onCourt.map((p) => p.id),
+        homeOnCourtIds: homeRotation.onCourt.map((entry) => entry.player.id),
+        awayOnCourtIds: awayRotation.onCourt.map((entry) => entry.player.id),
       }
       possessionLog.push(entry)
 

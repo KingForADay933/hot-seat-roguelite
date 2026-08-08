@@ -4,6 +4,7 @@ import { deriveBoxScore } from '../../engine/boxScore'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { createSeededRng } from '../../engine/rng'
 import { tickFatigue } from '../../engine/rotation/fatigue'
+import { slotByPosition } from '../../engine/matchup'
 import { createRotationState } from '../../engine/rotation/rotationState'
 import { simulateGameSteps, type SimulationStep } from '../../engine/simulateGame'
 import { advancePlayback, createPlaybackState, type PlaybackContext, type PlaybackState } from './playbackState'
@@ -86,7 +87,7 @@ describe('advancePlayback', () => {
     // recorded -- exactly what simulateGameSteps did internally as it played.
     const rotation = createRotationState(homeTeam, playerById)
     for (const step of steps) {
-      rotation.onCourt = step.entry.homeOnCourtIds.map((id) => playerById.get(id)!)
+      rotation.onCourt = slotByPosition(step.entry.homeOnCourtIds.map((id) => playerById.get(id)!))
       tickFatigue(rotation, context.homeRoster, step.entry.durationSeconds)
     }
 
