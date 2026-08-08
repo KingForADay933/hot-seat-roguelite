@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Game,
   GameResult,
   PlayCallType,
@@ -8,7 +8,7 @@ import type {
   PossessionLogEntry,
   TeamId,
 } from '../data/types'
-import { REGULATION_MINUTES } from './constants'
+import { SECONDS_PER_MINUTE } from './constants'
 import type { Rng } from './rng'
 
 /** Pass-originated play calls where a make credits an assist to secondaries[0]. Other play calls
@@ -18,10 +18,6 @@ import type { Rng } from './rng'
  *  rather than a copy that could drift. */
 export const ASSIST_ELIGIBLE_PLAY_CALLS: PlayCallType[] = ['spot-up', 'cutting']
 
-/** There's no live rebound-triggered possession model in MVP, so a miss's rebound is approximated
- *  post-hoc: the offense recovers roughly as often as a real offensive-rebound rate, weighted by Rebounding. */
-const OFFENSIVE_REBOUND_RATE = 0.25
-
 function emptyLine(playerId: PlayerId): PlayerBoxScoreLine {
   return {
     playerId,
@@ -30,6 +26,8 @@ function emptyLine(playerId: PlayerId): PlayerBoxScoreLine {
     fieldGoalsAttempted: 0,
     threePointersMade: 0,
     threePointersAttempted: 0,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
     turnovers: 0,
@@ -62,7 +60,6 @@ export function deriveBoxScore(
   possessionLog: PossessionLogEntry[],
   homeTeamId: TeamId,
   playersById: Map<PlayerId, Player>,
-  possessionsPerGame: number,
   rng: Rng,
 ): GameResult {
   const lines = new Map<PlayerId, PlayerBoxScoreLine>()
@@ -77,8 +74,10 @@ export function deriveBoxScore(
 
   const homeIds = new Set<PlayerId>()
   const awayIds = new Set<PlayerId>()
-  const possessionsOnCourt = new Map<PlayerId, number>()
-  const bumpOnCourt = (id: PlayerId) => possessionsOnCourt.set(id, (possessionsOnCourt.get(id) ?? 0) + 1)
+  /** Real game seconds on the floor, summed from each possession's own duration -- no longer a
+   *  possession count scaled by a nominal pace, so an overtime game simply reports more than 48. */
+  const secondsOnCourt = new Map<PlayerId, number>()
+  const bumpOnCourt = (id: PlayerId, seconds: number) => secondsOnCourt.set(id, (secondsOnCourt.get(id) ?? 0) + seconds)
 
   let homeScore = 0
   let awayScore = 0
@@ -86,12 +85,12 @@ export function deriveBoxScore(
   for (const entry of possessionLog) {
     entry.homeOnCourtIds.forEach((id) => {
       homeIds.add(id)
-      bumpOnCourt(id)
+      bumpOnCourt(id, entry.durationSeconds)
       lineFor(id)
     })
     entry.awayOnCourtIds.forEach((id) => {
       awayIds.add(id)
-      bumpOnCourt(id)
+      bumpOnCourt(id, entry.durationSeconds)
       lineFor(id)
     })
 
@@ -115,22 +114,30 @@ export function deriveBoxScore(
       primaryLine.fieldGoalsAttempted += 1
       if (entry.isThreePointAttempt) primaryLine.threePointersAttempted += 1
 
-      const offenseOnCourt = resolvePlayers(offenseIsHome ? entry.homeOnCourtIds : entry.awayOnCourtIds, playersById)
-      const defenseOnCourt = resolvePlayers(offenseIsHome ? entry.awayOnCourtIds : entry.homeOnCourtIds, playersById)
-      const reboundingTeam = rng() < OFFENSIVE_REBOUND_RATE ? offenseOnCourt : defenseOnCourt
-      const rebounder = weightedPick(reboundingTeam, (p) => p.attributes.rebounding, rng)
+      // Which side got the board is the simulation's decision -- it determined who kept the ball --
+      // so it's read off the log rather than re-rolled here. Only *which player* on that five came
+      // down with it is settled now, since nothing upstream needed to know.
+      const reboundingSideIsOffense = entry.offensiveRebound
+      const reboundingIsHome = reboundingSideIsOffense ? offenseIsHome : !offenseIsHome
+      const reboundingIds = reboundingIsHome ? entry.homeOnCourtIds : entry.awayOnCourtIds
+      const rebounder = weightedPick(resolvePlayers(reboundingIds, playersById), (p) => p.attributes.rebounding, rng)
       lineFor(rebounder.id).rebounds += 1
     } else if (entry.outcome === 'turnover') {
       primaryLine.turnovers += 1
     } else if (entry.outcome === 'foul') {
-      // MVP simplification: no free-throw mechanic exists, so a shooting foul is logged as a distinct
-      // box-score event on the offensive player who drew it rather than a defender's personal foul count.
+      // The whistle lands on the offensive player who drew it, not a defender's personal foul count
+      // -- there's still no defensive foul attribution model. The free throws it produced do score.
       primaryLine.fouls += 1
+      primaryLine.freeThrowsMade += entry.freeThrowsMade
+      primaryLine.freeThrowsAttempted += entry.freeThrowsAttempted
+      primaryLine.points += entry.pointsScored
+      if (offenseIsHome) homeScore += entry.pointsScored
+      else awayScore += entry.pointsScored
     }
   }
 
   lines.forEach((line, id) => {
-    line.minutesPlayed = ((possessionsOnCourt.get(id) ?? 0) / possessionsPerGame) * REGULATION_MINUTES
+    line.minutesPlayed = (secondsOnCourt.get(id) ?? 0) / SECONDS_PER_MINUTE
   })
 
   const allLines = [...lines.values()]
@@ -155,6 +162,8 @@ export interface SeasonTotals {
   fieldGoalsAttempted: number
   threePointersMade: number
   threePointersAttempted: number
+  freeThrowsMade: number
+  freeThrowsAttempted: number
   assists: number
   rebounds: number
   turnovers: number
@@ -170,6 +179,8 @@ function emptySeasonTotals(): SeasonTotals {
     fieldGoalsAttempted: 0,
     threePointersMade: 0,
     threePointersAttempted: 0,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
     turnovers: 0,
@@ -193,6 +204,8 @@ export function aggregateSeasonTotals(games: Game[]): Map<PlayerId, SeasonTotals
       current.fieldGoalsAttempted += line.fieldGoalsAttempted
       current.threePointersMade += line.threePointersMade
       current.threePointersAttempted += line.threePointersAttempted
+      current.freeThrowsMade += line.freeThrowsMade
+      current.freeThrowsAttempted += line.freeThrowsAttempted
       current.assists += line.assists
       current.rebounds += line.rebounds
       current.turnovers += line.turnovers

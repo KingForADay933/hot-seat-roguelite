@@ -71,6 +71,10 @@ export interface RunContextValue {
   /** Continues past a fired run's final Season Results screen to the Fired screen -- the shop-less
    *  equivalent of openShop for a run that's over. */
   acknowledgeFired: () => void
+  /** Quits the run in progress and returns to the start screen, deleting the save. Distinct from
+   *  beginDraft, which also erases but then immediately rolls the next run's draft -- quitting and
+   *  starting again are separate acts. Nothing is retained; there's no run history to write to. */
+  abandonRun: () => Promise<void>
   beginDraft: () => Promise<void>
   /** Resolves phase one of setup: applies the chosen quirk and house rule to the roster and rolls
    *  the system candidates, moving to the reveal (still nothing persisted -- see PendingReveal). */

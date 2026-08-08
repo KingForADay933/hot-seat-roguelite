@@ -1,10 +1,12 @@
 import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
 import type { Game, Player, PossessionLogEntry, Team } from '../data/types'
 import { deriveBoxScore } from './boxScore'
-import { OVERTIME_MINUTES, REGULATION_MINUTES } from './constants'
+import { OVERTIME_SECONDS, PERIOD_SECONDS, REGULATION_PERIODS } from './constants'
 import { computeOffenseStrength, synergyMultiplier } from './possession/possessionStrength'
 import { getInvolvedPlayerIds, selectPlayers } from './possession/playerSelector'
 import { selectPlayCall } from './possession/playCallSelector'
+import { possessionDurationSeconds } from './possession/possessionDuration'
+import { offensiveReboundProbability } from './possession/rebound'
 import { resolvePossession } from './possession/outcomeResolver'
 import { computeResistance } from './possession/resistance'
 import { tickFatigue } from './rotation/fatigue'
@@ -21,31 +23,21 @@ function resolveRoster(team: Team, playersById: Map<string, Player>): Player[] {
 }
 
 /**
- * Length of one overtime period, in possessions, at the same pace as regulation -- mirrors the
- * real NBA's 5-minute (5/12 of a 12-minute quarter) extra period. Floored at 1 so a very low
- * possessionsPerGame configuration can never produce a zero-length period, which would make the
- * "keep playing until someone wins" loop in simulateGame spin forever without the score changing.
+ * "Q1"-"Q4" during regulation, then "OT"/"2OT"/... beyond it, mirroring formatOvertimeLabel
+ * (ui/formatOvertime.ts). Now a straight lookup on the period the possession was actually played
+ * in, rather than the old approximation that sliced a possession count into four -- the loop runs
+ * one real period at a time. Lives here (not in ui/) because Coaching Insights needs it too.
  */
-export function computeOvertimePossessions(possessionsPerGame: number): number {
-  return Math.max(1, Math.round((OVERTIME_MINUTES / REGULATION_MINUTES) * possessionsPerGame))
+export function getPeriodLabel(period: number): string {
+  if (period <= REGULATION_PERIODS) return `Q${period}`
+  const overtimeNumber = period - REGULATION_PERIODS
+  return overtimeNumber === 1 ? 'OT' : `${overtimeNumber}OT`
 }
 
-/**
- * Which period a given possession falls in, for live display -- "Q1"-"Q4" during regulation (split
- * evenly across possessionsPerGame), then "OT"/"2OT"/... beyond that, mirroring formatOvertimeLabel
- * (ui/formatOvertime.ts). Presentation-only: derived from possession counts, the same way
- * minutesPlayed already stands in for a real game clock (Section 13), not a new engine concept --
- * lives here (not in ui/) because Coaching Insights (engine code) needs it too.
- */
-export function getPeriodLabel(possessionNumber: number, possessionsPerGame: number): string {
-  if (possessionNumber <= possessionsPerGame) {
-    const quarterLength = possessionsPerGame / 4
-    const quarter = Math.min(4, Math.max(1, Math.ceil(possessionNumber / quarterLength)))
-    return `Q${quarter}`
-  }
-  const overtimePossessions = computeOvertimePossessions(possessionsPerGame)
-  const overtimeNumber = Math.ceil((possessionNumber - possessionsPerGame) / overtimePossessions)
-  return overtimeNumber === 1 ? 'OT' : `${overtimeNumber}OT`
+/** mm:ss for a scoreboard, rounding up so a possession ending at 0.4s left still reads 0:01. */
+export function formatGameClock(secondsRemaining: number): string {
+  const total = Math.max(0, Math.ceil(secondsRemaining))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
 /**
@@ -76,6 +68,12 @@ export interface SimulationStep {
  * once, and is the pause point future interactive coaching decisions (timeouts, subs, matchup/
  * emphasis changes) will hook into.
  *
+ * The game is driven by a clock, not a possession count: four real 12-minute periods, each running
+ * until its time expires, so how many possessions a team gets is an outcome of how long its
+ * possessions take (see possession/possessionDuration.ts). `possessionsPerGame` survives as the
+ * league-wide pace scale that sizes those durations rather than as a loop bound, which is what lets
+ * a fast playbook genuinely out-pace a slow one.
+ *
  * MVP simplification: offense alternates home/away on a fixed count rather than being triggered by
  * live rebounds/makes -- who gets first possession of a period (including the opening tip, not
  * just overtime) is decided by a jump ball (rollJumpBall), and alternates from there.
@@ -83,10 +81,11 @@ export interface SimulationStep {
  * Bench rotation: each team's on-court five starts as its startingFive and changes over the game
  * via fatigue/pace-driven substitutions (see engine/rotation) -- see each possession's logged
  * homeOnCourtIds/awayOnCourtIds for who was actually on the floor. Fatigue/rotation state carries
- * continuously from regulation into overtime, exactly like a real game.
+ * continuously from regulation into overtime, exactly like a real game, and both are measured in
+ * game seconds so a fast break costs less than a ground-out post-up.
  *
- * Overtime: if regulation ends tied, extra periods (Section 14.2) run until the tie breaks --
- * never capped, matching the real rules. Each period, including regulation's opening tip, gets
+ * Overtime: if regulation ends tied, extra 5-minute periods (Section 14.2) run until the tie breaks
+ * -- never capped, matching the real rules. Each period, including regulation's opening tip, gets
  * its own independent jump ball rather than continuing the previous period's alternating pattern.
  */
 export function* simulateGameSteps(
@@ -114,20 +113,31 @@ export function* simulateGameSteps(
   let homeScore = 0
   let awayScore = 0
   let possessionNumber = 0 // overall counter across the whole game, regulation + every overtime
+  let elapsedSeconds = 0 // game time elapsed across the whole game, for rotation pacing
 
-  /** Runs one period (regulation or a single overtime) of `periodLength` possessions. */
-  function* runPeriod(periodLength: number, homeStartsOnOffense: boolean): Generator<SimulationStep> {
-    for (let periodPossession = 1; periodPossession <= periodLength; periodPossession++) {
+  /**
+   * Runs one period until its clock expires. Possessions keep starting while any time remains --
+   * a trip that begins with two seconds left is a real thing -- and the last one is truncated to
+   * whatever was actually on the clock rather than overrunning the period.
+   */
+  function* runPeriod(period: number, periodSeconds: number, homeStartsOnOffense: boolean): Generator<SimulationStep> {
+    const isFinalPeriod = period >= REGULATION_PERIODS
+    let clock = periodSeconds
+    let homeIsOffense = homeStartsOnOffense
+    // Set when the previous attempt was rebounded by its own offense, making this one a putback
+    // rather than a fresh trip up the floor.
+    let isSecondChance = false
+
+    while (clock > 0) {
       possessionNumber += 1
 
       // Snapshot both fives before checking either team's subs, so neither team's matchup-fit
       // scoring sees the other team's just-updated five for this possession.
       const homeOnCourtBefore = [...homeRotation.onCourt]
       const awayOnCourtBefore = [...awayRotation.onCourt]
-      checkSubstitutions(homeRotation, homeTeam, awayOnCourtBefore, playersById, possessionNumber)
-      checkSubstitutions(awayRotation, awayTeam, homeOnCourtBefore, playersById, possessionNumber)
+      checkSubstitutions(homeRotation, homeTeam, awayOnCourtBefore, playersById, elapsedSeconds)
+      checkSubstitutions(awayRotation, awayTeam, homeOnCourtBefore, playersById, elapsedSeconds)
 
-      const homeIsOffense = homeStartsOnOffense ? periodPossession % 2 === 1 : periodPossession % 2 === 0
       const offenseTeam = homeIsOffense ? homeTeam : awayTeam
       const offenseOnCourt = homeIsOffense ? homeRotation.onCourt : awayRotation.onCourt
       const defenseOnCourt = homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt
@@ -140,24 +150,34 @@ export function* simulateGameSteps(
       const selection = selectPlayers(playCall, offenseOnCourt, defenseOnCourt, scheme, rng)
       const strength = computeOffenseStrength(playCall, selection, playbook, offenseOnCourt, synergy)
       const resistance = computeResistance(playCall, selection, scheme, offenseOnCourt, defenseOnCourt)
-      const resolved = resolvePossession(
-        playCall,
-        selection,
-        strength,
-        resistance,
-        periodPossession,
-        periodLength,
-        scoreMargin,
-        rng,
-      )
+      const resolved = resolvePossession(playCall, selection, strength, resistance, clock, isFinalPeriod, scoreMargin, rng)
 
-      if (resolved.outcome === 'make') {
-        if (homeIsOffense) homeScore += resolved.pointsScored
-        else awayScore += resolved.pointsScored
-      }
+      // Only a miss can be rebounded by the offense: a make is inbounded by the other team, a
+      // turnover hands it over, and a foul stops play for free throws.
+      const offensiveRebound =
+        resolved.outcome === 'miss' && rng() < offensiveReboundProbability(offenseOnCourt, defenseOnCourt)
+
+      // Duration is sampled after resolution because the outcome shapes it -- a turnover cuts the
+      // action short, a miss adds the rebound scramble. Clamped to the clock so a period never
+      // runs long.
+      const durationSeconds = Math.min(
+        clock,
+        possessionDurationSeconds(playCall, resolved.outcome, possessionsPerGame, rng, isSecondChance),
+      )
+      clock -= durationSeconds
+      elapsedSeconds += durationSeconds
+
+      // Not gated on outcome === 'make' any more: a shooting foul scores whatever dropped at the
+      // line, and every other outcome reports 0, so adding unconditionally is both simpler and the
+      // only way free-throw points reach the scoreboard.
+      if (homeIsOffense) homeScore += resolved.pointsScored
+      else awayScore += resolved.pointsScored
 
       const entry: PossessionLogEntry = {
         possessionNumber,
+        period,
+        clockSecondsRemaining: clock,
+        durationSeconds,
         offenseTeamId: offenseTeam.id,
         playCallUsed: playCall,
         primaryPlayerId: selection.primary.id,
@@ -165,29 +185,39 @@ export function* simulateGameSteps(
         outcome: resolved.outcome,
         pointsScored: resolved.pointsScored,
         isThreePointAttempt: selection.isOutsideShotAction,
+        freeThrowsMade: resolved.freeThrowsMade,
+        freeThrowsAttempted: resolved.freeThrowsAttempted,
+        offensiveRebound,
+        isSecondChance,
         playersInvolved: getInvolvedPlayerIds(selection),
         homeOnCourtIds: homeRotation.onCourt.map((p) => p.id),
         awayOnCourtIds: awayRotation.onCourt.map((p) => p.id),
       }
       possessionLog.push(entry)
 
-      tickFatigue(homeRotation, homeRoster)
-      tickFatigue(awayRotation, awayRoster)
+      tickFatigue(homeRotation, homeRoster, durationSeconds)
+      tickFatigue(awayRotation, awayRoster, durationSeconds)
+
+      // The ball only changes hands when the offense doesn't get its own miss back, which is what
+      // makes a trip able to span several attempts.
+      if (!offensiveRebound) homeIsOffense = !homeIsOffense
+      isSecondChance = offensiveRebound
 
       yield { entry, homeScore, awayScore }
     }
   }
 
-  yield* runPeriod(possessionsPerGame, rollJumpBall(rng))
+  for (let period = 1; period <= REGULATION_PERIODS; period++) {
+    yield* runPeriod(period, PERIOD_SECONDS, rollJumpBall(rng))
+  }
 
-  const overtimePossessions = computeOvertimePossessions(possessionsPerGame)
   let overtimePeriods = 0
   while (homeScore === awayScore) {
     overtimePeriods += 1
-    yield* runPeriod(overtimePossessions, rollJumpBall(rng))
+    yield* runPeriod(REGULATION_PERIODS + overtimePeriods, OVERTIME_SECONDS, rollJumpBall(rng))
   }
 
-  const result = deriveBoxScore(possessionLog, homeTeam.id, playersById, possessionsPerGame, rng)
+  const result = deriveBoxScore(possessionLog, homeTeam.id, playersById, rng)
 
   return {
     ...game,

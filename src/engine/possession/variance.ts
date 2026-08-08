@@ -1,5 +1,5 @@
 import type { Player } from '../../data/types'
-import { CLUTCH_BONUS_MAX, CLUTCH_POSSESSION_WINDOW_FRACTION, CLUTCH_SCORE_MARGIN, CONSISTENCY_NOISE_MAX } from '../constants'
+import { CLUTCH_BONUS_MAX, CLUTCH_SCORE_MARGIN, CLUTCH_SECONDS_REMAINING, CONSISTENCY_NOISE_MAX } from '../constants'
 import type { Rng } from '../rng'
 
 function gaussianNoise(mean: number, stdDev: number, rng: Rng): number {
@@ -17,9 +17,15 @@ export function computeConsistencyNoise(player: Player, rng: Rng): number {
   return gaussianNoise(0, stdDev, rng)
 }
 
-export function isClutchTime(possessionNumber: number, totalPossessions: number, scoreMargin: number): boolean {
-  const windowStart = totalPossessions * (1 - CLUTCH_POSSESSION_WINDOW_FRACTION)
-  return possessionNumber >= windowStart && Math.abs(scoreMargin) <= CLUTCH_SCORE_MARGIN
+/**
+ * The last five minutes of the final period with the score inside five -- the NBA's own clutch
+ * definition, now that there's a real clock to read it off. `isFinalPeriod` is what keeps a tight
+ * end of Q1 from counting; every overtime period qualifies, since the whole five minutes of one
+ * sits inside the window.
+ */
+export function isClutchTime(clockSecondsRemaining: number, isFinalPeriod: boolean, scoreMargin: number): boolean {
+  if (!isFinalPeriod) return false
+  return clockSecondsRemaining <= CLUTCH_SECONDS_REMAINING && Math.abs(scoreMargin) <= CLUTCH_SCORE_MARGIN
 }
 
 /** Zero outside clutch time regardless of the player's Clutch rating. */

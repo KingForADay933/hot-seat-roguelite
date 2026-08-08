@@ -3,7 +3,8 @@ import type { Game, Player } from '../data/types'
 import { OVERTIME_MINUTES, REGULATION_MINUTES } from './constants'
 import { generateTeam } from './generator/randomTeam'
 import { createSeededRng } from './rng'
-import { computeOvertimePossessions, rollJumpBall, simulateGame, simulateGameSteps } from './simulateGame'
+import { OVERTIME_SECONDS, PERIOD_SECONDS } from './constants'
+import { formatGameClock, getPeriodLabel, rollJumpBall, simulateGame, simulateGameSteps } from './simulateGame'
 
 function buildMatchup(seed: number) {
   const home = generateTeam({
@@ -46,36 +47,88 @@ function emptyGame(homeTeamId: string, awayTeamId: string): Game {
 }
 
 describe('simulateGame', () => {
-  it('produces exactly one possession log entry per configured possession', () => {
+  it('runs a possession count in the neighbourhood of the league pace rather than exactly it', () => {
     const { home, away, playersById } = buildMatchup(10)
-    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 100, createSeededRng(99))
-    expect(game.possessionLog).toHaveLength(100)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(99))
+
+    // Pace is emergent now: the clock decides how many trips fit, so the count varies with the
+    // playbook mix and the sampled durations rather than landing on the configured number.
+    expect(game.possessionLog.length).toBeGreaterThan(150)
+    expect(game.possessionLog.length).toBeLessThan(260)
     expect(game.isPlayed).toBe(true)
+  })
+
+  it('plays four regulation periods that each run their clock out', () => {
+    const { home, away, playersById } = buildMatchup(10)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(99))
+
+    const regulation = game.possessionLog.filter((e) => e.period <= 4)
+    expect(new Set(regulation.map((e) => e.period))).toEqual(new Set([1, 2, 3, 4]))
+
+    for (const period of [1, 2, 3, 4]) {
+      const entries = game.possessionLog.filter((e) => e.period === period)
+      // Durations sum to the full period, and the last possession leaves nothing on the clock.
+      expect(entries.reduce((sum, e) => sum + e.durationSeconds, 0)).toBeCloseTo(PERIOD_SECONDS, 5)
+      expect(entries[entries.length - 1].clockSecondsRemaining).toBeCloseTo(0, 5)
+    }
+  })
+
+  it('never lets a possession overrun the period clock', () => {
+    const { home, away, playersById } = buildMatchup(12)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(31))
+
+    for (const entry of game.possessionLog) {
+      expect(entry.durationSeconds).toBeGreaterThan(0)
+      expect(entry.clockSecondsRemaining).toBeGreaterThanOrEqual(0)
+    }
   })
 
   it('alternates offense strictly within each period, every period (including the opening tip) starting from its own jump ball', () => {
     const { home, away, playersById } = buildMatchup(11)
-    const possessionsPerGame = 20
-    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, possessionsPerGame, createSeededRng(5))
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(5))
 
-    // Regulation's opening tip is a jump ball too now, so nothing forces home to start on offense --
-    // just that every possession strictly alternates from whichever team won that period's tip.
-    game.possessionLog
-      .filter((e) => e.possessionNumber <= possessionsPerGame)
-      .forEach((entry, i, regulationEntries) => {
+    // Every period gets its own jump ball, so nothing forces home to start on offense -- just that
+    // the ball changes hands on every attempt EXCEPT one the offense rebounded, which keeps it.
+    // Grouping by the logged period is what makes this checkable without re-deriving boundaries.
+    const byPeriod = new Map<number, typeof game.possessionLog>()
+    for (const entry of game.possessionLog) {
+      byPeriod.set(entry.period, [...(byPeriod.get(entry.period) ?? []), entry])
+    }
+
+    for (const entries of byPeriod.values()) {
+      entries.forEach((entry, i) => {
         if (i === 0) return
-        expect(entry.offenseTeamId).not.toBe(regulationEntries[i - 1].offenseTeamId)
+        const previous = entries[i - 1]
+        if (previous.offensiveRebound) {
+          // Second chance: same team shoots again, and the entry is flagged as such.
+          expect(entry.offenseTeamId).toBe(previous.offenseTeamId)
+          expect(entry.isSecondChance).toBe(true)
+        } else {
+          expect(entry.offenseTeamId).not.toBe(previous.offenseTeamId)
+          expect(entry.isSecondChance).toBe(false)
+        }
       })
+    }
+  })
 
-    // Overtime periods (if any) each start fresh off their own jump ball -- not necessarily aligned
-    // to regulation's pattern -- but still strictly alternate possession-to-possession within a period.
-    const overtimePossessions = computeOvertimePossessions(possessionsPerGame)
-    const overtimeEntries = game.possessionLog.filter((e) => e.possessionNumber > possessionsPerGame)
-    overtimeEntries.forEach((entry, i) => {
-      const positionInPeriod = i % overtimePossessions
-      if (positionInPeriod === 0) return // first possession of a period may repeat the prior period's last offense
-      expect(entry.offenseTeamId).not.toBe(overtimeEntries[i - 1].offenseTeamId)
-    })
+  it('only rebounds its own misses, and second chances are quick putbacks', () => {
+    const { home, away, playersById } = buildMatchup(11)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(5))
+
+    const offensiveRebounds = game.possessionLog.filter((e) => e.offensiveRebound)
+    expect(offensiveRebounds.length).toBeGreaterThan(0)
+    // Only a miss can be rebounded by the offense -- a make is inbounded, a turnover hands over,
+    // and a foul stops play for free throws.
+    expect(offensiveRebounds.every((e) => e.outcome === 'miss')).toBe(true)
+
+    const secondChances = game.possessionLog.filter((e) => e.isSecondChance)
+    expect(secondChances.length).toBe(offensiveRebounds.length)
+    // A putback is a shot already under the rim, not a fresh trip, so it costs far less clock.
+    const putbackMean = secondChances.reduce((sum, e) => sum + e.durationSeconds, 0) / secondChances.length
+    const tripMean =
+      game.possessionLog.filter((e) => !e.isSecondChance).reduce((sum, e) => sum + e.durationSeconds, 0) /
+      game.possessionLog.filter((e) => !e.isSecondChance).length
+    expect(putbackMean).toBeLessThan(tripMean / 2)
   })
 
   it("rollJumpBall is a neutral coin flip, not fixed to either team", () => {
@@ -95,17 +148,46 @@ describe('simulateGame', () => {
   it('final score matches the sum of points logged for each team', () => {
     const { home, away, playersById } = buildMatchup(12)
     const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 100, createSeededRng(3))
+    // No outcome filter: pointsScored is 0 on everything except a make or a converted shooting
+    // foul, so summing the whole log is the score -- same way simulateGame accumulates it.
     const homePoints = game.possessionLog
-      .filter((e) => e.offenseTeamId === home.id && e.outcome === 'make')
+      .filter((e) => e.offenseTeamId === home.id)
       .reduce((sum, e) => sum + e.pointsScored, 0)
     const awayPoints = game.possessionLog
-      .filter((e) => e.offenseTeamId === away.id && e.outcome === 'make')
+      .filter((e) => e.offenseTeamId === away.id)
       .reduce((sum, e) => sum + e.pointsScored, 0)
 
     expect(game.result!.homeScore).toBe(homePoints)
     expect(game.result!.awayScore).toBe(awayPoints)
     expect(game.result!.homeScore).toBeGreaterThan(0)
     expect(game.result!.awayScore).toBeGreaterThan(0)
+  })
+
+  it('box score points sum to the final score, free throws included', () => {
+    // Two independent paths add points now -- simulateGame accumulates resolved.pointsScored onto
+    // the scoreboard while deriveBoxScore re-adds entry.pointsScored onto player lines. A make
+    // credits the shooter in one place and a converted foul in another, so they can silently drift.
+    const { home, away, playersById } = buildMatchup(12)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 100, createSeededRng(11))
+    const { boxScore, homeScore, awayScore } = game.result!
+
+    expect(boxScore.home.reduce((sum, l) => sum + l.points, 0)).toBe(homeScore)
+    expect(boxScore.away.reduce((sum, l) => sum + l.points, 0)).toBe(awayScore)
+  })
+
+  it('converts shooting fouls into free throws that score', () => {
+    const { home, away, playersById } = buildMatchup(12)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 100, createSeededRng(5))
+    const fouls = game.possessionLog.filter((e) => e.outcome === 'foul')
+
+    expect(fouls.length).toBeGreaterThan(0)
+    // Two free throws on a two-point attempt, three on a three -- and points equal what dropped.
+    for (const entry of fouls) {
+      expect(entry.freeThrowsAttempted).toBe(entry.isThreePointAttempt ? 3 : 2)
+      expect(entry.freeThrowsMade).toBeLessThanOrEqual(entry.freeThrowsAttempted)
+      expect(entry.pointsScored).toBe(entry.freeThrowsMade)
+    }
+    expect(fouls.some((e) => e.pointsScored > 0)).toBe(true)
   })
 
   it('is reproducible given the same rosters and seeded rng', () => {
@@ -156,23 +238,22 @@ describe('simulateGame', () => {
   })
 
   describe('overtime', () => {
-    it('never ends in a tie, and the possession log length always matches regulation + full overtime periods', () => {
+    it('never ends in a tie, and every overtime period runs a full five minutes', () => {
       const { home, away, playersById } = buildMatchup(40)
-      const possessionsPerGame = 100
-      const overtimePossessions = computeOvertimePossessions(possessionsPerGame)
       let sawOvertime = false
 
       for (let seed = 0; seed < 300; seed++) {
-        const game = simulateGame(
-          emptyGame(home.id, away.id),
-          home,
-          away,
-          playersById,
-          possessionsPerGame,
-          createSeededRng(seed),
-        )
+        const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(seed))
         expect(game.result!.homeScore).not.toBe(game.result!.awayScore)
-        expect(game.possessionLog).toHaveLength(possessionsPerGame + game.result!.overtimePeriods * overtimePossessions)
+
+        const overtimePeriods = new Set(game.possessionLog.filter((e) => e.period > 4).map((e) => e.period))
+        expect(overtimePeriods.size).toBe(game.result!.overtimePeriods)
+
+        for (const period of overtimePeriods) {
+          const entries = game.possessionLog.filter((e) => e.period === period)
+          expect(entries.reduce((sum, e) => sum + e.durationSeconds, 0)).toBeCloseTo(OVERTIME_SECONDS, 5)
+        }
+
         if (game.result!.overtimePeriods > 0) sawOvertime = true
       }
 
@@ -219,10 +300,8 @@ describe('simulateGameSteps', () => {
     let next = steps.next()
     while (!next.done) {
       const { entry, homeScore, awayScore } = next.value
-      if (entry.outcome === 'make') {
-        if (entry.offenseTeamId === home.id) runningHome += entry.pointsScored
-        else runningAway += entry.pointsScored
-      }
+      if (entry.offenseTeamId === home.id) runningHome += entry.pointsScored
+      else runningAway += entry.pointsScored
       expect(homeScore).toBe(runningHome)
       expect(awayScore).toBe(runningAway)
       next = steps.next()
@@ -238,17 +317,21 @@ describe('simulateGameSteps', () => {
   })
 })
 
-describe('computeOvertimePossessions', () => {
-  it('computes 5/12 of a quarter at the same pace as regulation', () => {
-    expect(computeOvertimePossessions(96)).toBe(10) // 96/4=24 possessions/quarter, 5/12*24=10 exactly
+describe('getPeriodLabel', () => {
+  it('labels regulation quarters and successive overtimes', () => {
+    expect(getPeriodLabel(1)).toBe('Q1')
+    expect(getPeriodLabel(4)).toBe('Q4')
+    expect(getPeriodLabel(5)).toBe('OT')
+    expect(getPeriodLabel(6)).toBe('2OT')
   })
+})
 
-  it('rounds to the nearest whole possession for the default 100-possession pace', () => {
-    expect(computeOvertimePossessions(100)).toBe(10) // 5/48*100=10.4167 -> rounds to 10
-  })
-
-  it('floors at 1 possession so a period can never be zero-length', () => {
-    expect(computeOvertimePossessions(4)).toBe(1) // 4/4=1/quarter, 5/12*1=0.4167 -> rounds to 0, floored to 1
+describe('formatGameClock', () => {
+  it('renders mm:ss, rounding up so a live possession never shows 0:00 early', () => {
+    expect(formatGameClock(PERIOD_SECONDS)).toBe('12:00')
+    expect(formatGameClock(65)).toBe('1:05')
+    expect(formatGameClock(0.4)).toBe('0:01')
+    expect(formatGameClock(0)).toBe('0:00')
   })
 })
 

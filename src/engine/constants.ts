@@ -1,4 +1,4 @@
-import type { TendencyProfile } from '../data/types'
+﻿import type { TendencyProfile } from '../data/types'
 
 /** All formula weights live here so balance tuning is a config change, not a code change. */
 
@@ -49,17 +49,72 @@ export const TURNOVER_MIN = 0.04
 export const TURNOVER_MAX = 0.22
 export const TURNOVER_SENSITIVITY = 500
 
-export const MAKE_PROB_BASE = 0.45
-export const MAKE_PROB_MARGIN_SCALE = 200
-export const MAKE_PROB_MIN = 0.05
+/**
+ * Make probability for an evenly-matched two-point attempt, before the shot-quality margin moves it.
+ * Realized two-point percentage lands ~54%, against a real league's ~53%.
+ *
+ * It could only be tuned to a real rate once offensive rebounds became retained possession. Before
+ * that a trip was exactly one shot, so the engine took ~80 attempts per 100 possessions where a real
+ * team takes ~89, and the per-attempt rate had to be inflated to ~59% to reach a believable score.
+ * Second chances supply the missing attempts, so the percentage no longer has to lie to make up for
+ * them.
+ */
+export const MAKE_PROB_BASE = 0.47
+
+/**
+ * How much less often a three goes in than a two of the same quality.
+ *
+ * Without this a three-point attempt was strictly better than a two: `isOutsideShotAction` changed
+ * what the make was worth but not how hard it was, so the same ~50% conversion paid 3 points
+ * instead of 2. Every jump-shooting playbook was therefore free money, and Seven Seconds Or Less
+ * put up 152 a night at 61% from deep.
+ *
+ * 0.17 is the real gap -- the league shoots about 53% on twos and 36% on threes. The extra point is
+ * what compensates for the difficulty, which is exactly the trade this constant restores.
+ */
+export const THREE_POINT_MAKE_PENALTY = 0.17
+/** Attribute points of shot-quality margin per 1.0 of make probability. Raised from 200 to damp how
+ *  hard a talent gap lands on the scoreboard: at 200 a mismatch swung scoring far enough to produce
+ *  sub-90 and 160-point games several times more often than a real league does. Still the main way
+ *  roster quality reaches the score -- just no longer the only thing that matters. Tuned alongside
+ *  the pace and shot constants to keep the spread of team scores near a real league's. */
+export const MAKE_PROB_MARGIN_SCALE = 360
+/** Floor on a single attempt. Raised from 0.05, which let a badly outmatched offense shoot 5% and
+ *  produced sub-90 team scores in ~10% of games against a real ~2%. Even a heavily contested shot by
+ *  a poor scorer falls somewhere near a quarter of the time; nobody shoots 5%. */
+export const MAKE_PROB_MIN = 0.25
 export const MAKE_PROB_MAX = 0.85
 
-export const FOUL_PROB_BASE = 0.12
+/** Tuned to land around 22 free-throw attempts a team a game, the real rate. At the old 0.12 the
+ *  engine produced ~18, which cost roughly four points a side once free throws started scoring. */
+export const FOUL_PROB_BASE = 0.15
 export const FOUL_PROB_INTERIOR_BONUS = 0.08
+
+/**
+ * Free throws from a shooting foul. There is no dedicated Free Throw attribute, so Outside Shot
+ * stands in as shooting touch -- the same rating that drives jumpers, which is what a free throw is
+ * with nobody guarding it.
+ *
+ * The band is deliberately narrow and high: real NBA free-throw percentage runs roughly 55% (a poor
+ * big) to 90% (an elite guard), a far tighter spread than field-goal percentage, because the shot is
+ * uncontested. Mapping the 0-100 attribute scale across that range keeps a 45-outside-shot center
+ * genuinely bad at the line without making him hopeless.
+ */
+export const FREE_THROW_PROB_MIN = 0.55
+export const FREE_THROW_PROB_MAX = 0.9
+
+/** Free throws awarded by a shooting foul, matching the real rules: three if the foul came on a
+ *  three-point attempt, two otherwise. There's no and-1 -- the engine only rolls a foul after the
+ *  shot has already missed (see outcomeResolver), so a make and a foul never coincide. */
+export const FREE_THROWS_ON_TWO = 2
+export const FREE_THROWS_ON_THREE = 3
 
 export const CONSISTENCY_NOISE_MAX = 12
 export const CLUTCH_BONUS_MAX = 6
-export const CLUTCH_POSSESSION_WINDOW_FRACTION = 0.05
+/** Seconds left in the final period inside which a close game counts as clutch -- the NBA's own
+ *  definition. Replaces a "last 5% of the possessions" approximation that, with regulation running
+ *  as one undivided block, worked out to roughly the last five possessions of the game. */
+export const CLUTCH_SECONDS_REMAINING = 300
 export const CLUTCH_SCORE_MARGIN = 5
 
 /**
@@ -79,27 +134,104 @@ export const USAGE_WEIGHT_EXPONENT = 3
 export const SCHEDULE_GAP_DAYS = [1, 2, 3] as const
 export const SCHEDULE_GAP_WEIGHTS = [0.15, 0.65, 0.2] as const
 
-// --- Bench rotation / fatigue ---
+// --- Game clock ---
 
-/** Standard game length in minutes. Converts on-court possession counts <-> minutes. */
+/** Standard game length in minutes. */
 export const REGULATION_MINUTES = 48
 
-/** Real-NBA overtime length: 5 minutes per extra period, at the same pace as regulation. */
+/** Real-NBA overtime length: 5 minutes per extra period. */
 export const OVERTIME_MINUTES = 5
+
+export const SECONDS_PER_MINUTE = 60
+export const REGULATION_PERIODS = 4
+/** 12-minute quarters. */
+export const PERIOD_SECONDS = (REGULATION_MINUTES / REGULATION_PERIODS) * SECONDS_PER_MINUTE
+export const REGULATION_SECONDS = REGULATION_MINUTES * SECONDS_PER_MINUTE
+export const OVERTIME_SECONDS = OVERTIME_MINUTES * SECONDS_PER_MINUTE
+
+/**
+ * How long each play call takes off the clock, in seconds, before pace scaling. Transition is a
+ * sprint; half-court sets take a normal trip; isolation and post-ups grind the shot clock down.
+ * Every band sits under the 24-second shot clock, which the old possession-counted model could not
+ * honour -- 100 possessions across 48 minutes implied 28.8 seconds each.
+ */
+export const POSSESSION_DURATION_BANDS: Record<string, readonly [number, number]> = {
+  transition: [9, 14],
+  'pick-and-roll': [13, 18],
+  cutting: [13, 18],
+  'spot-up': [13, 18],
+  isolation: [15, 20],
+  'post-up': [15, 20],
+}
+
+/**
+ * The reference possession length `paceScale` normalizes against, so a league configured for N
+ * possessions actually gets about N under a neutral playbook.
+ *
+ * This is the *realized* mean of the unscaled model, not the unweighted mean of
+ * POSSESSION_DURATION_BANDS' midpoints -- it sits above that because the outcome adjustments are
+ * asymmetric: roughly 40% of possessions are misses paying REBOUND_SECONDS while only ~10% are
+ * turnovers getting the truncation.
+ *
+ * Calibrated against a randomly generated league rather than any single playbook, since the mix of
+ * systems across eight teams is what a player actually sees. That lands the league at ~98 true
+ * possessions a team, the real rate. Note "possession" here means a trip: an offensive rebound
+ * keeps the ball, so a team runs ~108 logged attempts against those ~98 trips.
+ *
+ * Playbooks that skew fast or slow still move off that number in the right direction, which is the
+ * whole point of deriving pace from play calls rather than fixing it -- just not by the ~44% spread
+ * the first pass produced, against a real league's ~7%.
+ */
+export const NOMINAL_POSSESSION_SECONDS = 16.6
+
+/** A live-ball turnover happens partway through the action, not at the end of it. */
+export const TURNOVER_DURATION_FACTOR = 0.65
+
+/** The rebound scramble after a missed shot, before the other team has the ball. Makes and fouls
+ *  don't pay it: a make is inbounded and a foul stops the clock outright. */
+export const REBOUND_SECONDS = 2.5
+
+/** A putback off an offensive rebound is a shot already in progress, not a fresh trip up the floor,
+ *  so it costs a few seconds rather than a full possession's worth. */
+export const SECOND_CHANCE_DURATION_BAND: readonly [number, number] = [3, 7]
+
+// --- Rebounding ---
+
+/**
+ * Share of missed shots the shooting team recovers when both fives rebound equally -- the real
+ * league runs 23-28%. An offensive rebound keeps the ball with the offense rather than merely
+ * crediting a stat, so this is what produces second-chance shots: a trip can now span several
+ * attempts, which is where the ~89 field-goal attempts per 100 possessions a real team takes
+ * actually come from.
+ */
+export const OFFENSIVE_REBOUND_RATE = 0.25
+
+/** Attribute points of team rebounding edge per 1.0 of offensive-rebound probability. A five
+ *  averaging 10 points more Rebounding than the opponent pulls roughly 4% more of its own misses,
+ *  which is about the real spread between the best and worst rebounding teams. */
+export const OFFENSIVE_REBOUND_SENSITIVITY = 250
+
+// --- Bench rotation / fatigue ---
 
 /** Relative target-minutes share by depth-chart rank within a position group (0 = starter),
  *  normalized to sum to REGULATION_MINUTES across however many players occupy that group. */
 export const ROTATION_DEPTH_WEIGHTS = [1.0, 0.5, 0.2, 0.1, 0.05]
 
-/** Fatigue points gained per possession played, at DURABILITY_NEUTRAL. Tuned so a continuously-
- *  playing average-durability player hits FATIGUE_SUB_OUT_THRESHOLD (80) after roughly an
- *  18-possession shift (~8.6 minutes at the default 100-possession pace) -- a realistic shift. */
-export const FATIGUE_GAIN_BASE = 4.5
+/**
+ * Fatigue points gained per SECOND on the floor, at DURABILITY_NEUTRAL. Denominated in seconds
+ * rather than possessions now that the clock is real -- a possession is no longer a fixed slice of
+ * the game, so per-possession rates would silently change every shift length whenever pace moved.
+ *
+ * Carried over from the old tuning rather than re-picked: 18 possessions x 4.5 = 81 fatigue over
+ * 8.64 minutes (518s) at the old 100-possession pace, so 81 / 518 ~= 0.156/s. A continuously-playing
+ * average-durability player still hits FATIGUE_SUB_OUT_THRESHOLD after roughly 8.5 minutes.
+ */
+export const FATIGUE_GAIN_PER_SECOND = 0.156
 
-/** Fatigue points recovered per possession benched, at DURABILITY_NEUTRAL. Set above the gain
- *  rate so a maxed-out player (80) drops under FATIGUE_SUB_IN_MAX (30) in about 10 possessions
- *  (~4.8 minutes) of rest. */
-export const FATIGUE_RECOVERY_BASE = 5.0
+/** Fatigue recovered per SECOND benched, at DURABILITY_NEUTRAL. Same carry-over: 10 possessions x
+ *  5.0 = 50 points over 4.8 minutes (288s) gives 50 / 288 ~= 0.174/s, so a maxed-out player still
+ *  drops under FATIGUE_SUB_IN_MAX after about five minutes of rest. */
+export const FATIGUE_RECOVERY_PER_SECOND = 0.174
 
 /** Durability value at which the gain/recovery multiplier is exactly 1 -- the midpoint of
  *  hidden.durability's 40-90 generation range (generator/randomPlayer.ts). */
@@ -114,24 +246,25 @@ export const FATIGUE_MULT_MAX = 1.3
 /** Fatigue (0-100) at which an on-court player becomes eligible to be subbed out. */
 export const FATIGUE_SUB_OUT_THRESHOLD = 80
 
-/** Fatigue so high a player is pulled immediately, bypassing MIN_SHIFT_POSSESSIONS's cooldown. */
+/** Fatigue so high a player is pulled immediately, bypassing MIN_SHIFT_SECONDS's cooldown. */
 export const FATIGUE_EMERGENCY_THRESHOLD = 95
 
 /** A bench player must be rested to at or below this to be sub-in eligible -- left well below
  *  FATIGUE_SUB_OUT_THRESHOLD so a just-subbed-out player can never immediately re-qualify. */
 export const FATIGUE_SUB_IN_MAX = 30
 
-/** Possessions a player must stay on court after entering before being re-evaluated for a
- *  sub-out (except via FATIGUE_EMERGENCY_THRESHOLD) -- prevents rapid in/out thrashing when
- *  fatigue or pace sits right at a threshold boundary. */
-export const MIN_SHIFT_POSSESSIONS = 6
+/** Seconds a player must stay on court after entering before being re-evaluated for a sub-out
+ *  (except via FATIGUE_EMERGENCY_THRESHOLD) -- prevents rapid in/out thrashing when fatigue or pace
+ *  sits right at a threshold boundary. ~3 minutes, carried over from the old 6-possession cooldown
+ *  (6/100 of a 48-minute game = 2.88 minutes). */
+export const MIN_SHIFT_SECONDS = 175
 
-/** Possessions-elapsed-so-far below which the pace-overage trigger is skipped entirely -- avoids
- *  dividing by a tiny/zero possession count early in the game. */
-export const PACE_CHECK_MIN_POSSESSIONS = 8
+/** Game seconds elapsed below which the pace-overage trigger is skipped entirely -- avoids dividing
+ *  by a tiny elapsed time in the opening minutes. Carried over from the old 8-possession guard. */
+export const PACE_CHECK_MIN_SECONDS = 230
 
-/** A player is sub-out eligible on pace grounds once possessionsPlayed / possessionsElapsed
- *  exceeds their target share (rotationMinutes / REGULATION_MINUTES) by this fraction. */
+/** A player is sub-out eligible on pace grounds once secondsPlayed / secondsElapsed exceeds their
+ *  target share (rotationMinutes / REGULATION_MINUTES) by this fraction. */
 export const PACE_OVERAGE_THRESHOLD = 0.2
 
 /** Weight on a bench candidate's raw-attribute quality in rotationValue. */

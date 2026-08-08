@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { Game, Player, PlayerBoxScoreLine, PlayerId, PossessionLogEntry } from '../data/types'
 import { makeTestPlayer } from './testFixtures'
 import { aggregateSeasonTotals, deriveBoxScore } from './boxScore'
@@ -16,6 +16,11 @@ function playersMap(players: Player[]): Map<PlayerId, Player> {
 function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEntry, 'homeOnCourtIds' | 'awayOnCourtIds'>): PossessionLogEntry {
   return {
     possessionNumber: 1,
+    period: 1,
+    clockSecondsRemaining: 700,
+    // 20s a possession keeps the arithmetic in these tests trivial: three possessions on court is
+    // exactly one minute played.
+    durationSeconds: 20,
     offenseTeamId: 'home-team',
     playCallUsed: 'isolation',
     primaryPlayerId: overrides.homeOnCourtIds[0],
@@ -23,6 +28,10 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEn
     outcome: 'turnover',
     pointsScored: 0,
     isThreePointAttempt: false,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
+    offensiveRebound: false,
+    isSecondChance: false,
     playersInvolved: [],
     ...overrides,
   }
@@ -42,6 +51,9 @@ describe('deriveBoxScore', () => {
     const log: PossessionLogEntry[] = [
       {
         possessionNumber: 1,
+        period: 1,
+        clockSecondsRemaining: 700,
+        durationSeconds: 20,
         offenseTeamId: homeTeamId,
         playCallUsed: 'post-up',
         primaryPlayerId: h1.id,
@@ -49,12 +61,19 @@ describe('deriveBoxScore', () => {
         outcome: 'make',
         pointsScored: 2,
         isThreePointAttempt: false,
+        freeThrowsMade: 0,
+        freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [h1.id, a1.id],
         homeOnCourtIds,
         awayOnCourtIds,
       },
       {
         possessionNumber: 2,
+        period: 1,
+        clockSecondsRemaining: 700,
+        durationSeconds: 20,
         offenseTeamId: awayTeamId,
         playCallUsed: 'spot-up',
         primaryPlayerId: a1.id,
@@ -62,12 +81,19 @@ describe('deriveBoxScore', () => {
         outcome: 'make',
         pointsScored: 3,
         isThreePointAttempt: true,
+        freeThrowsMade: 0,
+        freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [a1.id, a2.id, h1.id],
         homeOnCourtIds,
         awayOnCourtIds,
       },
       {
         possessionNumber: 3,
+        period: 1,
+        clockSecondsRemaining: 700,
+        durationSeconds: 20,
         offenseTeamId: homeTeamId,
         playCallUsed: 'spot-up',
         primaryPlayerId: h1.id,
@@ -75,12 +101,19 @@ describe('deriveBoxScore', () => {
         outcome: 'miss',
         pointsScored: 0,
         isThreePointAttempt: true,
+        freeThrowsMade: 0,
+        freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [h1.id, h2.id, a1.id],
         homeOnCourtIds,
         awayOnCourtIds,
       },
       {
         possessionNumber: 4,
+        period: 1,
+        clockSecondsRemaining: 700,
+        durationSeconds: 20,
         offenseTeamId: awayTeamId,
         playCallUsed: 'isolation',
         primaryPlayerId: a2.id,
@@ -88,12 +121,19 @@ describe('deriveBoxScore', () => {
         outcome: 'turnover',
         pointsScored: 0,
         isThreePointAttempt: false,
+        freeThrowsMade: 0,
+        freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [a2.id, h1.id],
         homeOnCourtIds,
         awayOnCourtIds,
       },
       {
         possessionNumber: 5,
+        period: 1,
+        clockSecondsRemaining: 700,
+        durationSeconds: 20,
         offenseTeamId: homeTeamId,
         playCallUsed: 'post-up',
         primaryPlayerId: h2.id,
@@ -101,24 +141,29 @@ describe('deriveBoxScore', () => {
         outcome: 'foul',
         pointsScored: 0,
         isThreePointAttempt: false,
+        freeThrowsMade: 0,
+        freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [h2.id, a1.id],
         homeOnCourtIds,
         awayOnCourtIds,
       },
     ]
 
-    // Possession 3 is the only miss: rng[0]=0.9 forces the defense (away) to recover (>= the 0.25 offensive-rebound rate),
-    // rng[1]=0.1 lands in A1's weighted band (A1 is first in awayOnCourt with equal 50 rebounding, band [0,50) of a 100 total).
-    const rng = queue(0.9, 0.1)
+    // Possession 3 is the only miss, and its entry says offensiveRebound: false -- so the defending
+    // (away) five gets the board, no roll needed for which side. The single rng call left is which
+    // player: 0.1 lands in A1's weighted band (first in awayOnCourt, equal 50 rebounding, [0,50) of 100).
+    const rng = queue(0.1)
 
-    const result = deriveBoxScore(log, homeTeamId, playersMap([h1, h2, a1, a2]), 5, rng)
+    const result = deriveBoxScore(log, homeTeamId, playersMap([h1, h2, a1, a2]), rng)
 
     expect(result.homeScore).toBe(2)
     expect(result.awayScore).toBe(3)
 
     const h1Line = result.boxScore.home.find((l) => l.playerId === h1.id)!
     expect(h1Line).toMatchObject({ points: 2, fieldGoalsMade: 1, fieldGoalsAttempted: 2, threePointersAttempted: 1, threePointersMade: 0 })
-    expect(h1Line.minutesPlayed).toBeCloseTo(48, 5) // on court for all 5 of 5 possessions
+    expect(h1Line.minutesPlayed).toBeCloseTo((5 * 20) / 60, 5) // on court for all 5 possessions, 20s each
 
     const h2Line = result.boxScore.home.find((l) => l.playerId === h2.id)!
     expect(h2Line.fouls).toBe(1)
@@ -137,7 +182,7 @@ describe('deriveBoxScore', () => {
     const a1 = makeTestPlayer()
     const log = [makeEntry({ homeOnCourtIds: [h1.id, h2.id], awayOnCourtIds: [a1.id] })]
 
-    const result = deriveBoxScore(log, 'home-team', playersMap([h1, h2, a1]), 1, () => 0.5)
+    const result = deriveBoxScore(log, 'home-team', playersMap([h1, h2, a1]), () => 0.5)
 
     expect(result.boxScore.home.map((l) => l.playerId).sort()).toEqual([h1.id, h2.id].sort())
     expect(result.boxScore.away.map((l) => l.playerId)).toEqual([a1.id])
@@ -145,10 +190,10 @@ describe('deriveBoxScore', () => {
     expect(h2Line).toMatchObject({ points: 0, fieldGoalsAttempted: 0, rebounds: 0, assists: 0, turnovers: 0, fouls: 0 })
   })
 
-  it('derives minutesPlayed proportional to on-court possession count', () => {
+  it('sums minutesPlayed from each possession\'s own duration', () => {
     const h1 = makeTestPlayer()
     const a1 = makeTestPlayer()
-    // h1 on court for 3 of 5 possessions
+    // h1 on court for 3 of 5 possessions, each 20 seconds long
     const log = [1, 2, 3, 4, 5].map((n) =>
       makeEntry({
         possessionNumber: n,
@@ -157,12 +202,26 @@ describe('deriveBoxScore', () => {
       }),
     )
 
-    const result = deriveBoxScore(log, 'home-team', playersMap([h1, a1]), 5, () => 0.5)
+    const result = deriveBoxScore(log, 'home-team', playersMap([h1, a1]), () => 0.5)
 
     const h1Line = result.boxScore.home.find((l) => l.playerId === h1.id)!
-    expect(h1Line.minutesPlayed).toBeCloseTo((3 / 5) * 48, 5)
+    expect(h1Line.minutesPlayed).toBeCloseTo((3 * 20) / 60, 5)
     const a1Line = result.boxScore.away.find((l) => l.playerId === a1.id)!
-    expect(a1Line.minutesPlayed).toBeCloseTo(48, 5) // on court every possession
+    expect(a1Line.minutesPlayed).toBeCloseTo((5 * 20) / 60, 5) // on court every possession
+  })
+
+  it('weights minutes by how long each possession actually took', () => {
+    const starter = makeTestPlayer()
+    const opponent = makeTestPlayer()
+    // A four-second fast break should cost a quarter of what a sixteen-second half-court set does.
+    const log = [
+      makeEntry({ possessionNumber: 1, durationSeconds: 4, homeOnCourtIds: [starter.id], awayOnCourtIds: [opponent.id] }),
+      makeEntry({ possessionNumber: 2, durationSeconds: 16, homeOnCourtIds: [starter.id], awayOnCourtIds: [opponent.id] }),
+    ]
+
+    const result = deriveBoxScore(log, 'home-team', playersMap([starter, opponent]), () => 0.5)
+
+    expect(result.boxScore.home[0].minutesPlayed).toBeCloseTo(20 / 60, 5)
   })
 
   it('gives a mid-game entrant correct partial minutes', () => {
@@ -179,11 +238,11 @@ describe('deriveBoxScore', () => {
       makeEntry({ possessionNumber: 5, homeOnCourtIds: [h1.id, h3.id], awayOnCourtIds: [a1.id] }),
     ]
 
-    const result = deriveBoxScore(log, 'home-team', playersMap([h1, h2, h3, a1]), 5, () => 0.5)
+    const result = deriveBoxScore(log, 'home-team', playersMap([h1, h2, h3, a1]), () => 0.5)
 
-    expect(result.boxScore.home.find((l) => l.playerId === h2.id)!.minutesPlayed).toBeCloseTo((1 / 5) * 48, 5)
-    expect(result.boxScore.home.find((l) => l.playerId === h3.id)!.minutesPlayed).toBeCloseTo((4 / 5) * 48, 5)
-    expect(result.boxScore.home.find((l) => l.playerId === h1.id)!.minutesPlayed).toBeCloseTo(48, 5)
+    expect(result.boxScore.home.find((l) => l.playerId === h2.id)!.minutesPlayed).toBeCloseTo((1 * 20) / 60, 5)
+    expect(result.boxScore.home.find((l) => l.playerId === h3.id)!.minutesPlayed).toBeCloseTo((4 * 20) / 60, 5)
+    expect(result.boxScore.home.find((l) => l.playerId === h1.id)!.minutesPlayed).toBeCloseTo((5 * 20) / 60, 5)
   })
 })
 
@@ -195,6 +254,8 @@ function makeStatLine(playerId: PlayerId, overrides: Partial<PlayerBoxScoreLine>
     fieldGoalsAttempted: 0,
     threePointersMade: 0,
     threePointersAttempted: 0,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
     turnovers: 0,

@@ -19,6 +19,7 @@ export function Scoreboard({
   homeScore,
   awayScore,
   periodLabel,
+  clockLabel,
   userTeamId,
 }: {
   homeTeam: Team
@@ -26,12 +27,16 @@ export function Scoreboard({
   homeScore: number
   awayScore: number
   periodLabel: string
+  clockLabel: string
   userTeamId: TeamId
 }) {
   return (
     <div className="scoreboard">
       <Side team={awayTeam} score={awayScore} isUserTeam={awayTeam.id === userTeamId} />
-      <span className="scoreboard-period">{periodLabel}</span>
+      <span className="scoreboard-period">
+        {periodLabel}
+        <span className="scoreboard-clock">{clockLabel}</span>
+      </span>
       <Side team={homeTeam} score={homeScore} isUserTeam={homeTeam.id === userTeamId} />
     </div>
   )

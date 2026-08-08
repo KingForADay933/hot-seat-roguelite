@@ -3,12 +3,14 @@ import type { Game } from '../../data/types'
 import type { SimulationStep } from '../../engine/simulateGame'
 import { advancePlayback, createPlaybackState, type PlaybackContext, type PlaybackState } from './playbackState'
 
-/** Multipliers on BASE_POSSESSION_MS. 1x runs a ~100-possession game in about a minute and a half --
- *  slow enough to read the play-by-play; 16x is closer to a highlight reel than a broadcast. */
+/** Multipliers on BASE_POSSESSION_MS. 1x runs a full game in about three minutes -- slow enough to
+ *  read the play-by-play; 16x is closer to a highlight reel than a broadcast. */
 export const PLAYBACK_SPEEDS = [1, 2, 4, 16] as const
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
 
-const BASE_POSSESSION_MS = 900
+/** Halved when the clock doubled the possession count, so a broadcast still runs about as long in
+ *  wall-clock terms as it did at ~100 possessions. */
+const BASE_POSSESSION_MS = 450
 
 export type PlaybackStatus = 'playing' | 'paused' | 'final'
 

@@ -10,7 +10,11 @@ function resolveName(id: PlayerId, playerById: Map<PlayerId, Player>): string {
 function outcomeKeyFor(entry: PossessionLogEntry): OutcomeKey {
   if (entry.outcome === 'make') return entry.pointsScored === 3 ? 'make3' : 'make2'
   if (entry.outcome === 'miss') return entry.isThreePointAttempt ? 'miss3' : 'miss2'
-  return entry.outcome // 'turnover' | 'foul' -- same names as their OutcomeKey
+  if (entry.outcome === 'foul') {
+    if (entry.freeThrowsMade === 0) return 'foulNone'
+    return entry.freeThrowsMade === entry.freeThrowsAttempted ? 'foulAll' : 'foulSome'
+  }
+  return 'turnover'
 }
 
 /**

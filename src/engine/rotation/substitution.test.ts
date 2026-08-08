@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { Player, PlayerId, Team } from '../../data/types'
 import { makeTestPlayer, makeTestTeam } from '../testFixtures'
 import {
   FATIGUE_EMERGENCY_THRESHOLD,
   FATIGUE_SUB_IN_MAX,
   FATIGUE_SUB_OUT_THRESHOLD,
-  MIN_SHIFT_POSSESSIONS,
-  PACE_CHECK_MIN_POSSESSIONS,
+  MIN_SHIFT_SECONDS,
+  PACE_CHECK_MIN_SECONDS,
 } from '../constants'
 import { checkSubstitutions, rotationValue } from './substitution'
 import type { RotationState } from './rotationState'
@@ -15,8 +15,8 @@ function buildFixture(opts: {
   starterFatigue?: number
   benchFatigue?: number
   rotationMinutes?: Record<PlayerId, number>
-  possessionsPlayed?: number
-  shiftEnteredAt?: number
+  secondsPlayed?: number
+  shiftEnteredAtSeconds?: number
 }) {
   const starter = makeTestPlayer({ positions: ['PG'], name: 'Starter' })
   const bench = makeTestPlayer({ positions: ['PG'], name: 'Bench' })
@@ -41,25 +41,25 @@ function buildFixture(opts: {
       [bench.id, opts.benchFatigue ?? 0],
       [offPosition.id, 0],
     ]),
-    possessionsPlayed: new Map([
-      [starter.id, opts.possessionsPlayed ?? 0],
+    secondsPlayed: new Map([
+      [starter.id, opts.secondsPlayed ?? 0],
       [bench.id, 0],
       [offPosition.id, 0],
     ]),
-    shiftEnteredAt: new Map([[starter.id, opts.shiftEnteredAt ?? 0]]),
+    shiftEnteredAtSeconds: new Map([[starter.id, opts.shiftEnteredAtSeconds ?? 0]]),
   }
 
   return { starter, bench, offPosition, team, playersById, state }
 }
 
 describe('checkSubstitutions', () => {
-  it('does not sub even at high fatigue before MIN_SHIFT_POSSESSIONS has elapsed', () => {
+  it('does not sub even at high fatigue before MIN_SHIFT_SECONDS has elapsed', () => {
     const { starter, state, team, playersById } = buildFixture({
       starterFatigue: 90,
       benchFatigue: 0,
-      shiftEnteredAt: 0,
+      shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS - 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS - 1)
     expect(state.onCourt[0]).toBe(starter)
   })
 
@@ -67,9 +67,9 @@ describe('checkSubstitutions', () => {
     const { bench, state, team, playersById } = buildFixture({
       starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
       benchFatigue: 0,
-      shiftEnteredAt: 0,
+      shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
     expect(state.onCourt[0]).toBe(bench)
   })
 
@@ -77,7 +77,7 @@ describe('checkSubstitutions', () => {
     const { bench, state, team, playersById } = buildFixture({
       starterFatigue: FATIGUE_EMERGENCY_THRESHOLD,
       benchFatigue: 0,
-      shiftEnteredAt: 0,
+      shiftEnteredAtSeconds: 0,
     })
     checkSubstitutions(state, team, [], playersById, 1) // well within the normal cooldown window
     expect(state.onCourt[0]).toBe(bench)
@@ -87,9 +87,9 @@ describe('checkSubstitutions', () => {
     const { starter, state, team, playersById } = buildFixture({
       starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
       benchFatigue: FATIGUE_SUB_IN_MAX + 1,
-      shiftEnteredAt: 0,
+      shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
     expect(state.onCourt[0]).toBe(starter)
   })
 
@@ -98,9 +98,9 @@ describe('checkSubstitutions', () => {
     const { starter, offPosition, bench, state, team, playersById } = buildFixture({
       starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
       benchFatigue: FATIGUE_SUB_IN_MAX + 1, // the only same-position bench player is too tired
-      shiftEnteredAt: 0,
+      shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
     expect(state.onCourt[0]).not.toBe(offPosition)
     expect(state.onCourt[0]).toBe(starter) // falls back to "stays in", not the wrong-position player
     expect(state.onCourt[0]).not.toBe(bench)
@@ -111,23 +111,23 @@ describe('checkSubstitutions', () => {
       starterFatigue: 10, // well below FATIGUE_SUB_OUT_THRESHOLD
       benchFatigue: 0,
       rotationMinutes: undefined,
-      possessionsPlayed: 10, // played all 10 possessions elapsed so far -- way over any reasonable target
-      shiftEnteredAt: 0,
+      secondsPlayed: 240, // on court for every second elapsed so far -- way over any reasonable target
+      shiftEnteredAtSeconds: 0,
     })
     // give the starter a small target so their pace is clearly over
-    team.rotationMinutes[state.onCourt[0].id] = 5 // 5/48 target share
-    checkSubstitutions(state, team, [], playersById, PACE_CHECK_MIN_POSSESSIONS + 3)
+    team.rotationMinutes[state.onCourt[0].id] = 5 // 5/48 target share, against a 240/240 actual
+    checkSubstitutions(state, team, [], playersById, 240)
     expect(state.onCourt[0]).toBe(bench)
   })
 
-  it('skips the pace check entirely before PACE_CHECK_MIN_POSSESSIONS', () => {
+  it('skips the pace check entirely before PACE_CHECK_MIN_SECONDS', () => {
     const { starter, state, team, playersById } = buildFixture({
       starterFatigue: 0,
-      possessionsPlayed: 5,
-      shiftEnteredAt: 0,
+      secondsPlayed: 5,
+      shiftEnteredAtSeconds: 0,
     })
     team.rotationMinutes[starter.id] = 1 // tiny target, would trigger pace overage if checked
-    checkSubstitutions(state, team, [], playersById, PACE_CHECK_MIN_POSSESSIONS - 1)
+    checkSubstitutions(state, team, [], playersById, PACE_CHECK_MIN_SECONDS - 1)
     expect(state.onCourt[0]).toBe(starter)
   })
 
@@ -153,18 +153,18 @@ describe('checkSubstitutions', () => {
         [starter2.id, FATIGUE_SUB_OUT_THRESHOLD],
         [onlyBench.id, 0],
       ]),
-      possessionsPlayed: new Map([
+      secondsPlayed: new Map([
         [starter1.id, 0],
         [starter2.id, 0],
         [onlyBench.id, 0],
       ]),
-      shiftEnteredAt: new Map([
+      shiftEnteredAtSeconds: new Map([
         [starter1.id, 0],
         [starter2.id, 0],
       ]),
     }
 
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_POSSESSIONS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
 
     const onCourtIds = state.onCourt.map((p) => p.id)
     expect(new Set(onCourtIds).size).toBe(2) // no duplicate

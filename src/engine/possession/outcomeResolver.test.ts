@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { makeTestPlayer } from '../testFixtures'
-import type { Rng } from '../rng'
+import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR, FREE_THROW_PROB_MAX, FREE_THROW_PROB_MIN } from '../constants'
+import { createSeededRng, type Rng } from '../rng'
 import type { PlaySelection } from './playerSelector'
-import { resolvePossession } from './outcomeResolver'
+import { freeThrowProbability, resolvePossession } from './outcomeResolver'
 
 function queue(...values: number[]): Rng {
   let i = 0
@@ -32,7 +33,7 @@ function selectionFor(overrides: Partial<PlaySelection> = {}): PlaySelection {
   }
 }
 
-const NOT_CLUTCH = { possessionNumber: 1, totalPossessions: 100, scoreMargin: 0 }
+const NOT_CLUTCH = { clockSecondsRemaining: 700, isFinalPeriod: false, scoreMargin: 0 }
 
 describe('resolvePossession', () => {
   it('resolves a turnover before ever rolling for a shot outcome', () => {
@@ -43,12 +44,12 @@ describe('resolvePossession', () => {
       selectionFor(),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'turnover', pointsScored: 0 })
+    expect(result).toEqual({ outcome: 'turnover', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0 })
   })
 
   it('resolves a make with 3 points when isOutsideShotAction is true', () => {
@@ -59,12 +60,12 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: true }),
       100,
       0, // margin=100 -> makeProb clamps to 0.85
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'make', pointsScored: 3 })
+    expect(result).toEqual({ outcome: 'make', pointsScored: 3, freeThrowsMade: 0, freeThrowsAttempted: 0 })
   })
 
   it('resolves a make with 2 points when isOutsideShotAction is false', () => {
@@ -74,12 +75,12 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: false }),
       100,
       0,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'make', pointsScored: 2 })
+    expect(result).toEqual({ outcome: 'make', pointsScored: 2, freeThrowsMade: 0, freeThrowsAttempted: 0 })
   })
 
   it('resolves a miss when both the make roll and foul roll fail', () => {
@@ -90,27 +91,83 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: true }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'miss', pointsScored: 0 })
+    expect(result).toEqual({ outcome: 'miss', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0 })
   })
 
-  it('resolves a foul when the make roll fails but the foul roll succeeds', () => {
-    const rng = queue(0.99, 0.5, 0.5, 0.9, 0.05)
+  it('resolves a foul when the make roll fails but the foul roll succeeds, then shoots the free throws', () => {
+    // ...0.05 lands in the foul band, then three free-throw rolls. Any FT probability sits inside
+    // FREE_THROW_PROB_MIN..MAX (0.55-0.9), so 0.01 always drops and 0.99 never does.
+    const rng = queue(0.99, 0.5, 0.5, 0.9, 0.05, 0.01, 0.01, 0.99)
     const result = resolvePossession(
       'spot-up',
       selectionFor({ isOutsideShotAction: true }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'foul', pointsScored: 0 })
+    expect(result).toEqual({ outcome: 'foul', pointsScored: 2, freeThrowsMade: 2, freeThrowsAttempted: 3 })
+  })
+
+  it('awards two free throws when the foul came on a two-point attempt', () => {
+    const rng = queue(0.99, 0.5, 0.5, 0.9, 0.05, 0.01, 0.01)
+    const result = resolvePossession(
+      'post-up',
+      selectionFor({ isOutsideShotAction: false }),
+      50,
+      50,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
+      NOT_CLUTCH.scoreMargin,
+      rng,
+    )
+    expect(result).toEqual({ outcome: 'foul', pointsScored: 2, freeThrowsMade: 2, freeThrowsAttempted: 2 })
+  })
+
+  it('shoots free throws off Outside Shot, so a poor shooter converts fewer', () => {
+    // At the attribute floor the probability is FREE_THROW_PROB_MIN (0.55); at the ceiling it's
+    // MAX (0.9). A roll of 0.7 therefore misses for the first and drops for the second.
+    const brick = deterministicPlayer({ attributes: { outsideShot: ATTRIBUTE_FLOOR } })
+    const sharpshooter = deterministicPlayer({ attributes: { outsideShot: ATTRIBUTE_CEILING } })
+
+    expect(freeThrowProbability(brick, false)).toBeCloseTo(FREE_THROW_PROB_MIN, 5)
+    expect(freeThrowProbability(sharpshooter, false)).toBeCloseTo(FREE_THROW_PROB_MAX, 5)
+
+    const brickResult = resolvePossession(
+      'post-up',
+      selectionFor({ primary: brick }),
+      50,
+      50,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
+      NOT_CLUTCH.scoreMargin,
+      queue(0.99, 0.5, 0.5, 0.9, 0.05, 0.7, 0.7),
+    )
+    const sharpResult = resolvePossession(
+      'post-up',
+      selectionFor({ primary: sharpshooter }),
+      50,
+      50,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
+      NOT_CLUTCH.scoreMargin,
+      queue(0.99, 0.5, 0.5, 0.9, 0.05, 0.7, 0.7),
+    )
+
+    expect(brickResult.freeThrowsMade).toBe(0)
+    expect(sharpResult.freeThrowsMade).toBe(2)
+  })
+
+  it('raises free-throw probability for a high-Clutch shooter in clutch time only', () => {
+    const clutchStar = deterministicPlayer({ hidden: { clutch: 99 } })
+    expect(freeThrowProbability(clutchStar, true)).toBeGreaterThan(freeThrowProbability(clutchStar, false))
   })
 
   it('post-up and pick-and-roll draw fouls more often than other play calls (higher foul probability band)', () => {
@@ -123,8 +180,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: false }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       interiorRng,
     )
@@ -133,8 +190,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: false }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       perimeterRng,
     )
@@ -145,18 +202,39 @@ describe('resolvePossession', () => {
 
   it('applies no clutch bonus outside the clutch time window even for a high-Clutch player', () => {
     const clutchStar = deterministicPlayer({ hidden: { clutch: 99 } })
-    // Far from clutch time (possession 1 of 100): margin stays exactly strength-resistance with no clutch swing.
+    // Ten minutes left in Q1: outside the window on both counts, so the margin stays exactly
+    // strength-resistance with no clutch swing.
     const rng = queue(0.99, 0.5, 0.5, 0.451) // makeProb at margin=0 is exactly 0.45; 0.451 should miss
-    const result = resolvePossession(
-      'spot-up',
-      selectionFor({ primary: clutchStar, isOutsideShotAction: true }),
-      50,
-      50,
-      1,
-      100,
-      0,
-      rng,
-    )
+    const result = resolvePossession('spot-up', selectionFor({ primary: clutchStar, isOutsideShotAction: true }), 50, 50, 600, false, 0, rng)
     expect(result.outcome).not.toBe('make')
+  })
+
+  it('converts more often late in the final period than late in an early one', () => {
+    // Measured over many trials rather than by picking a roll that straddles the two probabilities:
+    // the clutch bonus is a couple of percentage points, so a single-roll test would be pinned to
+    // whatever MAKE_PROB_BASE happens to be and would break on any shot-model tuning.
+    const clutchStar = deterministicPlayer({ hidden: { clutch: 99 } })
+
+    const makeRate = (isFinalPeriod: boolean) => {
+      const rng = createSeededRng(4)
+      let makes = 0
+      const trials = 4000
+      for (let i = 0; i < trials; i++) {
+        const result = resolvePossession(
+          'post-up',
+          selectionFor({ primary: clutchStar }),
+          50,
+          50,
+          10, // ten seconds left, one-point game -- inside the window on time and margin
+          isFinalPeriod,
+          1,
+          rng,
+        )
+        if (result.outcome === 'make') makes += 1
+      }
+      return makes / trials
+    }
+
+    expect(makeRate(true)).toBeGreaterThan(makeRate(false))
   })
 })

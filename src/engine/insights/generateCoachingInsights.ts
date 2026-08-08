@@ -104,6 +104,8 @@ function detectWeakLinkTargeting(
 
 interface FatigueSubEvent {
   possessionNumber: number
+  /** Read straight off the log rather than re-derived from the possession index. */
+  period: number
   outPlayerId: PlayerId
   inPlayerId: PlayerId
   reason: 'emergency' | 'fatigue'
@@ -127,8 +129,8 @@ function detectFatigueSubstitutionEvents(
   const state: RotationState = {
     onCourt: [],
     fatigue: new Map(team.rosterPlayerIds.map((id) => [id, 0])),
-    possessionsPlayed: new Map(team.rosterPlayerIds.map((id) => [id, 0])),
-    shiftEnteredAt: new Map(),
+    secondsPlayed: new Map(team.rosterPlayerIds.map((id) => [id, 0])),
+    shiftEnteredAtSeconds: new Map(),
   }
 
   const events: FatigueSubEvent[] = []
@@ -137,7 +139,9 @@ function detectFatigueSubstitutionEvents(
     const entry = possessionLog[i]
     const onCourtIds = teamIsHome ? entry.homeOnCourtIds : entry.awayOnCourtIds
     state.onCourt = onCourtIds.map((id) => resolvePlayer(id, playersById))
-    tickFatigue(state, roster)
+    // The log's own duration, so the replay tracks the live sim exactly -- fatigue is time-based
+    // now, and assuming a fixed slice per possession would drift from the real trajectory.
+    tickFatigue(state, roster, entry.durationSeconds)
 
     const next = possessionLog[i + 1]
     if (!next) continue
@@ -153,6 +157,7 @@ function detectFatigueSubstitutionEvents(
       if (fatigueLevel < FATIGUE_SUB_OUT_THRESHOLD) return
       events.push({
         possessionNumber: entry.possessionNumber,
+        period: entry.period,
         outPlayerId: outId,
         inPlayerId: inIds[idx] ?? outId,
         reason: fatigueLevel >= FATIGUE_EMERGENCY_THRESHOLD ? 'emergency' : 'fatigue',
@@ -169,7 +174,6 @@ export function generateCoachingInsights(
   homeTeam: Team,
   awayTeam: Team,
   playersById: Map<PlayerId, Player>,
-  possessionsPerGame: number,
 ): CoachingInsight[] {
   const insights: CoachingInsight[] = []
 
@@ -194,7 +198,7 @@ export function generateCoachingInsights(
   for (const event of selectedFatigueEvents) {
     const outName = resolvePlayer(event.outPlayerId, playersById).name
     const inName = resolvePlayer(event.inPlayerId, playersById).name
-    const period = getPeriodLabel(event.possessionNumber, possessionsPerGame)
+    const period = getPeriodLabel(event.period)
     insights.push({ teamId: event.teamId, text: `${outName} was pulled with heavy fatigue in the ${period}, ${inName} checked in.` })
   }
 
