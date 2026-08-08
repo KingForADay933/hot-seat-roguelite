@@ -142,8 +142,9 @@ export function* simulateGameSteps(
       // scoring sees the other team's just-updated five for this possession.
       const homeOnCourtBefore = [...homeRotation.onCourt]
       const awayOnCourtBefore = [...awayRotation.onCourt]
-      checkSubstitutions(homeRotation, homeTeam, awayOnCourtBefore, playersById, elapsedSeconds)
-      checkSubstitutions(awayRotation, awayTeam, homeOnCourtBefore, playersById, elapsedSeconds)
+      const secondsIntoPeriod = periodSeconds - clock
+      checkSubstitutions(homeRotation, homeTeam, awayOnCourtBefore, playersById, elapsedSeconds, period, secondsIntoPeriod)
+      checkSubstitutions(awayRotation, awayTeam, homeOnCourtBefore, playersById, elapsedSeconds, period, secondsIntoPeriod)
 
       const offenseTeam = homeIsOffense ? homeTeam : awayTeam
       // Position-fit-adjusted for possession resolution only (rotation-charts.md Phase E):

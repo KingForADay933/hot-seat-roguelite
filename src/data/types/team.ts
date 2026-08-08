@@ -1,5 +1,26 @@
 import type { AttributeKey } from './player'
-import type { PlayerId, TeamId } from './common'
+import type { PlayerId, Position, TeamId } from './common'
+
+/**
+ * One span of game time, within one period, for one on-court slot: who fills it, or 'auto' to
+ * defer to the fatigue/pace heuristic (engine/rotation/substitution.ts) for that span. Boundaries
+ * are seconds *into the period*, not the whole game -- a chart is authored per period, so every
+ * period's segments start counting from 0 again, matching the period clock itself (PERIOD_SECONDS).
+ */
+export interface RotationSegment {
+  startSeconds: number
+  endSeconds: number
+  fill: { kind: 'player'; playerId: PlayerId } | { kind: 'auto' }
+}
+
+/**
+ * A GM's rotation chart: per period, per on-court slot, an ordered list of RotationSegments
+ * (rotation-charts.md Phase F). Keyed sparsely by period number (1-4 regulation, 5+ overtime) and
+ * then by slot -- a period or slot absent from the plan is exactly the same as an explicit `auto`
+ * segment covering the whole period (Decision 3: "unfilled time is implicitly Auto"), which is what
+ * lets a GM chart just Q1 and Q4 and leave the rest to the coach.
+ */
+export type RotationPlan = Partial<Record<number, Partial<Record<Position, RotationSegment[]>>>>
 
 export interface Coaching {
   /** Single scalar. Multiplies DP earned during season-end development (Section 3) --
@@ -52,6 +73,11 @@ export interface Team {
    *  here, or present with an empty/all-zero object, falls back to an auto-computed weighting
    *  proportional to that attribute's gap-to-potential. See engine/development/trainingFocus.ts. */
   trainingFocus: Record<PlayerId, Partial<Record<AttributeKey, number>>>
+  /** Absent means fully Auto -- every AI team, and a user team until a chart is authored (no editor
+   *  exists yet -- rotation-charts.md Phase G). engine/rotation/substitution.ts's checkSubstitutions
+   *  consults this before falling through to the fatigue/pace heuristic. */
+  rotationPlan?: RotationPlan
+
   /** Attribute-scale (40-99ish), neutral at engine/constants.ts's SYNERGY_NEUTRAL (65) -- feeds a
    *  small offense-strength multiplier via engine/possession/possessionStrength.ts's
    *  synergyMultiplier. Every AI-generated team stays neutral; only a roguelite run's

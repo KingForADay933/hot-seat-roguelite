@@ -11,6 +11,7 @@ import {
   ROTATION_MATCHUP_WEIGHT,
   ROTATION_QUALITY_WEIGHT,
 } from '../constants'
+import { chartedPlayerId } from './rotationPlan'
 import type { RotationState } from './rotationState'
 
 /**
@@ -60,6 +61,13 @@ function shouldConsiderSubOut(
  * same thing today, since candidates are still filtered to players whose own position matches the
  * slot, but it's the slot the incoming player will be evaluated as. Relaxing that filter is what
  * free-form lineups will do.
+ *
+ * `team.rotationPlan` (rotation-charts.md Phase F) is consulted first, per slot: a charted segment
+ * is law (Decision 3) and wins outright, bypassing the fatigue/pace heuristic below entirely --
+ * including bringing in an exhausted charted player, since deviation handling for that case is
+ * Phase H, not this function. Only a slot with no active charted instruction (no plan, no segment
+ * for this period, or an explicit `auto` segment) falls through to the heuristic, which is every
+ * slot for every AI team and for a user team before a chart exists.
  */
 export function checkSubstitutions(
   state: RotationState,
@@ -67,11 +75,26 @@ export function checkSubstitutions(
   opponentOnCourt: OnCourtPlayer[],
   playersById: Map<PlayerId, Player>,
   elapsedSeconds: number,
+  period: number,
+  secondsIntoPeriod: number,
 ): void {
   const nextFive = [...state.onCourt]
 
   for (let i = 0; i < nextFive.length; i++) {
     const { player: outgoing, slot } = nextFive[i]
+
+    const chartedId = chartedPlayerId(team.rotationPlan, period, slot, secondsIntoPeriod)
+    if (chartedId !== null) {
+      if (chartedId !== outgoing.id) {
+        const incoming = playersById.get(chartedId)
+        if (incoming) {
+          nextFive[i] = { player: incoming, slot }
+          state.shiftEnteredAtSeconds.set(incoming.id, elapsedSeconds)
+        }
+      }
+      continue // charted: never falls through to the heuristic below, matched or not
+    }
+
     if (!shouldConsiderSubOut(state, outgoing, elapsedSeconds, team.rotationMinutes)) continue
 
     const onCourtIdsNow = new Set(nextFive.map((entry) => entry.player.id))

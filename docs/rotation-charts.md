@@ -319,20 +319,36 @@ changed. Rotation state, fatigue and the possession log still read the real (uns
 Verified behavior-neutral: the full test suite (389 tests, up from 361) passes unchanged, since every
 slot in real gameplay still equals `positions[0]` until Phase F/G exist.
 
-### Phase F — Rotation plan data model
+### Phase F — Rotation plan data model — **done**
+`data/types/team.ts` adds exactly the shape sketched here: `RotationPlan` is
+`Partial<Record<period, Partial<Record<slot, RotationSegment[]>>>>`, and `Team.rotationPlan?` is
+optional -- absent for every AI team and for a user team before a chart exists, which is every team
+in the game today (no editor to write one yet). `RotationSegment.startSeconds`/`endSeconds` are
+seconds into the period, matching the period clock itself rather than the whole-game elapsed clock,
+so a chart's Q1 and Q3 segments both start counting from 0.
 
-```
-RotationPlan = per team, per period, per slot, an ordered list of segments:
-  { startSeconds, endSeconds, fill: { kind: 'player', playerId } | { kind: 'auto' } }
-```
+No migration needed: `runRepository.ts`'s `isValidBundleShape` only checks `teams` is an array, never
+a per-team shape, so an optional field a saved `Team` may or may not have needed no schema bump.
 
-Authored in game time, evaluated at runtime against the clock. **Unfilled time is implicitly Auto**,
-so a GM can chart Q1 and Q4 and leave the rest to the coach (Decision 3). It reaches the engine via
-`Team`, which already flows through `ChunkSimContext`.
+`engine/rotation/rotationPlan.ts`'s `chartedPlayerId(plan, period, slot, secondsIntoPeriod)` is the
+whole evaluation: no plan, no entry for this period/slot, a gap between segments, and an explicit
+`{ kind: 'auto' }` segment all collapse to the same `null` ("Decision 3: unfilled time is implicitly
+Auto"), so `checkSubstitutions` (`substitution.ts`) only has one branch to add. Per on-court slot, it
+asks the chart first; a non-null answer is law -- forced in immediately, bypassing the fatigue/pace
+heuristic entirely, *including* leaving an exhausted charted player in (deviation handling for that
+is Phase H, not this). Only `null` falls through to today's heuristic, unchanged -- which is what
+keeps every AI team and every un-charted user team behavior-neutral: verified by the full suite (402
+tests, up from 389) passing with no team anywhere setting `rotationPlan`.
 
-`checkSubstitutions` grows a branch consulting the plan when one exists, falling through to today's
-fatigue/pace heuristic for Auto segments and AI teams. `availability()` can then stop approximating:
-with a chart, who is on the floor when is known exactly rather than inferred from target minutes.
+`checkSubstitutions` grew two new parameters (`period`, `secondsIntoPeriod`) to make that lookup
+possible; `simulateGame.ts`'s two call sites compute `secondsIntoPeriod` as `periodSeconds - clock`,
+the same period-relative value `getPeriodLabel` and the clock display already key off.
+
+**Deliberately not done here:** `systemDraft.ts`'s `availability()` still approximates from
+`rotationMinutes` rather than reading a chart exactly, as this section originally floated. Left alone
+because there is no way yet to construct a real chart to approximate *instead of* -- every plan in
+existence right now is a synthetic test fixture. Worth revisiting once Phase G's editor exists and a
+GM can actually produce one.
 
 ### Phase G — The chart editor
 Five slot lanes, four quarters across, drag to set boundaries, mark spans Auto. Live validation:
