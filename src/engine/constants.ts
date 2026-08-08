@@ -57,6 +57,25 @@ export const MAKE_PROB_MAX = 0.85
 export const FOUL_PROB_BASE = 0.12
 export const FOUL_PROB_INTERIOR_BONUS = 0.08
 
+/**
+ * Free throws from a shooting foul. There is no dedicated Free Throw attribute, so Outside Shot
+ * stands in as shooting touch -- the same rating that drives jumpers, which is what a free throw is
+ * with nobody guarding it.
+ *
+ * The band is deliberately narrow and high: real NBA free-throw percentage runs roughly 55% (a poor
+ * big) to 90% (an elite guard), a far tighter spread than field-goal percentage, because the shot is
+ * uncontested. Mapping the 0-100 attribute scale across that range keeps a 45-outside-shot center
+ * genuinely bad at the line without making him hopeless.
+ */
+export const FREE_THROW_PROB_MIN = 0.55
+export const FREE_THROW_PROB_MAX = 0.9
+
+/** Free throws awarded by a shooting foul, matching the real rules: three if the foul came on a
+ *  three-point attempt, two otherwise. There's no and-1 -- the engine only rolls a foul after the
+ *  shot has already missed (see outcomeResolver), so a make and a foul never coincide. */
+export const FREE_THROWS_ON_TWO = 2
+export const FREE_THROWS_ON_THREE = 3
+
 export const CONSISTENCY_NOISE_MAX = 12
 export const CLUTCH_BONUS_MAX = 6
 export const CLUTCH_POSSESSION_WINDOW_FRACTION = 0.05

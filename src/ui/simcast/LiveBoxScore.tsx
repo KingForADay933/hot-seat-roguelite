@@ -29,6 +29,7 @@ export function LiveBoxScore({
             <th className="numeric">PTS</th>
             <th className="numeric">FG</th>
             <th className="numeric">3P</th>
+            <th className="numeric">FT</th>
             <th className="numeric">AST</th>
             <th className="numeric">REB</th>
             <th className="numeric">TO</th>
@@ -46,6 +47,9 @@ export function LiveBoxScore({
               </td>
               <td className="numeric">
                 {line.threePointersMade}-{line.threePointersAttempted}
+              </td>
+              <td className="numeric">
+                {line.freeThrowsMade}-{line.freeThrowsAttempted}
               </td>
               <td className="numeric">{line.assists}</td>
               <td className="numeric" title="Rebounds are attributed once the game ends">

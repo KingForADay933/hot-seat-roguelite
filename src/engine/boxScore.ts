@@ -30,6 +30,8 @@ function emptyLine(playerId: PlayerId): PlayerBoxScoreLine {
     fieldGoalsAttempted: 0,
     threePointersMade: 0,
     threePointersAttempted: 0,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
     turnovers: 0,
@@ -123,9 +125,14 @@ export function deriveBoxScore(
     } else if (entry.outcome === 'turnover') {
       primaryLine.turnovers += 1
     } else if (entry.outcome === 'foul') {
-      // MVP simplification: no free-throw mechanic exists, so a shooting foul is logged as a distinct
-      // box-score event on the offensive player who drew it rather than a defender's personal foul count.
+      // The whistle lands on the offensive player who drew it, not a defender's personal foul count
+      // -- there's still no defensive foul attribution model. The free throws it produced do score.
       primaryLine.fouls += 1
+      primaryLine.freeThrowsMade += entry.freeThrowsMade
+      primaryLine.freeThrowsAttempted += entry.freeThrowsAttempted
+      primaryLine.points += entry.pointsScored
+      if (offenseIsHome) homeScore += entry.pointsScored
+      else awayScore += entry.pointsScored
     }
   }
 
@@ -155,6 +162,8 @@ export interface SeasonTotals {
   fieldGoalsAttempted: number
   threePointersMade: number
   threePointersAttempted: number
+  freeThrowsMade: number
+  freeThrowsAttempted: number
   assists: number
   rebounds: number
   turnovers: number
@@ -170,6 +179,8 @@ function emptySeasonTotals(): SeasonTotals {
     fieldGoalsAttempted: 0,
     threePointersMade: 0,
     threePointersAttempted: 0,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
     turnovers: 0,
@@ -193,6 +204,8 @@ export function aggregateSeasonTotals(games: Game[]): Map<PlayerId, SeasonTotals
       current.fieldGoalsAttempted += line.fieldGoalsAttempted
       current.threePointersMade += line.threePointersMade
       current.threePointersAttempted += line.threePointersAttempted
+      current.freeThrowsMade += line.freeThrowsMade
+      current.freeThrowsAttempted += line.freeThrowsAttempted
       current.assists += line.assists
       current.rebounds += line.rebounds
       current.turnovers += line.turnovers

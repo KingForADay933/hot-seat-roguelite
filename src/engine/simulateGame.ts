@@ -151,10 +151,11 @@ export function* simulateGameSteps(
         rng,
       )
 
-      if (resolved.outcome === 'make') {
-        if (homeIsOffense) homeScore += resolved.pointsScored
-        else awayScore += resolved.pointsScored
-      }
+      // Not gated on outcome === 'make' any more: a shooting foul scores whatever dropped at the
+      // line, and every other outcome reports 0, so adding unconditionally is both simpler and the
+      // only way free-throw points reach the scoreboard.
+      if (homeIsOffense) homeScore += resolved.pointsScored
+      else awayScore += resolved.pointsScored
 
       const entry: PossessionLogEntry = {
         possessionNumber,
@@ -165,6 +166,8 @@ export function* simulateGameSteps(
         outcome: resolved.outcome,
         pointsScored: resolved.pointsScored,
         isThreePointAttempt: selection.isOutsideShotAction,
+        freeThrowsMade: resolved.freeThrowsMade,
+        freeThrowsAttempted: resolved.freeThrowsAttempted,
         playersInvolved: getInvolvedPlayerIds(selection),
         homeOnCourtIds: homeRotation.onCourt.map((p) => p.id),
         awayOnCourtIds: awayRotation.onCourt.map((p) => p.id),

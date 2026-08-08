@@ -19,8 +19,9 @@ export interface FeedEntry {
   possessionNumber: number
   periodLabel: string
   text: string
-  /** Scoring plays get picked out in the feed -- the reason to look up from the box score. */
-  pointsScored: 0 | 2 | 3
+  /** Scoring plays get picked out in the feed -- the reason to look up from the box score. Not a
+   *  fixed union: a shooting foul scores however many free throws dropped. */
+  pointsScored: number
   /** Which side ran the play, for colouring the line by team. */
   offenseTeamId: TeamId
 }
@@ -62,6 +63,8 @@ function emptyLine(playerId: PlayerId): LiveBoxScoreLine {
     fieldGoalsAttempted: 0,
     threePointersMade: 0,
     threePointersAttempted: 0,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
     assists: 0,
     turnovers: 0,
     fouls: 0,
@@ -149,9 +152,14 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
   } else if (entry.outcome === 'turnover') {
     bump(entry.primaryPlayerId, (line) => (line.turnovers += 1))
   } else if (entry.outcome === 'foul') {
-    // Same MVP simplification deriveBoxScore makes: no free-throw mechanic exists, so a shooting
-    // foul lands on the offensive player who drew it rather than a defender's personal foul count.
-    bump(entry.primaryPlayerId, (line) => (line.fouls += 1))
+    // Same attribution deriveBoxScore uses: the whistle lands on the offensive player who drew it,
+    // since there's no defensive foul model. The free throws it produced do score.
+    bump(entry.primaryPlayerId, (line) => {
+      line.fouls += 1
+      line.freeThrowsMade += entry.freeThrowsMade
+      line.freeThrowsAttempted += entry.freeThrowsAttempted
+      line.points += entry.pointsScored
+    })
   }
 
   for (const [id, possessions] of possessionsOnCourt) {

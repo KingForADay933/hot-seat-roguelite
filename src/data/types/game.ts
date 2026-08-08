@@ -17,9 +17,16 @@ export interface PossessionLogEntry {
   primaryPlayerId: PlayerId
   secondaryPlayerIds: PlayerId[]
   outcome: PossessionOutcome
-  pointsScored: 0 | 2 | 3
-  /** Needed to derive FGA/3PA splits on misses, where pointsScored alone can't distinguish a 2 from a 3. */
+  /** Points the offense actually scored. A field goal is 2 or 3; a shooting foul is 0-3 depending
+   *  on how many of the awarded free throws dropped, so this is not a fixed union. */
+  pointsScored: number
+  /** Needed to derive FGA/3PA splits on misses, where pointsScored alone can't distinguish a 2 from
+   *  a 3 -- and on fouls, where it sets the number of free throws awarded. */
   isThreePointAttempt: boolean
+  /** Free throws from a shooting foul. Both 0 on every other outcome -- there's no non-shooting
+   *  foul or bonus/penalty model, so free throws only ever arrive via outcome === 'foul'. */
+  freeThrowsMade: number
+  freeThrowsAttempted: number
   /** Union of offense + defense players credited, for box-score attribution. */
   playersInvolved: PlayerId[]
   /** The team's full on-court five (both teams play every possession, offense and defense) at the
@@ -36,9 +43,14 @@ export interface PlayerBoxScoreLine {
   fieldGoalsAttempted: number
   threePointersMade: number
   threePointersAttempted: number
+  freeThrowsMade: number
+  freeThrowsAttempted: number
   assists: number
   rebounds: number
   turnovers: number
+  /** Shooting fouls *drawn* by this player, not personal fouls committed -- there's no defensive
+   *  foul attribution model, so the whistle is credited to the offensive player who earned the trip
+   *  to the line. Pairs with freeThrowsAttempted above. */
   fouls: number
   minutesPlayed: number
 }

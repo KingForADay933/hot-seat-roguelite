@@ -95,17 +95,46 @@ describe('simulateGame', () => {
   it('final score matches the sum of points logged for each team', () => {
     const { home, away, playersById } = buildMatchup(12)
     const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 100, createSeededRng(3))
+    // No outcome filter: pointsScored is 0 on everything except a make or a converted shooting
+    // foul, so summing the whole log is the score -- same way simulateGame accumulates it.
     const homePoints = game.possessionLog
-      .filter((e) => e.offenseTeamId === home.id && e.outcome === 'make')
+      .filter((e) => e.offenseTeamId === home.id)
       .reduce((sum, e) => sum + e.pointsScored, 0)
     const awayPoints = game.possessionLog
-      .filter((e) => e.offenseTeamId === away.id && e.outcome === 'make')
+      .filter((e) => e.offenseTeamId === away.id)
       .reduce((sum, e) => sum + e.pointsScored, 0)
 
     expect(game.result!.homeScore).toBe(homePoints)
     expect(game.result!.awayScore).toBe(awayPoints)
     expect(game.result!.homeScore).toBeGreaterThan(0)
     expect(game.result!.awayScore).toBeGreaterThan(0)
+  })
+
+  it('box score points sum to the final score, free throws included', () => {
+    // Two independent paths add points now -- simulateGame accumulates resolved.pointsScored onto
+    // the scoreboard while deriveBoxScore re-adds entry.pointsScored onto player lines. A make
+    // credits the shooter in one place and a converted foul in another, so they can silently drift.
+    const { home, away, playersById } = buildMatchup(12)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 100, createSeededRng(11))
+    const { boxScore, homeScore, awayScore } = game.result!
+
+    expect(boxScore.home.reduce((sum, l) => sum + l.points, 0)).toBe(homeScore)
+    expect(boxScore.away.reduce((sum, l) => sum + l.points, 0)).toBe(awayScore)
+  })
+
+  it('converts shooting fouls into free throws that score', () => {
+    const { home, away, playersById } = buildMatchup(12)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 100, createSeededRng(5))
+    const fouls = game.possessionLog.filter((e) => e.outcome === 'foul')
+
+    expect(fouls.length).toBeGreaterThan(0)
+    // Two free throws on a two-point attempt, three on a three -- and points equal what dropped.
+    for (const entry of fouls) {
+      expect(entry.freeThrowsAttempted).toBe(entry.isThreePointAttempt ? 3 : 2)
+      expect(entry.freeThrowsMade).toBeLessThanOrEqual(entry.freeThrowsAttempted)
+      expect(entry.pointsScored).toBe(entry.freeThrowsMade)
+    }
+    expect(fouls.some((e) => e.pointsScored > 0)).toBe(true)
   })
 
   it('is reproducible given the same rosters and seeded rng', () => {
@@ -219,10 +248,8 @@ describe('simulateGameSteps', () => {
     let next = steps.next()
     while (!next.done) {
       const { entry, homeScore, awayScore } = next.value
-      if (entry.outcome === 'make') {
-        if (entry.offenseTeamId === home.id) runningHome += entry.pointsScored
-        else runningAway += entry.pointsScored
-      }
+      if (entry.offenseTeamId === home.id) runningHome += entry.pointsScored
+      else runningAway += entry.pointsScored
       expect(homeScore).toBe(runningHome)
       expect(awayScore).toBe(runningAway)
       next = steps.next()

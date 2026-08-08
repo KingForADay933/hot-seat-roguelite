@@ -3,7 +3,17 @@ import type { PlayCallType } from '../../data/types'
 export type ActionPhraseBuilder = (primary: string, secondary?: string) => string
 export type OutcomePhraseBuilder = (primary: string) => string
 
-export type OutcomeKey = 'make2' | 'make3' | 'miss2' | 'miss3' | 'turnover' | 'foul'
+/** Fouls split by how the trip to the line went, since "draws a foul" alone leaves the listener
+ *  wondering where the points came from -- the score moves on foulAll and foulSome. */
+export type OutcomeKey =
+  | 'make2'
+  | 'make3'
+  | 'miss2'
+  | 'miss3'
+  | 'turnover'
+  | 'foulAll'
+  | 'foulSome'
+  | 'foulNone'
 
 /** How the possession's action unfolded, per play call. Pick-and-Roll/Spot-Up/Cutting/Transition
  *  use `secondary` (the roller/creator/passer/outlet); Isolation/Post-Up don't have one. */
@@ -57,5 +67,19 @@ export const OUTCOME_PHRASES: Record<OutcomeKey, OutcomePhraseBuilder[]> = {
     () => 'The pass is picked off -- turnover!',
     (p) => `${p} throws it away.`,
   ],
-  foul: [(p) => `${p} draws a foul on the play.`, () => 'And a whistle blows -- foul.', (p) => `${p} gets fouled going up.`],
+  foulAll: [
+    (p) => `${p} draws the foul and knocks them all down.`,
+    (p) => `Whistle -- and ${p} is perfect at the line.`,
+    (p) => `${p} gets fouled going up, then calmly buries the freebies.`,
+  ],
+  foulSome: [
+    (p) => `${p} draws a foul and splits them at the line.`,
+    (p) => `Whistle on the play -- ${p} takes one of them.`,
+    (p) => `${p} gets to the stripe and leaves some points out there.`,
+  ],
+  foulNone: [
+    (p) => `${p} draws a foul, then misses everything at the line.`,
+    (p) => `Whistle -- but ${p} can't convert a single one.`,
+    (p) => `${p} earns the trip to the stripe and comes away empty.`,
+  ],
 }

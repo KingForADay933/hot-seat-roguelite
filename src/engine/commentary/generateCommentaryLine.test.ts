@@ -15,6 +15,8 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & { primaryPlayerId: P
     outcome: 'make',
     pointsScored: 2,
     isThreePointAttempt: false,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
     playersInvolved: [],
     homeOnCourtIds: [],
     awayOnCourtIds: [],
