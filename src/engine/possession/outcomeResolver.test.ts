@@ -1,7 +1,7 @@
 ﻿import { describe, expect, it } from 'vitest'
 import { makeTestPlayer } from '../testFixtures'
 import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR, FREE_THROW_PROB_MAX, FREE_THROW_PROB_MIN } from '../constants'
-import type { Rng } from '../rng'
+import { createSeededRng, type Rng } from '../rng'
 import type { PlaySelection } from './playerSelector'
 import { freeThrowProbability, resolvePossession } from './outcomeResolver'
 
@@ -209,32 +209,32 @@ describe('resolvePossession', () => {
     expect(result.outcome).not.toBe('make')
   })
 
-  it('applies no clutch bonus late in an early period, only late in the final one', () => {
+  it('converts more often late in the final period than late in an early one', () => {
+    // Measured over many trials rather than by picking a roll that straddles the two probabilities:
+    // the clutch bonus is a couple of percentage points, so a single-roll test would be pinned to
+    // whatever MAKE_PROB_BASE happens to be and would break on any shot-model tuning.
     const clutchStar = deterministicPlayer({ hidden: { clutch: 99 } })
-    // Same ten seconds left and same one-point game, but Q1 rather than Q4.
-    const earlyPeriod = resolvePossession(
-      'spot-up',
-      selectionFor({ primary: clutchStar, isOutsideShotAction: true }),
-      50,
-      50,
-      10,
-      false,
-      1,
-      queue(0.99, 0.5, 0.5, 0.451),
-    )
-    const finalPeriod = resolvePossession(
-      'spot-up',
-      selectionFor({ primary: clutchStar, isOutsideShotAction: true }),
-      50,
-      50,
-      10,
-      true,
-      1,
-      queue(0.99, 0.5, 0.5, 0.451),
-    )
 
-    expect(earlyPeriod.outcome).not.toBe('make')
-    // The clutch bonus lifts makeProb past the same 0.451 roll once it's the final period.
-    expect(finalPeriod.outcome).toBe('make')
+    const makeRate = (isFinalPeriod: boolean) => {
+      const rng = createSeededRng(4)
+      let makes = 0
+      const trials = 4000
+      for (let i = 0; i < trials; i++) {
+        const result = resolvePossession(
+          'post-up',
+          selectionFor({ primary: clutchStar }),
+          50,
+          50,
+          10, // ten seconds left, one-point game -- inside the window on time and margin
+          isFinalPeriod,
+          1,
+          rng,
+        )
+        if (result.outcome === 'make') makes += 1
+      }
+      return makes / trials
+    }
+
+    expect(makeRate(true)).toBeGreaterThan(makeRate(false))
   })
 })

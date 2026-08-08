@@ -1,4 +1,4 @@
-import type { TendencyProfile } from '../data/types'
+﻿import type { TendencyProfile } from '../data/types'
 
 /** All formula weights live here so balance tuning is a config change, not a code change. */
 
@@ -49,12 +49,47 @@ export const TURNOVER_MIN = 0.04
 export const TURNOVER_MAX = 0.22
 export const TURNOVER_SENSITIVITY = 500
 
-export const MAKE_PROB_BASE = 0.45
-export const MAKE_PROB_MARGIN_SCALE = 200
-export const MAKE_PROB_MIN = 0.05
+/**
+ * Make probability for an evenly-matched two-point attempt, before the shot-quality margin moves it.
+ * Realized two-point percentage lands around 57-59%, against a real league's ~53%.
+ *
+ * That gap is deliberate and structural. This engine resolves exactly one shot per offensive trip
+ * and has no second-chance putback, so it takes ~80 attempts per 100 possessions where a real team
+ * takes ~89 -- the difference being offensive rebounds extending a trip. Tuned to real *attempt*
+ * rates the league would score about 100 a night. Points are what a box score is read for, so the
+ * per-attempt rate is carrying the value of the second chance the model doesn't simulate.
+ *
+ * Calibrated with the rest of the shot model to put a generated league at ~115 points a team.
+ * Modelling offensive rebounds as retained possession would let this drop to a real 53%.
+ */
+export const MAKE_PROB_BASE = 0.53
+
+/**
+ * How much less often a three goes in than a two of the same quality.
+ *
+ * Without this a three-point attempt was strictly better than a two: `isOutsideShotAction` changed
+ * what the make was worth but not how hard it was, so the same ~50% conversion paid 3 points
+ * instead of 2. Every jump-shooting playbook was therefore free money, and Seven Seconds Or Less
+ * put up 152 a night at 61% from deep.
+ *
+ * 0.17 is the real gap -- the league shoots about 53% on twos and 36% on threes. The extra point is
+ * what compensates for the difficulty, which is exactly the trade this constant restores.
+ */
+export const THREE_POINT_MAKE_PENALTY = 0.17
+/** Attribute points of shot-quality margin per 1.0 of make probability. Raised from 200 to damp how
+ *  hard a talent gap lands on the scoreboard: at 200 a mismatch swung scoring far enough to produce
+ *  sub-90 and 160-point games several times more often than a real league does. Still the main way
+ *  roster quality reaches the score -- just no longer the only thing that matters. */
+export const MAKE_PROB_MARGIN_SCALE = 320
+/** Floor on a single attempt. Raised from 0.05, which let a badly outmatched offense shoot 5% and
+ *  produced sub-90 team scores in ~10% of games against a real ~2%. Even a heavily contested shot by
+ *  a poor scorer falls somewhere near a quarter of the time; nobody shoots 5%. */
+export const MAKE_PROB_MIN = 0.25
 export const MAKE_PROB_MAX = 0.85
 
-export const FOUL_PROB_BASE = 0.12
+/** Tuned to land around 22 free-throw attempts a team a game, the real rate. At the old 0.12 the
+ *  engine produced ~18, which cost roughly four points a side once free throws started scoring. */
+export const FOUL_PROB_BASE = 0.15
 export const FOUL_PROB_INTERIOR_BONUS = 0.08
 
 /**
@@ -123,29 +158,32 @@ export const OVERTIME_SECONDS = OVERTIME_MINUTES * SECONDS_PER_MINUTE
  * honour -- 100 possessions across 48 minutes implied 28.8 seconds each.
  */
 export const POSSESSION_DURATION_BANDS: Record<string, readonly [number, number]> = {
-  transition: [4, 9],
-  'pick-and-roll': [10, 18],
-  cutting: [10, 18],
-  'spot-up': [10, 18],
-  isolation: [14, 22],
-  'post-up': [14, 22],
+  transition: [9, 14],
+  'pick-and-roll': [13, 18],
+  cutting: [13, 18],
+  'spot-up': [13, 18],
+  isolation: [15, 20],
+  'post-up': [15, 20],
 }
 
 /**
  * The reference possession length `paceScale` normalizes against, so a league configured for N
  * possessions actually gets about N under a neutral playbook.
  *
- * This is the *realized* mean of the unscaled model, not the 14.08s unweighted mean of
+ * This is the *realized* mean of the unscaled model, not the unweighted mean of
  * POSSESSION_DURATION_BANDS' midpoints -- it sits above that because the outcome adjustments are
  * asymmetric: roughly 40% of possessions are misses paying REBOUND_SECONDS while only ~10% are
- * turnovers getting the truncation. Measured against a Balanced playbook, which then lands within a
- * few possessions of nominal.
+ * turnovers getting the truncation.
+ *
+ * Calibrated against a randomly generated league rather than any single playbook, since the mix of
+ * systems across eight teams is what a player actually sees. That lands the league at ~100
+ * possessions a team, the real rate.
  *
  * Playbooks that skew fast or slow still move off that number in the right direction, which is the
- * whole point of deriving pace from play calls rather than fixing it: Seven Seconds Or Less runs
- * ~35% more possessions than Twin Towers.
+ * whole point of deriving pace from play calls rather than fixing it -- just not by the ~44% spread
+ * the first pass produced, against a real league's ~7%.
  */
-export const NOMINAL_POSSESSION_SECONDS = 15.35
+export const NOMINAL_POSSESSION_SECONDS = 16.2
 
 /** A live-ball turnover happens partway through the action, not at the end of it. */
 export const TURNOVER_DURATION_FACTOR = 0.65
