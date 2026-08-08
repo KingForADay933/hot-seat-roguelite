@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { Game, Player, PlayerId, Team } from '../../data/types'
 import { deriveBoxScore } from '../../engine/boxScore'
 import { generateLeague } from '../../engine/generator/randomLeague'
@@ -44,7 +44,6 @@ function playOneGame(seed: number) {
     homeRoster: roster(homeTeam),
     awayRoster: roster(awayTeam),
     playerById,
-    possessionsPerGame: POSSESSIONS_PER_GAME,
   }
 
   return { steps, context, played: next.value, homeTeam, awayTeam, playerById, rng }
@@ -88,7 +87,7 @@ describe('advancePlayback', () => {
     const rotation = createRotationState(homeTeam, playerById)
     for (const step of steps) {
       rotation.onCourt = step.entry.homeOnCourtIds.map((id) => playerById.get(id)!)
-      tickFatigue(rotation, context.homeRoster)
+      tickFatigue(rotation, context.homeRoster, step.entry.durationSeconds)
     }
 
     const state = foldAll(context, steps)
@@ -101,13 +100,7 @@ describe('advancePlayback', () => {
     const { steps, context, homeTeam, playerById, rng } = playOneGame(14)
     const state = foldAll(context, steps)
 
-    const official = deriveBoxScore(
-      steps.map((s) => s.entry),
-      homeTeam.id,
-      playerById,
-      POSSESSIONS_PER_GAME,
-      rng,
-    )
+    const official = deriveBoxScore(steps.map((s) => s.entry), homeTeam.id, playerById, rng)
 
     expect(official.boxScore.home.length).toBeGreaterThan(0)
     for (const line of official.boxScore.home) {

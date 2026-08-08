@@ -12,6 +12,16 @@ export type PlayCallType =
 
 export interface PossessionLogEntry {
   possessionNumber: number
+  /** 1-4 for regulation quarters, 5+ for successive overtimes. A real period, not a label derived
+   *  by slicing the possession count into four -- the loop runs one period at a time now. */
+  period: number
+  /** Clock left in the period once this possession finished, in seconds. 0 means it ran the period
+   *  out. Together with `durationSeconds` this makes the log a complete record of game time. */
+  clockSecondsRemaining: number
+  /** Seconds this possession took off the clock, already truncated to whatever was left. The sole
+   *  input to minutes played -- box scores sum it per on-court player rather than scaling a
+   *  possession count. */
+  durationSeconds: number
   offenseTeamId: TeamId
   playCallUsed: PlayCallType
   primaryPlayerId: PlayerId

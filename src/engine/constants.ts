@@ -78,7 +78,10 @@ export const FREE_THROWS_ON_THREE = 3
 
 export const CONSISTENCY_NOISE_MAX = 12
 export const CLUTCH_BONUS_MAX = 6
-export const CLUTCH_POSSESSION_WINDOW_FRACTION = 0.05
+/** Seconds left in the final period inside which a close game counts as clutch -- the NBA's own
+ *  definition. Replaces a "last 5% of the possessions" approximation that, with regulation running
+ *  as one undivided block, worked out to roughly the last five possessions of the game. */
+export const CLUTCH_SECONDS_REMAINING = 300
 export const CLUTCH_SCORE_MARGIN = 5
 
 /**
@@ -98,27 +101,80 @@ export const USAGE_WEIGHT_EXPONENT = 3
 export const SCHEDULE_GAP_DAYS = [1, 2, 3] as const
 export const SCHEDULE_GAP_WEIGHTS = [0.15, 0.65, 0.2] as const
 
-// --- Bench rotation / fatigue ---
+// --- Game clock ---
 
-/** Standard game length in minutes. Converts on-court possession counts <-> minutes. */
+/** Standard game length in minutes. */
 export const REGULATION_MINUTES = 48
 
-/** Real-NBA overtime length: 5 minutes per extra period, at the same pace as regulation. */
+/** Real-NBA overtime length: 5 minutes per extra period. */
 export const OVERTIME_MINUTES = 5
+
+export const SECONDS_PER_MINUTE = 60
+export const REGULATION_PERIODS = 4
+/** 12-minute quarters. */
+export const PERIOD_SECONDS = (REGULATION_MINUTES / REGULATION_PERIODS) * SECONDS_PER_MINUTE
+export const REGULATION_SECONDS = REGULATION_MINUTES * SECONDS_PER_MINUTE
+export const OVERTIME_SECONDS = OVERTIME_MINUTES * SECONDS_PER_MINUTE
+
+/**
+ * How long each play call takes off the clock, in seconds, before pace scaling. Transition is a
+ * sprint; half-court sets take a normal trip; isolation and post-ups grind the shot clock down.
+ * Every band sits under the 24-second shot clock, which the old possession-counted model could not
+ * honour -- 100 possessions across 48 minutes implied 28.8 seconds each.
+ */
+export const POSSESSION_DURATION_BANDS: Record<string, readonly [number, number]> = {
+  transition: [4, 9],
+  'pick-and-roll': [10, 18],
+  cutting: [10, 18],
+  'spot-up': [10, 18],
+  isolation: [14, 22],
+  'post-up': [14, 22],
+}
+
+/**
+ * The reference possession length `paceScale` normalizes against, so a league configured for N
+ * possessions actually gets about N under a neutral playbook.
+ *
+ * This is the *realized* mean of the unscaled model, not the 14.08s unweighted mean of
+ * POSSESSION_DURATION_BANDS' midpoints -- it sits above that because the outcome adjustments are
+ * asymmetric: roughly 40% of possessions are misses paying REBOUND_SECONDS while only ~10% are
+ * turnovers getting the truncation. Measured against a Balanced playbook, which then lands within a
+ * few possessions of nominal.
+ *
+ * Playbooks that skew fast or slow still move off that number in the right direction, which is the
+ * whole point of deriving pace from play calls rather than fixing it: Seven Seconds Or Less runs
+ * ~35% more possessions than Twin Towers.
+ */
+export const NOMINAL_POSSESSION_SECONDS = 15.35
+
+/** A live-ball turnover happens partway through the action, not at the end of it. */
+export const TURNOVER_DURATION_FACTOR = 0.65
+
+/** The rebound scramble after a missed shot, before the other team has the ball. Makes and fouls
+ *  don't pay it: a make is inbounded and a foul stops the clock outright. */
+export const REBOUND_SECONDS = 2.5
+
+// --- Bench rotation / fatigue ---
 
 /** Relative target-minutes share by depth-chart rank within a position group (0 = starter),
  *  normalized to sum to REGULATION_MINUTES across however many players occupy that group. */
 export const ROTATION_DEPTH_WEIGHTS = [1.0, 0.5, 0.2, 0.1, 0.05]
 
-/** Fatigue points gained per possession played, at DURABILITY_NEUTRAL. Tuned so a continuously-
- *  playing average-durability player hits FATIGUE_SUB_OUT_THRESHOLD (80) after roughly an
- *  18-possession shift (~8.6 minutes at the default 100-possession pace) -- a realistic shift. */
-export const FATIGUE_GAIN_BASE = 4.5
+/**
+ * Fatigue points gained per SECOND on the floor, at DURABILITY_NEUTRAL. Denominated in seconds
+ * rather than possessions now that the clock is real -- a possession is no longer a fixed slice of
+ * the game, so per-possession rates would silently change every shift length whenever pace moved.
+ *
+ * Carried over from the old tuning rather than re-picked: 18 possessions x 4.5 = 81 fatigue over
+ * 8.64 minutes (518s) at the old 100-possession pace, so 81 / 518 ~= 0.156/s. A continuously-playing
+ * average-durability player still hits FATIGUE_SUB_OUT_THRESHOLD after roughly 8.5 minutes.
+ */
+export const FATIGUE_GAIN_PER_SECOND = 0.156
 
-/** Fatigue points recovered per possession benched, at DURABILITY_NEUTRAL. Set above the gain
- *  rate so a maxed-out player (80) drops under FATIGUE_SUB_IN_MAX (30) in about 10 possessions
- *  (~4.8 minutes) of rest. */
-export const FATIGUE_RECOVERY_BASE = 5.0
+/** Fatigue recovered per SECOND benched, at DURABILITY_NEUTRAL. Same carry-over: 10 possessions x
+ *  5.0 = 50 points over 4.8 minutes (288s) gives 50 / 288 ~= 0.174/s, so a maxed-out player still
+ *  drops under FATIGUE_SUB_IN_MAX after about five minutes of rest. */
+export const FATIGUE_RECOVERY_PER_SECOND = 0.174
 
 /** Durability value at which the gain/recovery multiplier is exactly 1 -- the midpoint of
  *  hidden.durability's 40-90 generation range (generator/randomPlayer.ts). */
@@ -133,24 +189,25 @@ export const FATIGUE_MULT_MAX = 1.3
 /** Fatigue (0-100) at which an on-court player becomes eligible to be subbed out. */
 export const FATIGUE_SUB_OUT_THRESHOLD = 80
 
-/** Fatigue so high a player is pulled immediately, bypassing MIN_SHIFT_POSSESSIONS's cooldown. */
+/** Fatigue so high a player is pulled immediately, bypassing MIN_SHIFT_SECONDS's cooldown. */
 export const FATIGUE_EMERGENCY_THRESHOLD = 95
 
 /** A bench player must be rested to at or below this to be sub-in eligible -- left well below
  *  FATIGUE_SUB_OUT_THRESHOLD so a just-subbed-out player can never immediately re-qualify. */
 export const FATIGUE_SUB_IN_MAX = 30
 
-/** Possessions a player must stay on court after entering before being re-evaluated for a
- *  sub-out (except via FATIGUE_EMERGENCY_THRESHOLD) -- prevents rapid in/out thrashing when
- *  fatigue or pace sits right at a threshold boundary. */
-export const MIN_SHIFT_POSSESSIONS = 6
+/** Seconds a player must stay on court after entering before being re-evaluated for a sub-out
+ *  (except via FATIGUE_EMERGENCY_THRESHOLD) -- prevents rapid in/out thrashing when fatigue or pace
+ *  sits right at a threshold boundary. ~3 minutes, carried over from the old 6-possession cooldown
+ *  (6/100 of a 48-minute game = 2.88 minutes). */
+export const MIN_SHIFT_SECONDS = 175
 
-/** Possessions-elapsed-so-far below which the pace-overage trigger is skipped entirely -- avoids
- *  dividing by a tiny/zero possession count early in the game. */
-export const PACE_CHECK_MIN_POSSESSIONS = 8
+/** Game seconds elapsed below which the pace-overage trigger is skipped entirely -- avoids dividing
+ *  by a tiny elapsed time in the opening minutes. Carried over from the old 8-possession guard. */
+export const PACE_CHECK_MIN_SECONDS = 230
 
-/** A player is sub-out eligible on pace grounds once possessionsPlayed / possessionsElapsed
- *  exceeds their target share (rotationMinutes / REGULATION_MINUTES) by this fraction. */
+/** A player is sub-out eligible on pace grounds once secondsPlayed / secondsElapsed exceeds their
+ *  target share (rotationMinutes / REGULATION_MINUTES) by this fraction. */
 export const PACE_OVERAGE_THRESHOLD = 0.2
 
 /** Weight on a bench candidate's raw-attribute quality in rotationValue. */

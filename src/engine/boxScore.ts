@@ -8,7 +8,7 @@ import type {
   PossessionLogEntry,
   TeamId,
 } from '../data/types'
-import { REGULATION_MINUTES } from './constants'
+import { SECONDS_PER_MINUTE } from './constants'
 import type { Rng } from './rng'
 
 /** Pass-originated play calls where a make credits an assist to secondaries[0]. Other play calls
@@ -64,7 +64,6 @@ export function deriveBoxScore(
   possessionLog: PossessionLogEntry[],
   homeTeamId: TeamId,
   playersById: Map<PlayerId, Player>,
-  possessionsPerGame: number,
   rng: Rng,
 ): GameResult {
   const lines = new Map<PlayerId, PlayerBoxScoreLine>()
@@ -79,8 +78,10 @@ export function deriveBoxScore(
 
   const homeIds = new Set<PlayerId>()
   const awayIds = new Set<PlayerId>()
-  const possessionsOnCourt = new Map<PlayerId, number>()
-  const bumpOnCourt = (id: PlayerId) => possessionsOnCourt.set(id, (possessionsOnCourt.get(id) ?? 0) + 1)
+  /** Real game seconds on the floor, summed from each possession's own duration -- no longer a
+   *  possession count scaled by a nominal pace, so an overtime game simply reports more than 48. */
+  const secondsOnCourt = new Map<PlayerId, number>()
+  const bumpOnCourt = (id: PlayerId, seconds: number) => secondsOnCourt.set(id, (secondsOnCourt.get(id) ?? 0) + seconds)
 
   let homeScore = 0
   let awayScore = 0
@@ -88,12 +89,12 @@ export function deriveBoxScore(
   for (const entry of possessionLog) {
     entry.homeOnCourtIds.forEach((id) => {
       homeIds.add(id)
-      bumpOnCourt(id)
+      bumpOnCourt(id, entry.durationSeconds)
       lineFor(id)
     })
     entry.awayOnCourtIds.forEach((id) => {
       awayIds.add(id)
-      bumpOnCourt(id)
+      bumpOnCourt(id, entry.durationSeconds)
       lineFor(id)
     })
 
@@ -137,7 +138,7 @@ export function deriveBoxScore(
   }
 
   lines.forEach((line, id) => {
-    line.minutesPlayed = ((possessionsOnCourt.get(id) ?? 0) / possessionsPerGame) * REGULATION_MINUTES
+    line.minutesPlayed = (secondsOnCourt.get(id) ?? 0) / SECONDS_PER_MINUTE
   })
 
   const allLines = [...lines.values()]

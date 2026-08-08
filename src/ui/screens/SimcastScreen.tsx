@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+﻿import { useCallback, useMemo } from 'react'
 import type { Game, Player, Team } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { defaultRng } from '../../engine/rng'
@@ -38,7 +38,6 @@ export function SimcastScreen({
       homeRoster: resolveRoster(homeTeam, context.playersById),
       awayRoster: resolveRoster(awayTeam, context.playersById),
       playerById: context.playersById,
-      possessionsPerGame: context.possessionsPerGame,
     }
   }, [homeTeam, awayTeam, context])
 
@@ -104,6 +103,8 @@ function SimcastBroadcast({
         homeScore={state.homeScore}
         awayScore={state.awayScore}
         periodLabel={isFinal ? `Final${formatOvertimeLabel(finalGame?.result?.overtimePeriods ?? 0)}` : state.periodLabel}
+        // Blank once the buzzer sounds -- "Final 0:00" reads like the clock is still running.
+        clockLabel={isFinal ? '' : state.clockLabel}
         userTeamId={run.teamId}
       />
 

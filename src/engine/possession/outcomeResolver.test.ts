@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { makeTestPlayer } from '../testFixtures'
 import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR, FREE_THROW_PROB_MAX, FREE_THROW_PROB_MIN } from '../constants'
 import type { Rng } from '../rng'
@@ -33,7 +33,7 @@ function selectionFor(overrides: Partial<PlaySelection> = {}): PlaySelection {
   }
 }
 
-const NOT_CLUTCH = { possessionNumber: 1, totalPossessions: 100, scoreMargin: 0 }
+const NOT_CLUTCH = { clockSecondsRemaining: 700, isFinalPeriod: false, scoreMargin: 0 }
 
 describe('resolvePossession', () => {
   it('resolves a turnover before ever rolling for a shot outcome', () => {
@@ -44,8 +44,8 @@ describe('resolvePossession', () => {
       selectionFor(),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
@@ -60,8 +60,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: true }),
       100,
       0, // margin=100 -> makeProb clamps to 0.85
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
@@ -75,8 +75,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: false }),
       100,
       0,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
@@ -91,8 +91,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: true }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
@@ -108,8 +108,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: true }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
@@ -123,8 +123,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: false }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       rng,
     )
@@ -145,8 +145,8 @@ describe('resolvePossession', () => {
       selectionFor({ primary: brick }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       queue(0.99, 0.5, 0.5, 0.9, 0.05, 0.7, 0.7),
     )
@@ -155,8 +155,8 @@ describe('resolvePossession', () => {
       selectionFor({ primary: sharpshooter }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       queue(0.99, 0.5, 0.5, 0.9, 0.05, 0.7, 0.7),
     )
@@ -180,8 +180,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: false }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       interiorRng,
     )
@@ -190,8 +190,8 @@ describe('resolvePossession', () => {
       selectionFor({ isOutsideShotAction: false }),
       50,
       50,
-      NOT_CLUTCH.possessionNumber,
-      NOT_CLUTCH.totalPossessions,
+      NOT_CLUTCH.clockSecondsRemaining,
+      NOT_CLUTCH.isFinalPeriod,
       NOT_CLUTCH.scoreMargin,
       perimeterRng,
     )
@@ -202,18 +202,39 @@ describe('resolvePossession', () => {
 
   it('applies no clutch bonus outside the clutch time window even for a high-Clutch player', () => {
     const clutchStar = deterministicPlayer({ hidden: { clutch: 99 } })
-    // Far from clutch time (possession 1 of 100): margin stays exactly strength-resistance with no clutch swing.
+    // Ten minutes left in Q1: outside the window on both counts, so the margin stays exactly
+    // strength-resistance with no clutch swing.
     const rng = queue(0.99, 0.5, 0.5, 0.451) // makeProb at margin=0 is exactly 0.45; 0.451 should miss
-    const result = resolvePossession(
+    const result = resolvePossession('spot-up', selectionFor({ primary: clutchStar, isOutsideShotAction: true }), 50, 50, 600, false, 0, rng)
+    expect(result.outcome).not.toBe('make')
+  })
+
+  it('applies no clutch bonus late in an early period, only late in the final one', () => {
+    const clutchStar = deterministicPlayer({ hidden: { clutch: 99 } })
+    // Same ten seconds left and same one-point game, but Q1 rather than Q4.
+    const earlyPeriod = resolvePossession(
       'spot-up',
       selectionFor({ primary: clutchStar, isOutsideShotAction: true }),
       50,
       50,
+      10,
+      false,
       1,
-      100,
-      0,
-      rng,
+      queue(0.99, 0.5, 0.5, 0.451),
     )
-    expect(result.outcome).not.toBe('make')
+    const finalPeriod = resolvePossession(
+      'spot-up',
+      selectionFor({ primary: clutchStar, isOutsideShotAction: true }),
+      50,
+      50,
+      10,
+      true,
+      1,
+      queue(0.99, 0.5, 0.5, 0.451),
+    )
+
+    expect(earlyPeriod.outcome).not.toBe('make')
+    // The clutch bonus lifts makeProb past the same 0.451 roll once it's the final period.
+    expect(finalPeriod.outcome).toBe('make')
   })
 })

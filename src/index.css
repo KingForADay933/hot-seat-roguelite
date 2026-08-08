@@ -525,12 +525,23 @@ h3 {
 }
 
 .scoreboard-period {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   color: var(--text-muted);
   font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   min-width: 64px;
   text-align: center;
+}
+
+/* Tabular figures so the clock doesn't jitter horizontally as digits tick down. */
+.scoreboard-clock {
+  font-size: 18px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 
 .simcast-controls {

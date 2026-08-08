@@ -63,8 +63,8 @@ export function resolvePossession(
   selection: PlaySelection,
   strength: number,
   resistance: number,
-  possessionNumber: number,
-  totalPossessions: number,
+  clockSecondsRemaining: number,
+  isFinalPeriod: boolean,
   scoreMargin: number,
   rng: Rng,
 ): ResolvedPossession {
@@ -80,7 +80,7 @@ export function resolvePossession(
     return { outcome: 'turnover', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0 }
   }
 
-  const isClutch = isClutchTime(possessionNumber, totalPossessions, scoreMargin)
+  const isClutch = isClutchTime(clockSecondsRemaining, isFinalPeriod, scoreMargin)
   const netStrength = strength + computeConsistencyNoise(primary, rng) + computeClutchBonus(primary, isClutch)
   const margin = netStrength - resistance
   const makeProb = clamp(MAKE_PROB_BASE + margin / MAKE_PROB_MARGIN_SCALE, MAKE_PROB_MIN, MAKE_PROB_MAX)

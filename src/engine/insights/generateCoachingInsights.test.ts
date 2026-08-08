@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { Game, Player, PlayerId, PossessionLogEntry } from '../../data/types'
 import { generateTeam } from '../generator/randomTeam'
 import { createSeededRng } from '../rng'
@@ -37,6 +37,9 @@ describe('generateCoachingInsights', () => {
 
     const possessionLog: PossessionLogEntry[] = Array.from({ length: 4 }, (_, i) => ({
       possessionNumber: i + 1,
+      period: 1,
+      clockSecondsRemaining: 700,
+      durationSeconds: 20,
       offenseTeamId: awayTeam.id,
       playCallUsed: 'pick-and-roll',
       primaryPlayerId: attacker.id,
@@ -51,7 +54,7 @@ describe('generateCoachingInsights', () => {
       awayOnCourtIds: [attacker.id],
     }))
 
-    const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById, 100)
+    const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
 
     expect(insights.some((i) => i.text.includes('Weak Defender') && i.text.includes('8 points'))).toBe(true)
     // The weak link is on the defending (home) team -- the insight must be tagged accordingly, not
@@ -78,6 +81,9 @@ describe('generateCoachingInsights', () => {
 
     const possessionLog: PossessionLogEntry[] = Array.from({ length: 6 }, (_, i) => ({
       possessionNumber: i + 1,
+      period: 1,
+      clockSecondsRemaining: 700,
+      durationSeconds: 20,
       offenseTeamId: awayTeam.id,
       playCallUsed: 'pick-and-roll',
       primaryPlayerId: attacker.id,
@@ -92,7 +98,7 @@ describe('generateCoachingInsights', () => {
       awayOnCourtIds: [attacker.id],
     }))
 
-    const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById, 100)
+    const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
 
     expect(insights.some((i) => i.text.includes('picked on'))).toBe(false)
   })
@@ -106,11 +112,16 @@ describe('generateCoachingInsights', () => {
     const awayTeam = makeTestTeam({ rosterPlayerIds: [dummy.id] })
     const playersById = playersMap([starter, bench, dummy])
 
-    const onCourtPossessions = 20 // ~87 fatigue at default durability -- comfortably over FATIGUE_SUB_OUT_THRESHOLD (80), under FATIGUE_EMERGENCY_THRESHOLD (95)
+    // 28 x 20s = 560 game seconds at 0.156 fatigue/s -> ~87 at default durability, comfortably over
+    // FATIGUE_SUB_OUT_THRESHOLD (80) and under FATIGUE_EMERGENCY_THRESHOLD (95).
+    const onCourtPossessions = 28
     const possessionLog: PossessionLogEntry[] = []
     for (let i = 0; i < onCourtPossessions; i++) {
       possessionLog.push({
         possessionNumber: i + 1,
+        period: 1,
+        clockSecondsRemaining: 700,
+        durationSeconds: 20,
         offenseTeamId: awayTeam.id,
         playCallUsed: 'isolation',
         primaryPlayerId: dummy.id,
@@ -127,6 +138,9 @@ describe('generateCoachingInsights', () => {
     }
     possessionLog.push({
       possessionNumber: onCourtPossessions + 1,
+      period: 1,
+      clockSecondsRemaining: 700,
+      durationSeconds: 20,
       offenseTeamId: awayTeam.id,
       playCallUsed: 'isolation',
       primaryPlayerId: dummy.id,
@@ -141,7 +155,7 @@ describe('generateCoachingInsights', () => {
       awayOnCourtIds: [dummy.id],
     })
 
-    const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById, 100)
+    const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
 
     expect(
       insights.some(
@@ -189,13 +203,7 @@ describe('generateCoachingInsights', () => {
     const possessionsPerGame = 100
     const simulated = simulateGame(game, home.team, away.team, playersById, possessionsPerGame, createSeededRng(72))
 
-    const insights = generateCoachingInsights(
-      simulated.possessionLog,
-      home.team,
-      away.team,
-      playersById,
-      possessionsPerGame,
-    )
+    const insights = generateCoachingInsights(simulated.possessionLog, home.team, away.team, playersById)
 
     expect(insights.some((i) => i.text.includes('heavy fatigue'))).toBe(true)
   })
@@ -210,6 +218,9 @@ describe('generateCoachingInsights', () => {
 
     const possessionLog: PossessionLogEntry[] = Array.from({ length: 21 }, (_, i) => ({
       possessionNumber: i + 1,
+      period: 1,
+      clockSecondsRemaining: 700,
+      durationSeconds: 20,
       offenseTeamId: awayTeam.id,
       playCallUsed: 'isolation',
       primaryPlayerId: dummy.id,
@@ -224,8 +235,8 @@ describe('generateCoachingInsights', () => {
       awayOnCourtIds: [dummy.id],
     }))
 
-    const a = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById, 100)
-    const b = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById, 100)
+    const a = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
+    const b = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
     expect(a).toEqual(b)
   })
 })

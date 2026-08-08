@@ -4,8 +4,8 @@ import {
   FATIGUE_EMERGENCY_THRESHOLD,
   FATIGUE_SUB_IN_MAX,
   FATIGUE_SUB_OUT_THRESHOLD,
-  MIN_SHIFT_POSSESSIONS,
-  PACE_CHECK_MIN_POSSESSIONS,
+  MIN_SHIFT_SECONDS,
+  PACE_CHECK_MIN_SECONDS,
   PACE_OVERAGE_THRESHOLD,
   REGULATION_MINUTES,
   ROTATION_MATCHUP_WEIGHT,
@@ -31,22 +31,21 @@ export function rotationValue(candidate: Player, opponent: Player | undefined): 
 function shouldConsiderSubOut(
   state: RotationState,
   player: Player,
-  possessionNumber: number,
+  elapsedSeconds: number,
   rotationMinutes: Record<PlayerId, number>,
 ): boolean {
   const fatigueLevel = state.fatigue.get(player.id) ?? 0
   if (fatigueLevel >= FATIGUE_EMERGENCY_THRESHOLD) return true
 
-  const enteredAt = state.shiftEnteredAt.get(player.id) ?? 0
-  if (possessionNumber - enteredAt < MIN_SHIFT_POSSESSIONS) return false
+  const enteredAt = state.shiftEnteredAtSeconds.get(player.id) ?? 0
+  if (elapsedSeconds - enteredAt < MIN_SHIFT_SECONDS) return false
 
   if (fatigueLevel >= FATIGUE_SUB_OUT_THRESHOLD) return true
 
-  const possessionsElapsed = possessionNumber - 1
-  if (possessionsElapsed < PACE_CHECK_MIN_POSSESSIONS) return false
+  if (elapsedSeconds < PACE_CHECK_MIN_SECONDS) return false
 
   const target = (rotationMinutes[player.id] ?? 0) / REGULATION_MINUTES
-  const paceSoFar = (state.possessionsPlayed.get(player.id) ?? 0) / possessionsElapsed
+  const paceSoFar = (state.secondsPlayed.get(player.id) ?? 0) / elapsedSeconds
   return paceSoFar > target * (1 + PACE_OVERAGE_THRESHOLD)
 }
 
@@ -62,13 +61,13 @@ export function checkSubstitutions(
   team: Team,
   opponentOnCourt: Player[],
   playersById: Map<PlayerId, Player>,
-  possessionNumber: number,
+  elapsedSeconds: number,
 ): void {
   const nextFive = [...state.onCourt]
 
   for (let i = 0; i < nextFive.length; i++) {
     const outgoing = nextFive[i]
-    if (!shouldConsiderSubOut(state, outgoing, possessionNumber, team.rotationMinutes)) continue
+    if (!shouldConsiderSubOut(state, outgoing, elapsedSeconds, team.rotationMinutes)) continue
 
     const position: Position = outgoing.positions[0]
     const onCourtIdsNow = new Set(nextFive.map((p) => p.id))
@@ -87,7 +86,7 @@ export function checkSubstitutions(
     const opponent = findAtPosition(position, opponentOnCourt)
     const incoming = pickBest(candidates, (c) => rotationValue(c, opponent))
     nextFive[i] = incoming
-    state.shiftEnteredAt.set(incoming.id, possessionNumber)
+    state.shiftEnteredAtSeconds.set(incoming.id, elapsedSeconds)
   }
 
   state.onCourt = nextFive

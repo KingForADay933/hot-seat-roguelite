@@ -75,7 +75,11 @@ export interface GeneratedLeague {
 }
 
 export function generateLeague(params: GenerateLeagueParams): GeneratedLeague {
-  const { teamCount, leagueName, rng, seasonLength = 16, possessionsPerGame = 100, averageOverallShift = 0 } = params
+  // 200 total possessions -- ~100 per team, the real NBA rate. The old 100 gave each team ~50 and
+  // implied 28.8 seconds of clock per possession, longer than a shot clock; nothing could sample a
+  // believable duration at that pace. Points-per-possession was already realistic, so doubling the
+  // possessions is also what brings scoring up to a real ~115 a side without touching the shot model.
+  const { teamCount, leagueName, rng, seasonLength = 16, possessionsPerGame = 200, averageOverallShift = 0 } = params
 
   if (teamCount < 2 || teamCount > TEAM_POOL.length) {
     throw new Error(`teamCount must be between 2 and ${TEAM_POOL.length}, got ${teamCount}`)

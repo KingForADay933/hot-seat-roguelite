@@ -1,9 +1,9 @@
 import type { Player, PlayerBoxScoreLine, PlayerId, TeamId } from '../../data/types'
 import { ASSIST_ELIGIBLE_PLAY_CALLS } from '../../engine/boxScore'
 import { generateCommentaryLine } from '../../engine/commentary/generateCommentaryLine'
-import { REGULATION_MINUTES } from '../../engine/constants'
-import { fatigueGainPerPossession, fatigueRecoveryPerPossession } from '../../engine/rotation/fatigue'
-import { getPeriodLabel, type SimulationStep } from '../../engine/simulateGame'
+import { PERIOD_SECONDS, SECONDS_PER_MINUTE } from '../../engine/constants'
+import { fatigueGainPerSecond, fatigueRecoveryPerSecond } from '../../engine/rotation/fatigue'
+import { formatGameClock, getPeriodLabel, type SimulationStep } from '../../engine/simulateGame'
 
 /**
  * A running box-score line. Every counting stat the possession log determines on its own -- which is
@@ -31,6 +31,8 @@ export interface PlaybackState {
   homeScore: number
   awayScore: number
   periodLabel: string
+  /** mm:ss left in the current period -- a real scoreboard clock now that the sim keeps one. */
+  clockLabel: string
   /** Newest first, so the screen renders it top-down without reversing on every frame. */
   feed: FeedEntry[]
   homeOnCourtIds: PlayerId[]
@@ -38,8 +40,9 @@ export interface PlaybackState {
   /** 0-100 for every rostered player on both teams, bench included. */
   fatigue: Map<PlayerId, number>
   lines: Map<PlayerId, LiveBoxScoreLine>
-  /** Possessions each player has been on the floor for -- what minutesPlayed is scaled from. */
-  possessionsOnCourt: Map<PlayerId, number>
+  /** Game seconds each player has been on the floor for -- what minutesPlayed is summed from,
+   *  matching deriveBoxScore rather than approximating it from a possession count. */
+  secondsOnCourt: Map<PlayerId, number>
 }
 
 /** Everything the reducer needs that doesn't change as the game runs. */
@@ -47,7 +50,6 @@ export interface PlaybackContext {
   homeRoster: Player[]
   awayRoster: Player[]
   playerById: Map<PlayerId, Player>
-  possessionsPerGame: number
 }
 
 /** How many entries of play-by-play the feed keeps. A full game is ~100 possessions and the screen
@@ -79,13 +81,14 @@ export function createPlaybackState(context: PlaybackContext): PlaybackState {
     possessionsPlayed: 0,
     homeScore: 0,
     awayScore: 0,
-    periodLabel: getPeriodLabel(1, context.possessionsPerGame),
+    periodLabel: getPeriodLabel(1),
+    clockLabel: formatGameClock(PERIOD_SECONDS),
     feed: [],
     homeOnCourtIds: [],
     awayOnCourtIds: [],
     fatigue: new Map(roster.map((p) => [p.id, 0])),
     lines: new Map(roster.map((p) => [p.id, emptyLine(p.id)])),
-    possessionsOnCourt: new Map(roster.map((p) => [p.id, 0])),
+    secondsOnCourt: new Map(roster.map((p) => [p.id, 0])),
   }
 }
 
@@ -95,12 +98,19 @@ export function createPlaybackState(context: PlaybackContext): PlaybackState {
  * for whoever is on court and recovers for everyone else, and the possession log records exactly
  * that five, so the numbers shown here are the ones the simulation used.
  */
-function tickTeamFatigue(fatigue: Map<PlayerId, number>, roster: Player[], onCourtIds: PlayerId[]): void {
+function tickTeamFatigue(
+  fatigue: Map<PlayerId, number>,
+  roster: Player[],
+  onCourtIds: PlayerId[],
+  elapsedSeconds: number,
+): void {
   const onCourt = new Set(onCourtIds)
 
   for (const player of roster) {
     const current = fatigue.get(player.id) ?? 0
-    const next = onCourt.has(player.id) ? current + fatigueGainPerPossession(player) : current - fatigueRecoveryPerPossession(player)
+    const next = onCourt.has(player.id)
+      ? current + fatigueGainPerSecond(player) * elapsedSeconds
+      : current - fatigueRecoveryPerSecond(player) * elapsedSeconds
     fatigue.set(player.id, Math.min(100, Math.max(0, next)))
   }
 }
@@ -116,12 +126,12 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
   const { entry } = step
 
   const fatigue = new Map(state.fatigue)
-  tickTeamFatigue(fatigue, context.homeRoster, entry.homeOnCourtIds)
-  tickTeamFatigue(fatigue, context.awayRoster, entry.awayOnCourtIds)
+  tickTeamFatigue(fatigue, context.homeRoster, entry.homeOnCourtIds, entry.durationSeconds)
+  tickTeamFatigue(fatigue, context.awayRoster, entry.awayOnCourtIds, entry.durationSeconds)
 
-  const possessionsOnCourt = new Map(state.possessionsOnCourt)
+  const secondsOnCourt = new Map(state.secondsOnCourt)
   for (const id of [...entry.homeOnCourtIds, ...entry.awayOnCourtIds]) {
-    possessionsOnCourt.set(id, (possessionsOnCourt.get(id) ?? 0) + 1)
+    secondsOnCourt.set(id, (secondsOnCourt.get(id) ?? 0) + entry.durationSeconds)
   }
 
   const lines = new Map(state.lines)
@@ -162,12 +172,12 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
     })
   }
 
-  for (const [id, possessions] of possessionsOnCourt) {
+  for (const [id, seconds] of secondsOnCourt) {
     const line = lines.get(id)
-    if (line) lines.set(id, { ...line, minutesPlayed: (possessions / context.possessionsPerGame) * REGULATION_MINUTES })
+    if (line) lines.set(id, { ...line, minutesPlayed: seconds / SECONDS_PER_MINUTE })
   }
 
-  const periodLabel = getPeriodLabel(entry.possessionNumber, context.possessionsPerGame)
+  const periodLabel = getPeriodLabel(entry.period)
   const feedEntry: FeedEntry = {
     possessionNumber: entry.possessionNumber,
     periodLabel,
@@ -181,11 +191,12 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
     homeScore: step.homeScore,
     awayScore: step.awayScore,
     periodLabel,
+    clockLabel: formatGameClock(entry.clockSecondsRemaining),
     feed: [feedEntry, ...state.feed].slice(0, FEED_LENGTH),
     homeOnCourtIds: entry.homeOnCourtIds,
     awayOnCourtIds: entry.awayOnCourtIds,
     fatigue,
     lines,
-    possessionsOnCourt,
+    secondsOnCourt,
   }
 }

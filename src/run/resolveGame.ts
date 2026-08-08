@@ -42,7 +42,7 @@ export function resolveGame(context: ChunkSimContext, run: RunState, scheduled: 
 
   const involvesRunTeam = played.homeTeamId === run.teamId || played.awayTeamId === run.teamId
   const insights = involvesRunTeam
-    ? generateCoachingInsights(played.possessionLog, homeTeam, awayTeam, context.playersById, context.possessionsPerGame).filter(
+    ? generateCoachingInsights(played.possessionLog, homeTeam, awayTeam, context.playersById).filter(
         (insight) => insight.teamId === run.teamId,
       )
     : []
