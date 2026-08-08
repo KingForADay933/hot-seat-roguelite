@@ -1,4 +1,4 @@
-import type { AttributeKey } from '../../data/types'
+import type { AttributeKey, RotationPlan } from '../../data/types'
 import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { computeStandings } from '../../engine/schedule/standings'
@@ -9,6 +9,7 @@ import { MARKET_SIZES } from '../../run/marketSize'
 import { HOUSE_RULES } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS } from '../../run/variation/rosterQuirks'
 import { RosterDetailPanel } from '../components/RosterDetailPanel'
+import { RotationChartEditor } from '../components/RotationChartEditor'
 import { ScoutingPanel } from '../components/ScoutingPanel'
 import { TeamSummary } from '../components/TeamSummary'
 
@@ -30,11 +31,13 @@ export function MyTeamScreen({
   bundle,
   onSetMinutes,
   onSetFocus,
+  onSetRotationPlan,
   onBack,
 }: {
   bundle: RunBundle
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
+  onSetRotationPlan: (plan: RotationPlan) => void
   onBack: () => void
 }) {
   const { run, teams, players, games } = bundle
@@ -42,6 +45,7 @@ export function MyTeamScreen({
   if (!team) return null
 
   const roster = players.filter((p) => p.teamId === team.id)
+  const playersById = new Map(players.map((p) => [p.id, p]))
   const record = computeStandings(teams, games).find((row) => row.teamId === team.id)
   const targetPct = Math.round(run.target.rankFraction * 100)
   const quirk = ROSTER_QUIRKS[run.rosterQuirk]
@@ -123,6 +127,9 @@ export function MyTeamScreen({
         take effect from the next stretch of games.
       </p>
       <RosterDetailPanel team={team} roster={roster} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+
+      <h2>Rotation Chart</h2>
+      <RotationChartEditor team={team} roster={roster} playersById={playersById} onSetRotationPlan={onSetRotationPlan} />
 
       <h2>Scouting</h2>
       <p>Ratings the simulation reads that don&apos;t show up in the attribute sheet.</p>

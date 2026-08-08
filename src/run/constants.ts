@@ -228,3 +228,10 @@ export const LUCKY_JERSEY_ATTRIBUTE_SHIFT = 3
  *  activated, not simulation-scoped like the other 6 cards (see run/consumables/
  *  applyConsumableEffect.ts's doc comment on why it's a no-op there). */
 export const ENERGY_DRINK_SPONSORSHIP_BUDGET_BONUS = 150
+
+// --- Rotation chart editor (rotation-charts.md Phase G) ---
+
+/** Shortest span the editor allows a segment to shrink to, whether by dragging a boundary or
+ *  splitting a span in two -- keeps a slot's timeline from collapsing into slivers too thin to
+ *  read or to matter to the sim (a few seconds of "on court" isn't a real substitution decision). */
+export const MIN_ROTATION_SEGMENT_SECONDS = 60

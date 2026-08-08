@@ -42,6 +42,7 @@ function AppContent() {
     finishStretch,
     setRotationMinutes,
     setTrainingFocus,
+    setRotationPlan,
     openShop,
     buyPlayerCamp,
     buyTeamCamp,
@@ -130,6 +131,7 @@ function AppContent() {
         bundle={bundle}
         onSetMinutes={setRotationMinutes}
         onSetFocus={setTrainingFocus}
+        onSetRotationPlan={setRotationPlan}
         onBack={() => setViewingMyTeam(false)}
       />
     )

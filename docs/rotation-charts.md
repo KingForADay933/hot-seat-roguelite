@@ -350,11 +350,63 @@ because there is no way yet to construct a real chart to approximate *instead of
 existence right now is a synthetic test fixture. Worth revisiting once Phase G's editor exists and a
 GM can actually produce one.
 
-### Phase G — The chart editor
-Five slot lanes, four quarters across, drag to set boundaries, mark spans Auto. Live validation:
-team-minutes total, per-player totals, empty slots, an out-of-position penalty badge, and a
-projected-fatigue overlay. Natural home is `MyTeamScreen`, which already owns the minutes/focus
-controls this supersedes for the user's team.
+### Phase G — The chart editor — **done**
+Lives in `MyTeamScreen` as planned, as a new "Rotation Chart" section alongside (not replacing) the
+existing minutes/focus table -- Phase F already decided `rotationMinutes` stays the Auto-fallback and
+synergy input, so both controls are live at once, one govern the charted spans and the other governs
+everything else.
+
+Five slot rows (`RotationChartEditor.tsx`) by four period columns (`CHARTABLE_PERIODS` --
+regulation only; overtime is a live simcast prompt per Decision 5, not something authored ahead of
+time). Each cell is a `TimelineBar` rendering that slot/period's segments (`run/rotationChart.ts`'s
+`getSegments`, which reads a real plan or defaults to one Auto span covering the whole period).
+
+**Boundaries move by drag, as planned** -- pointer capture on a thin handle between two segments,
+position converted from `clientX` back to seconds against the bar's own bounding rect
+(`moveBoundary`, clamped to `MIN_ROTATION_SEGMENT_SECONDS` on each side so a drag can't collapse a
+span to nothing). **Creating a new boundary is "Split in two" (bisect, same fill on both halves)
+rather than click-to-cut at an arbitrary point** -- simpler to get right than inferring where on a
+30px-tall bar a GM meant to cut, and dragging the resulting boundary afterward reaches the same place.
+"Merge with previous/next" is the inverse, removing a boundary and keeping the earlier segment's fill.
+Clicking a segment selects it and opens an assignment panel: a select (Auto, plus the roster in the
+same starters-then-bench grouping `CampPurchaseForm` already established) and the split/merge
+controls, all editing the same plan `checkSubstitutions` already knows how to read.
+
+Edits are optimistic and local except for the drag case: every discrete action (fill change, split,
+merge) calls `onSetRotationPlan` immediately, same as `MinutesInput`/`TrainingFocusSelect` elsewhere
+on this screen, but a drag updates local state on every `pointermove` and only persists on
+`pointerup` -- otherwise a single drag gesture would be an IndexedDB write per pixel of mouse
+movement.
+
+**Live validation, against the doc's list:**
+- *Team-minutes total / per-player totals* -- `rotationChartValidation.ts`'s
+  `chartedMinutesByPlayer` sums charted (non-Auto) seconds per player, shown in a per-player table.
+  Deliberately doesn't try to project Auto minutes into that total: what the heuristic will actually
+  give an Auto span isn't knowable before the game runs.
+- *Empty slots*, generalized to a real problem the free-editing-per-slot design actually has: nothing
+  stops the same player being named in two slots at once. `doubleBookedConflicts` finds every
+  overlapping pair and the summary panel surfaces it in red -- this is what keeps `checkSubstitutions`
+  safe in trusting the plan it's handed (Phase F never validates this itself).
+- *Out-of-position penalty badge* -- a small red `!` on any segment where the named player's own
+  position doesn't match the charted slot, computed inline with `engine/positionFit.ts`'s
+  `slotSlideDistance` (the same function the in-sim penalty uses) rather than a parallel check.
+- *Projected-fatigue overlay* -- narrowed from the original idea of an overlay drawn on the timeline
+  itself to a Q1-Q4 fatigue-at-period-end row per charted player, reusing
+  `engine/rotation/fatigue.ts`'s real gain/recovery formulas over each player's own charted on/off
+  spans. Explicitly labeled a floor, not a forecast: any of a player's un-charted time is scored as
+  bench rest, since what the live heuristic would actually do with an Auto span isn't known ahead of
+  the game.
+
+Verified in-browser (dev server + a scripted Chromium session, screenshots inspected) rather than
+with component tests, matching how the rest of the UI layer is verified in this codebase -- there's no
+`@testing-library` dependency here, only pure-logic unit tests plus manual/driven verification for
+`.tsx`. Confirmed: the grid renders 20 timeline bars (5 slots x 4 periods) against a real generated
+roster, segment selection and the fill select work, split produces two segments with the summary
+panel's charted-minutes and fatigue numbers updating live, dragging a boundary between two
+same-player segments live-redraws without changing their combined total, merge restores one segment,
+and assigning an out-of-position player lights up the `!` badge and the summary row for exactly that
+player -- zero console errors through all of it. `run/rotationChart.ts` and
+`run/rotationChartValidation.ts` additionally carry 32 unit tests of their own.
 
 ### Phase H — Deviation and edge rules
 Overtime (Decision 5), exhausted charted players, later foul trouble and injuries. Deviations surface
@@ -400,10 +452,15 @@ through Coaching Insights, which already exists as that channel.
 - **Secondary positions.** Resolved for now: `Player.positions` stays single-valued and affinity is
   fully derived from height + attribute profile (no generation change), per the option §4 left open.
   Revisit only if a real secondary-position mechanic (not just fit-penalty math) becomes worth adding.
-- **Does the GM see the penalty numerically,** or as a green/amber/red badge? Still open -- no editor
-  exists yet to show it in. Numeric is honest, qualitative keeps the editor readable. `PlayerRevealCard`
-  already carries the Positionless/Specialist vocabulary (via `ui/playerTags.ts`) to match whichever
-  Phase G picks.
-- **Does the chart feed synergy continuously, or only at stretch boundaries?** Still open, and now
-  sharper: Phase 0's fix makes `setRotationMinutes` recompute synergy immediately, so a continuous
-  chart-driven recompute is the more consistent choice, but also the more expensive one per drag.
+- **Does the GM see the penalty numerically, or as a badge? Resolved as qualitative for now:** a bare
+  red `!` on the mismatched segment, no severity number -- readable at the 30px cell size the grid
+  actually has room for. The numeric side isn't gone, just relocated: the summary panel's fatigue and
+  charted-minutes columns are exact numbers, just not the attribute-dock severity itself. Revisit if a
+  GM wants to know *how bad* before committing, not just *that* it's bad.
+- **Does the chart feed synergy continuously, or only at stretch boundaries? Still open, and now
+  concretely deferred rather than abstractly open:** `setRotationPlan` (`RunProvider.tsx`) does not
+  call `teamsWithRecomputedSynergy` at all, because `computeInitialSynergyScore` still only reads
+  `rotationMinutes` (Phase F's deliberate deferral of `availability()`) -- a chart-only edit has
+  nothing new for that recompute to see yet. Once `availability()` is taught to read a real chart,
+  this question becomes live again, and Phase 0's precedent (recompute immediately, on every edit)
+  is the likely answer.

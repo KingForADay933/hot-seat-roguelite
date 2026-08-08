@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import type { AttributeKey, Game, GameId, PlayerId } from '../../data/types'
+import type { AttributeKey, Game, GameId, PlayerId, RotationPlan } from '../../data/types'
 import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
 import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from '../../data/persistence/runRepository'
 import { REGULATION_MINUTES } from '../../engine/constants'
@@ -436,6 +436,17 @@ export function RunProvider({ children }: { children: ReactNode }) {
     [bundle],
   )
 
+  const setRotationPlan = useCallback(
+    async (plan: RotationPlan) => {
+      if (!bundle) return
+      const teams = bundle.teams.map((t) => (t.id === bundle.run.teamId ? { ...t, rotationPlan: plan } : t))
+      const updatedBundle: RunBundle = { ...bundle, teams }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
+
   const openShop = useCallback(async () => {
     if (!bundle) return
     const tier: ShopTier = bundle.lastSeasonTargetHit ? 'expanded' : 'condensed'
@@ -616,6 +627,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     finishStretch,
     setRotationMinutes,
     setTrainingFocus,
+    setRotationPlan,
     openShop,
     buyPlayerCamp,
     buyTeamCamp,
