@@ -1,4 +1,4 @@
-﻿import type { TendencyProfile } from '../data/types'
+﻿import type { Position, TendencyProfile } from '../data/types'
 
 /** All formula weights live here so balance tuning is a config change, not a code change. */
 
@@ -12,6 +12,16 @@ export const ATTRIBUTE_BASELINE_SPAN = ATTRIBUTE_CEILING - ATTRIBUTE_FLOOR
 export const ATTRIBUTE_STANDOUT_CHANCE = 0.05
 export const ATTRIBUTE_STANDOUT_MIN = 90
 export const ATTRIBUTE_STANDOUT_SPAN = 9
+
+/** Height band generation rolls within, per position -- also the fit reference for positionFit.ts's
+ *  out-of-position height penalty (a player slotted outside their own band's range). */
+export const POSITION_HEIGHT_RANGE_INCHES: Record<Position, [number, number]> = {
+  PG: [72, 76],
+  SG: [74, 78],
+  SF: [77, 81],
+  PF: [80, 84],
+  C: [82, 88],
+}
 
 export const POSSESSION_STRENGTH_WEIGHTS = {
   pickAndRoll: { handlerBallHandling: 0.35, handlerPassing: 0.25, rollerInsideShot: 0.25, rollerVertical: 0.15 },
@@ -344,3 +354,61 @@ export const SYNERGY_NEUTRAL = 65
 export const SYNERGY_MULTIPLIER_FACTOR = 0.004
 export const SYNERGY_MULTIPLIER_MIN = 0.9
 export const SYNERGY_MULTIPLIER_MAX = 1.1
+
+// --- Positional versatility (rotation-charts.md Phase E) ---
+
+/**
+ * Attribute points docked, at full demand weight, per slot of distance between a player's own
+ * position and the slot they're charted into (PG->SG is 1, PG->C is 4). "Full demand weight" means
+ * the attribute the slot leans on hardest -- see SLOT_INTERIOR_LEAN. A first-cut number, not yet
+ * tuned against real lineups (rotation-charts.md Section 8): a max four-slot slide docks the
+ * hardest-leaned-on attributes by 4x this before the height term.
+ */
+export const POSITION_FIT_SLIDE_PENALTY_PER_SLOT = 6
+
+/** Extra points docked per inch a player's height sits outside the charted slot's own band
+ *  (POSITION_HEIGHT_RANGE_INCHES) -- on top of, not instead of, the slide penalty, since a slide can
+ *  be short in slot-count but still a bad height match (a 6'3" PG slid one slot to SF, say). */
+export const POSITION_FIT_HEIGHT_PENALTY_PER_INCH = 3
+
+/**
+ * How far each slot leans toward interior attributes (insideShot, rebounding, interiorDefense,
+ * vertical) versus perimeter ones (outsideShot, passing, ballHandling, perimeterDefense, speed,
+ * lateralQuickness), 0 (fully perimeter) to 1 (fully interior). Interpolated across POSITION_ORDER
+ * rather than a hand-authored table per slot -- PG/C are the anchors and SG/SF/PF fall in a straight
+ * line between them, which lands SF at an even 0.5, matching its already-neutral POSITION_BIAS entry
+ * in randomPlayer.ts. A slot's demand weight for a given attribute is this lean (interior attributes)
+ * or its complement (perimeter attributes), and the dock for that attribute is the slide/height
+ * severity times its demand weight -- which is what makes a PG slid to C lose rebounding and interior
+ * defense while keeping his passing untouched (rotation-charts.md Section 4).
+ */
+export const SLOT_INTERIOR_LEAN: Record<Position, number> = {
+  PG: 0,
+  SG: 0.25,
+  SF: 0.5,
+  PF: 0.75,
+  C: 1,
+}
+
+/** A player's height counts as "in range" for a position if it falls in that position's own
+ *  POSITION_HEIGHT_RANGE_INCHES band. Positionless requires the height to land in at least this
+ *  many bands at once (there is real overlap at the edges -- see rotation-charts.md Section 3's
+ *  6'9"-SF example, which is in-range for both SF and PF). */
+export const POSITIONLESS_MIN_HEIGHT_BANDS = 2
+
+/** Spread (max attribute - min attribute) at/below which a profile counts as "balanced" for
+ *  Positionless, and at/above which it counts as "spiked" for Specialist. Attributes run 0-100, so
+ *  this is a generous band on each side of "roughly flat". */
+export const POSITIONLESS_ATTRIBUTE_SPREAD_MAX = 35
+export const SPECIALIST_ATTRIBUTE_SPREAD_MIN = 55
+
+/** A height within this many inches of either edge of the player's own position's band counts as
+ *  "at the extreme" for Specialist -- the tall end of PG or the short end of C, say. */
+export const SPECIALIST_HEIGHT_EDGE_INCHES = 1
+
+/** Multiplies the slide/height severity before it's applied: a Positionless player's height and
+ *  attribute profile already fit more than one slot, so a slide costs them less; a Specialist is
+ *  built for exactly one slot, so leaving it costs them more. Neither is stored -- both are derived
+ *  fresh from height and attributes every time (rotation-charts.md Section 4, "derive, don't store"). */
+export const POSITIONLESS_SEVERITY_MULTIPLIER = 0.5
+export const SPECIALIST_SEVERITY_MULTIPLIER = 1.5

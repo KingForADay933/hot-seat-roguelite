@@ -1,10 +1,13 @@
 # Rotation Charts — groundwork
 
 Planning notes for a 2K-style rotation chart: a per-quarter timeline where the GM maps out exactly
-who is on the floor, when, and for how long. Nothing here is built yet. This document records what
-the engine does today, what has to change, in what order, and the decisions already settled.
+who is on the floor, when, and for how long. This document records what the engine does today, what
+has to change, in what order, and the decisions already settled.
 
-Written against master as of the simcast (#8) and team-reveal/system-fit (#9) merges.
+Written against master as of the simcast (#8) and team-reveal/system-fit (#9) merges. Phases 0
+through E are now done (see Section 6) -- Sections 1-2 below describe the possession-counted engine
+those phases replaced, and are kept as the historical record of why the clock and pace changes were
+needed, not as a description of the engine as it stands today.
 
 ---
 
@@ -249,31 +252,24 @@ input and becomes an outcome.
 ### Phase 0 — Recompute synergy on rotation change
 §0. Small, independent, and a live bug today.
 
-### Phase A — Real periods
-Four actual periods instead of one 100-possession block. Per-period jump ball. Clutch becomes "late
-in Q4". **Put the period on `SimulationStep`** so the simcast stops diffing labels. Low risk, and
-everything after depends on periods existing.
+### Phase A — Real periods — **done**
+`simulateGameSteps` runs four actual `REGULATION_PERIODS`, each with its own `rollJumpBall`, plus
+untapped overtime periods beyond that. `getPeriodLabel` is now a straight lookup on the period the
+possession was actually played in, and `PossessionLogEntry.period` is what the simcast (`playbackState.ts`)
+reads for its label rather than diffing anything.
 
-### Phase B — Possession duration model
-Sample each possession's duration in seconds, conditioned on the selected play call:
+### Phase B — Possession duration model — **done**
+`possession/possessionDuration.ts` samples each possession's length in seconds off
+`POSSESSION_DURATION_BANDS`, conditioned on the play call, with outcome adjustments (`TURNOVER_DURATION_FACTOR`
+truncates early, `REBOUND_SECONDS` / `SECOND_CHANCE_DURATION_BAND` add scramble time after a miss).
+Landed at `NOMINAL_POSSESSION_SECONDS` ~16.6s rather than the originally-targeted 14.4 -- close
+enough that pace genuinely falls out of the playbook mix as intended, just calibrated against a full
+generated league instead of hand-picked band midpoints (see that constant's doc comment).
 
-| Play call | Duration |
-| --- | --- |
-| `transition` | 4–9 s |
-| `pick-and-roll`, `cutting`, `spot-up` | 10–18 s |
-| `isolation`, `post-up` | 14–22 s |
-
-Outcome adjusts: live-ball turnover truncates early, a make consumes the full sample, a miss adds
-rebound time. Target mean ~14.4 s.
-
-Pace then falls out of the playbook mix for free — `sevenSecondsOrLess` genuinely runs more
-possessions than `twinTowers`, no separate pace stat. `pacePresets.possessionsPerGame` becomes a
-league-wide pace multiplier, not a loop bound.
-
-### Phase C — Clock-driven loop
-Countdown instead of a possession count. Fatigue in seconds. Minutes summed from real elapsed time
-in **both** `deriveBoxScore` and `playbackState`. Retune `BASE_POSSESSION_MS`. Heaviest phase;
-expect a full pass over `constants.ts` and the sim tests.
+### Phase C — Clock-driven loop — **done**
+`runPeriod` counts a real clock down (`while (clock > 0)`) instead of a possession count; fatigue is
+denominated in seconds (`FATIGUE_GAIN_PER_SECOND` / `FATIGUE_RECOVERY_PER_SECOND`); minutes are summed
+from elapsed seconds in both `boxScore.ts` and `playbackState.ts`. `BASE_POSSESSION_MS` retuned to 450.
 
 ### Phase D — Slot-assigned on-court state — **done**
 `RotationState.onCourt` is now `OnCourtPlayer[]` (`{ player, slot }`). `buildMatchups` pairs slot
@@ -291,31 +287,126 @@ sim actually used instead of reconstructing it from `positions[0]`, and the simc
 shows each player's slot — so an out-of-position lineup will read as what the GM did rather than
 looking like a mislabel.
 
-### Phase E — Positional versatility
-The penalty model and derived quirks (§4). Independent of the clock, depends on D for the notion of a
-slot. Testable in isolation: assert a 6'3" PG at C is heavily docked, a 6'9" SF at PF barely touched,
-and — the interesting one — that a badly-slotted lineup drops the team's projected synergy.
-
-### Phase F — Rotation plan data model
+### Phase E — Positional versatility — **done**
+`engine/positionFit.ts` implements the penalty as the transient effective-attribute shift §4
+describes: `effectivePlayer(player, slot)` returns the player unchanged when `slot === positions[0]`
+(every slot in the game today, since no chart exists yet to disagree), and otherwise a shallow copy
+whose attributes are docked by
 
 ```
-RotationPlan = per team, per period, per slot, an ordered list of segments:
-  { startSeconds, endSeconds, fill: { kind: 'player', playerId } | { kind: 'auto' } }
+severity = (POSITION_FIT_SLIDE_PENALTY_PER_SLOT * slotSlideDistance + POSITION_FIT_HEIGHT_PENALTY_PER_INCH * heightMisfitInches) * quirkMultiplier
+dock[attribute] = severity * demandWeight(attribute, slot)
 ```
 
-Authored in game time, evaluated at runtime against the clock. **Unfilled time is implicitly Auto**,
-so a GM can chart Q1 and Q4 and leave the rest to the coach (Decision 3). It reaches the engine via
-`Team`, which already flows through `ChunkSimContext`.
+`demandWeight` splits the ten attributes into an interior group (insideShot/rebounding/interiorDefense/vertical)
+and a perimeter group (the other six), and weights each by `SLOT_INTERIOR_LEAN[slot]` -- 0 at PG, 1
+at C, interpolated in between -- so a PG slid to C docks only the interior group (passing, ballHandling
+etc. survive untouched) and a slide to SF docks both groups by half. This is the "demand-weighted, not
+uniform" rule from §4, derived from the engine's own interior/perimeter split (`avgInteriorDefense`/
+`avgPerimeterDefense` in `matchup.ts`) rather than a new hand-authored table -- deliberately simpler
+than routing through `PLAY_CALL_MODELS`, which has no notion of slot to hang a demand weight off of;
+see the open questions below for why that's a placeholder rather than the last word.
 
-`checkSubstitutions` grows a branch consulting the plan when one exists, falling through to today's
-fatigue/pace heuristic for Auto segments and AI teams. `availability()` can then stop approximating:
-with a chart, who is on the floor when is known exactly rather than inferred from target minutes.
+Positionless/Specialist are derived (never stored) from height-band overlap and attribute spread --
+`isPositionless`/`isSpecialist` in the same file -- and feed back into `quirkMultiplier`: 0.5x for
+Positionless, 1.5x for Specialist, 1x otherwise. `ui/playerTags.ts` wraps the same two functions for
+the team-reveal card, satisfying §4's "reconcile the vocabulary" note.
 
-### Phase G — The chart editor
-Five slot lanes, four quarters across, drag to set boundaries, mark spans Auto. Live validation:
-team-minutes total, per-player totals, empty slots, an out-of-position penalty badge, and a
-projected-fatigue overlay. Natural home is `MyTeamScreen`, which already owns the minutes/focus
-controls this supersedes for the user's team.
+Wired into `simulateGame.ts` at the one call site that needed it: `runPeriod` builds `offenseFive`/
+`defenseFive` through `effectiveFive` before handing them to `selectPlayers`, `computeOffenseStrength`,
+`computeResistance` and `offensiveReboundProbability`, exactly as §4 predicted -- no other call site
+changed. Rotation state, fatigue and the possession log still read the real (unshifted) players.
+Verified behavior-neutral: the full test suite (389 tests, up from 361) passes unchanged, since every
+slot in real gameplay still equals `positions[0]` until Phase F/G exist.
+
+### Phase F — Rotation plan data model — **done**
+`data/types/team.ts` adds exactly the shape sketched here: `RotationPlan` is
+`Partial<Record<period, Partial<Record<slot, RotationSegment[]>>>>`, and `Team.rotationPlan?` is
+optional -- absent for every AI team and for a user team before a chart exists, which is every team
+in the game today (no editor to write one yet). `RotationSegment.startSeconds`/`endSeconds` are
+seconds into the period, matching the period clock itself rather than the whole-game elapsed clock,
+so a chart's Q1 and Q3 segments both start counting from 0.
+
+No migration needed: `runRepository.ts`'s `isValidBundleShape` only checks `teams` is an array, never
+a per-team shape, so an optional field a saved `Team` may or may not have needed no schema bump.
+
+`engine/rotation/rotationPlan.ts`'s `chartedPlayerId(plan, period, slot, secondsIntoPeriod)` is the
+whole evaluation: no plan, no entry for this period/slot, a gap between segments, and an explicit
+`{ kind: 'auto' }` segment all collapse to the same `null` ("Decision 3: unfilled time is implicitly
+Auto"), so `checkSubstitutions` (`substitution.ts`) only has one branch to add. Per on-court slot, it
+asks the chart first; a non-null answer is law -- forced in immediately, bypassing the fatigue/pace
+heuristic entirely, *including* leaving an exhausted charted player in (deviation handling for that
+is Phase H, not this). Only `null` falls through to today's heuristic, unchanged -- which is what
+keeps every AI team and every un-charted user team behavior-neutral: verified by the full suite (402
+tests, up from 389) passing with no team anywhere setting `rotationPlan`.
+
+`checkSubstitutions` grew two new parameters (`period`, `secondsIntoPeriod`) to make that lookup
+possible; `simulateGame.ts`'s two call sites compute `secondsIntoPeriod` as `periodSeconds - clock`,
+the same period-relative value `getPeriodLabel` and the clock display already key off.
+
+**Deliberately not done here:** `systemDraft.ts`'s `availability()` still approximates from
+`rotationMinutes` rather than reading a chart exactly, as this section originally floated. Left alone
+because there is no way yet to construct a real chart to approximate *instead of* -- every plan in
+existence right now is a synthetic test fixture. Worth revisiting once Phase G's editor exists and a
+GM can actually produce one.
+
+### Phase G — The chart editor — **done**
+Lives in `MyTeamScreen` as planned, as a new "Rotation Chart" section alongside (not replacing) the
+existing minutes/focus table -- Phase F already decided `rotationMinutes` stays the Auto-fallback and
+synergy input, so both controls are live at once, one govern the charted spans and the other governs
+everything else.
+
+Five slot rows (`RotationChartEditor.tsx`) by four period columns (`CHARTABLE_PERIODS` --
+regulation only; overtime is a live simcast prompt per Decision 5, not something authored ahead of
+time). Each cell is a `TimelineBar` rendering that slot/period's segments (`run/rotationChart.ts`'s
+`getSegments`, which reads a real plan or defaults to one Auto span covering the whole period).
+
+**Boundaries move by drag, as planned** -- pointer capture on a thin handle between two segments,
+position converted from `clientX` back to seconds against the bar's own bounding rect
+(`moveBoundary`, clamped to `MIN_ROTATION_SEGMENT_SECONDS` on each side so a drag can't collapse a
+span to nothing). **Creating a new boundary is "Split in two" (bisect, same fill on both halves)
+rather than click-to-cut at an arbitrary point** -- simpler to get right than inferring where on a
+30px-tall bar a GM meant to cut, and dragging the resulting boundary afterward reaches the same place.
+"Merge with previous/next" is the inverse, removing a boundary and keeping the earlier segment's fill.
+Clicking a segment selects it and opens an assignment panel: a select (Auto, plus the roster in the
+same starters-then-bench grouping `CampPurchaseForm` already established) and the split/merge
+controls, all editing the same plan `checkSubstitutions` already knows how to read.
+
+Edits are optimistic and local except for the drag case: every discrete action (fill change, split,
+merge) calls `onSetRotationPlan` immediately, same as `MinutesInput`/`TrainingFocusSelect` elsewhere
+on this screen, but a drag updates local state on every `pointermove` and only persists on
+`pointerup` -- otherwise a single drag gesture would be an IndexedDB write per pixel of mouse
+movement.
+
+**Live validation, against the doc's list:**
+- *Team-minutes total / per-player totals* -- `rotationChartValidation.ts`'s
+  `chartedMinutesByPlayer` sums charted (non-Auto) seconds per player, shown in a per-player table.
+  Deliberately doesn't try to project Auto minutes into that total: what the heuristic will actually
+  give an Auto span isn't knowable before the game runs.
+- *Empty slots*, generalized to a real problem the free-editing-per-slot design actually has: nothing
+  stops the same player being named in two slots at once. `doubleBookedConflicts` finds every
+  overlapping pair and the summary panel surfaces it in red -- this is what keeps `checkSubstitutions`
+  safe in trusting the plan it's handed (Phase F never validates this itself).
+- *Out-of-position penalty badge* -- a small red `!` on any segment where the named player's own
+  position doesn't match the charted slot, computed inline with `engine/positionFit.ts`'s
+  `slotSlideDistance` (the same function the in-sim penalty uses) rather than a parallel check.
+- *Projected-fatigue overlay* -- narrowed from the original idea of an overlay drawn on the timeline
+  itself to a Q1-Q4 fatigue-at-period-end row per charted player, reusing
+  `engine/rotation/fatigue.ts`'s real gain/recovery formulas over each player's own charted on/off
+  spans. Explicitly labeled a floor, not a forecast: any of a player's un-charted time is scored as
+  bench rest, since what the live heuristic would actually do with an Auto span isn't known ahead of
+  the game.
+
+Verified in-browser (dev server + a scripted Chromium session, screenshots inspected) rather than
+with component tests, matching how the rest of the UI layer is verified in this codebase -- there's no
+`@testing-library` dependency here, only pure-logic unit tests plus manual/driven verification for
+`.tsx`. Confirmed: the grid renders 20 timeline bars (5 slots x 4 periods) against a real generated
+roster, segment selection and the fill select work, split produces two segments with the summary
+panel's charted-minutes and fatigue numbers updating live, dragging a boundary between two
+same-player segments live-redraws without changing their combined total, merge restores one segment,
+and assigning an out-of-position player lights up the `!` badge and the summary row for exactly that
+player -- zero console errors through all of it. `run/rotationChart.ts` and
+`run/rotationChartValidation.ts` additionally carry 32 unit tests of their own.
 
 ### Phase H — Deviation and edge rules
 Overtime (Decision 5), exhausted charted players, later foul trouble and injuries. Deviations surface
@@ -336,14 +427,40 @@ through Coaching Insights, which already exists as that channel.
 
 ## 8. Open questions
 
-- **Penalty magnitude.** How punishing is a two-slot slide? Model shape is settled, numbers are not.
-  Tune against real lineups once Phase E exists, watching the synergy knock-on as well as the
-  per-possession effect.
-- **Quirk derivation thresholds.** Where are the Positionless / Specialist cutoffs, given they're
-  derived rather than rolled? Too loose and free-form lineups stop having a cost.
-- **Does the GM see the penalty numerically,** or as a green/amber/red badge? Numeric is honest,
-  qualitative keeps the editor readable. `PlayerRevealCard` already has a tag vocabulary to match.
-- **Secondary positions.** Start populating `positions[1]` at generation as an explicit affinity
-  override, or leave affinity fully derived from height and role fit?
-- **Does the chart feed synergy continuously, or only at stretch boundaries?** Continuous is more
-  correct; boundary-only avoids a recompute on every drag in the editor.
+- **Penalty magnitude is now a real, tunable first cut, not settled.** `POSITION_FIT_SLIDE_PENALTY_PER_SLOT`
+  (6) and `POSITION_FIT_HEIGHT_PENALTY_PER_INCH` (3) in `constants.ts` are estimates: a max four-slot
+  slide docks the hardest-leaned-on attributes 24 points before the height term. Nothing has exercised
+  these against a real chart yet (Phase F/G don't exist), so they still need tuning once a GM can
+  actually build a lineup -- watch the synergy knock-on (`computeInitialSynergyScore` reads the same
+  attributes through `possessionRoles.ts`) as well as the per-possession effect, as originally planned.
+- **Quirk derivation thresholds are now real, tunable numbers, not settled.**
+  `POSITIONLESS_MIN_HEIGHT_BANDS` / `POSITIONLESS_ATTRIBUTE_SPREAD_MAX` / `SPECIALIST_ATTRIBUTE_SPREAD_MIN`
+  / `SPECIALIST_HEIGHT_EDGE_INCHES` in `constants.ts`. One consequence worth knowing before tuning
+  further: because PG's and C's own height bands are narrow and mostly consumed by their one neighbor's
+  overlap, almost every single-band PG/C height is close enough to that band's outer edge to read as
+  Specialist by height alone -- SG/SF/PF, each with two neighbors, have more room to be genuinely
+  neutral. Not obviously wrong (a "pure", non-overlapping point guard height *is* a shorter point
+  guard), but it means Positionless/Specialist are not evenly distributed across positions today.
+- **Attribute-fit "role fit" is not separately modeled.** §4 flagged `PLAY_CALL_MODELS` as a better
+  basis than `POSITION_BIAS` for the penalty's attribute-fit component; Phase E's demand-weighting
+  instead derives directly from the engine's interior/perimeter split (see Phase E above) because
+  `PLAY_CALL_MODELS` has no slot dimension to map demand onto without inventing one. The claimed
+  payoff still holds regardless -- because `selectPlayers`/`possessionRoles`/synergy all read
+  `player.attributes` and now see the docked copy, an out-of-position player automatically contributes
+  less and draws fewer projected touches, with zero bespoke wiring for that part. Revisit if the
+  interior/perimeter split proves too coarse once real charts expose it.
+- **Secondary positions.** Resolved for now: `Player.positions` stays single-valued and affinity is
+  fully derived from height + attribute profile (no generation change), per the option §4 left open.
+  Revisit only if a real secondary-position mechanic (not just fit-penalty math) becomes worth adding.
+- **Does the GM see the penalty numerically, or as a badge? Resolved as qualitative for now:** a bare
+  red `!` on the mismatched segment, no severity number -- readable at the 30px cell size the grid
+  actually has room for. The numeric side isn't gone, just relocated: the summary panel's fatigue and
+  charted-minutes columns are exact numbers, just not the attribute-dock severity itself. Revisit if a
+  GM wants to know *how bad* before committing, not just *that* it's bad.
+- **Does the chart feed synergy continuously, or only at stretch boundaries? Still open, and now
+  concretely deferred rather than abstractly open:** `setRotationPlan` (`RunProvider.tsx`) does not
+  call `teamsWithRecomputedSynergy` at all, because `computeInitialSynergyScore` still only reads
+  `rotationMinutes` (Phase F's deliberate deferral of `availability()`) -- a chart-only edit has
+  nothing new for that recompute to see yet. Once `availability()` is taught to read a real chart,
+  this question becomes live again, and Phase 0's precedent (recompute immediately, on every edit)
+  is the likely answer.

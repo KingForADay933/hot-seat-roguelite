@@ -1,4 +1,5 @@
 import type { AttributeKey, Player } from '../data/types'
+import { isPositionless, isSpecialist } from '../engine/positionFit'
 import { ATTRIBUTE_COLUMNS } from './attributeColumns'
 
 /**
@@ -8,6 +9,11 @@ import { ATTRIBUTE_COLUMNS } from './attributeColumns'
  * per-player variation, they were just never surfaced anywhere. This file names them so the team
  * reveal can show a GM who they actually inherited, without inventing a parallel system the
  * simulation doesn't read.
+ *
+ * Positionless/Specialist are the one exception to that last clause: the simulation does read them
+ * (engine/positionFit.ts's out-of-position penalty), so their derivation lives there and this file
+ * only wraps it for display -- reusing the same vocabulary a rotation chart will eventually show,
+ * per rotation-charts.md Section 4's "reconcile the vocabulary" note.
  */
 export type TagTone = 'positive' | 'negative' | 'neutral'
 
@@ -73,6 +79,11 @@ export function playerTags(player: Player): PlayerTag[] {
   const headroom = growthHeadroom(player)
   if (headroom >= HEADROOM_UNTAPPED) tags.push({ label: 'Untapped', detail: `${headroom} attribute points of room below his potential.`, tone: 'positive' })
   else if (headroom <= HEADROOM_CAPPED) tags.push({ label: 'Maxed Out', detail: `Only ${headroom} points of growth left in him.`, tone: 'negative' })
+
+  if (isPositionless(player))
+    tags.push({ label: 'Positionless', detail: 'Height and skill set fit more than one slot -- takes less of a hit charted out of position.', tone: 'positive' })
+  else if (isSpecialist(player))
+    tags.push({ label: 'Specialist', detail: 'Built for one slot -- takes more of a hit charted anywhere else.', tone: 'neutral' })
 
   return tags
 }

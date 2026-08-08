@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { AttributeKey, Game, GameId, League, Player, PlayerId, Team, TeamId } from '../../data/types'
+import type { AttributeKey, Game, GameId, League, Player, PlayerId, RotationPlan, Team, TeamId } from '../../data/types'
 import type { SystemId } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import type { ChunkSimContext } from '../../run/chunkSimContext'
@@ -113,6 +113,12 @@ export interface RunContextValue {
   /** GM adjustment available at a chunk checkpoint: sets (or, given null, clears back to
    *  auto-computed) one player's training focus to a single attribute. */
   setTrainingFocus: (playerId: PlayerId, attribute: AttributeKey | null) => Promise<void>
+  /** Replaces the user's team's whole rotation chart (rotation-charts.md Phase G) -- the editor
+   *  computes the new plan (split/merge/move-boundary/reassign are all pure functions over the old
+   *  one, see run/rotationChart.ts) and this just persists it. Does not recompute synergy: the
+   *  system-fit projection still reads rotationMinutes, not the chart (Phase F's deliberate
+   *  deferral), so a chart-only edit has nothing new for that recompute to see yet. */
+  setRotationPlan: (plan: RotationPlan) => Promise<void>
   /** Opens this season's shop visit (Section 8.4) -- tier picked from lastSeasonTargetHit. */
   openShop: () => Promise<void>
   /** Sends one freely-chosen roster player to camp for a boost to one freely-chosen attribute

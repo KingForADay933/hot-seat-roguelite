@@ -60,7 +60,7 @@ describe('checkSubstitutions', () => {
       benchFatigue: 0,
       shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS - 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS - 1, 1, MIN_SHIFT_SECONDS - 1)
     expect(state.onCourt[0].player).toBe(starter)
   })
 
@@ -70,7 +70,7 @@ describe('checkSubstitutions', () => {
       benchFatigue: 0,
       shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1, 1, MIN_SHIFT_SECONDS + 1)
     expect(state.onCourt[0].player).toBe(bench)
   })
 
@@ -85,7 +85,7 @@ describe('checkSubstitutions', () => {
     })
     const slotBefore = state.onCourt[0].slot
 
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1, 1, MIN_SHIFT_SECONDS + 1)
 
     expect(state.onCourt[0].slot).toBe(slotBefore)
   })
@@ -96,7 +96,7 @@ describe('checkSubstitutions', () => {
       benchFatigue: 0,
       shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, 1) // well within the normal cooldown window
+    checkSubstitutions(state, team, [], playersById, 1, 1, 1) // well within the normal cooldown window
     expect(state.onCourt[0].player).toBe(bench)
   })
 
@@ -106,7 +106,7 @@ describe('checkSubstitutions', () => {
       benchFatigue: FATIGUE_SUB_IN_MAX + 1,
       shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1, 1, MIN_SHIFT_SECONDS + 1)
     expect(state.onCourt[0].player).toBe(starter)
   })
 
@@ -117,7 +117,7 @@ describe('checkSubstitutions', () => {
       benchFatigue: FATIGUE_SUB_IN_MAX + 1, // the only same-position bench player is too tired
       shiftEnteredAtSeconds: 0,
     })
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1, 1, MIN_SHIFT_SECONDS + 1)
     expect(state.onCourt[0].player).not.toBe(offPosition)
     expect(state.onCourt[0].player).toBe(starter) // falls back to "stays in", not the wrong-position player
     expect(state.onCourt[0].player).not.toBe(bench)
@@ -133,7 +133,7 @@ describe('checkSubstitutions', () => {
     })
     // give the starter a small target so their pace is clearly over
     team.rotationMinutes[state.onCourt[0].player.id] = 5 // 5/48 target share, against a 240/240 actual
-    checkSubstitutions(state, team, [], playersById, 240)
+    checkSubstitutions(state, team, [], playersById, 240, 1, 240)
     expect(state.onCourt[0].player).toBe(bench)
   })
 
@@ -144,7 +144,7 @@ describe('checkSubstitutions', () => {
       shiftEnteredAtSeconds: 0,
     })
     team.rotationMinutes[starter.id] = 1 // tiny target, would trigger pace overage if checked
-    checkSubstitutions(state, team, [], playersById, PACE_CHECK_MIN_SECONDS - 1)
+    checkSubstitutions(state, team, [], playersById, PACE_CHECK_MIN_SECONDS - 1, 1, PACE_CHECK_MIN_SECONDS - 1)
     expect(state.onCourt[0].player).toBe(starter)
   })
 
@@ -181,11 +181,83 @@ describe('checkSubstitutions', () => {
       ]),
     }
 
-    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1, 1, MIN_SHIFT_SECONDS + 1)
 
     const onCourtIds = state.onCourt.map((entry) => entry.player.id)
     expect(new Set(onCourtIds).size).toBe(2) // no duplicate
     expect(onCourtIds).toContain(onlyBench.id) // one slot got the only candidate
+  })
+
+  describe('with a rotation chart (rotation-charts.md Phase F)', () => {
+    it('brings in the charted player even though the fatigue heuristic alone would leave the starter in', () => {
+      const { bench, state, team, playersById } = buildFixture({
+        starterFatigue: 0, // nowhere near any sub-out threshold
+        benchFatigue: 0,
+        shiftEnteredAtSeconds: 0,
+      })
+      team.rotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: 720, fill: { kind: 'player', playerId: bench.id } }] } }
+
+      checkSubstitutions(state, team, [], playersById, 100, 1, 100)
+
+      expect(state.onCourt[0].player).toBe(bench)
+      expect(state.onCourt[0].slot).toBe('PG')
+      expect(state.shiftEnteredAtSeconds.get(bench.id)).toBe(100)
+    })
+
+    it('keeps a charted player in even past the emergency fatigue threshold -- charted spans are law', () => {
+      const { starter, state, team, playersById } = buildFixture({
+        starterFatigue: FATIGUE_EMERGENCY_THRESHOLD,
+        benchFatigue: 0,
+        shiftEnteredAtSeconds: 0,
+      })
+      team.rotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: 720, fill: { kind: 'player', playerId: starter.id } }] } }
+
+      checkSubstitutions(state, team, [], playersById, 500, 1, 500)
+
+      expect(state.onCourt[0].player).toBe(starter)
+    })
+
+    it('falls through to the fatigue heuristic for an explicit auto segment', () => {
+      const { bench, state, team, playersById } = buildFixture({
+        starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
+        benchFatigue: 0,
+        shiftEnteredAtSeconds: 0,
+      })
+      team.rotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: 720, fill: { kind: 'auto' } }] } }
+
+      checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1, 1, MIN_SHIFT_SECONDS + 1)
+
+      expect(state.onCourt[0].player).toBe(bench) // ordinary fatigue-driven sub, unaffected by the plan
+    })
+
+    it('falls through to the fatigue heuristic outside any charted segment for this period', () => {
+      const { bench, state, team, playersById } = buildFixture({
+        starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
+        benchFatigue: 0,
+        shiftEnteredAtSeconds: 0,
+      })
+      // Chart only says something for period 2; period 1 has no entry at all.
+      team.rotationPlan = { 2: { PG: [{ startSeconds: 0, endSeconds: 720, fill: { kind: 'player', playerId: bench.id } }] } }
+
+      checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1, 1, MIN_SHIFT_SECONDS + 1)
+
+      expect(state.onCourt[0].player).toBe(bench) // reached the same way, but via the heuristic, not the chart
+    })
+
+    it('does not touch a slot whose charted occupant is already correct', () => {
+      const { starter, state, team, playersById } = buildFixture({
+        starterFatigue: 0,
+        benchFatigue: 0,
+        shiftEnteredAtSeconds: 0,
+      })
+      team.rotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: 720, fill: { kind: 'player', playerId: starter.id } }] } }
+
+      checkSubstitutions(state, team, [], playersById, 100, 1, 100)
+
+      expect(state.onCourt[0].player).toBe(starter)
+      // Untouched -- still whatever buildFixture seeded, not bumped to 100 by a no-op "swap".
+      expect(state.shiftEnteredAtSeconds.get(starter.id)).toBe(0)
+    })
   })
 })
 
