@@ -217,8 +217,10 @@ so a GM doesn't meet one set of names on the reveal card and another on the char
 - **Consumers taking `possessionsPerGame`:** `deriveBoxScore`, `getPeriodLabel`,
   `computeOvertimePossessions`, `isClutchTime`, `generateCoachingInsights`, `ChunkSimContext`,
   `playbackState`, `useSimcastPlayback`.
-- **Saves break, once.** `isValidBundleShape` rejects rather than migrates. Deriving quirks rather
-  than storing them keeps this to the possession-log change alone.
+- **Saves break on any possession-log change.** `isValidBundleShape` rejects rather than migrates.
+  Nothing has shipped, so this has been the cheap moment for those changes — it stops being cheap the
+  day there are players. Deriving quirks rather than storing them (§4) means Phase E needs no schema
+  change at all.
 
 ### The simcast hook for Decision 5
 
@@ -283,11 +285,11 @@ keep using.
 Verified behavior-neutral by fingerprinting a seeded 12-game slate before and after: identical
 scores and identical play count.
 
-**One thing deferred.** The possession log still records on-court *ids*, not slots, so
-`generateCoachingInsights` reconstructs slots from `positions[0]` when it replays fatigue. That is
-exactly what the live sim did, and it only reads ids anyway — but a log that has to survive
-out-of-position assignments will need the slots stored. Worth doing whenever the log next changes
-shape rather than as its own save-breaking migration.
+The possession log stores the slots too: `homeOnCourt` / `awayOnCourt` are `OnCourtRecord[]`
+(`{ playerId, slot }`) rather than id arrays. `generateCoachingInsights` replays the assignment the
+sim actually used instead of reconstructing it from `positions[0]`, and the simcast's on-court panel
+shows each player's slot — so an out-of-position lineup will read as what the GM did rather than
+looking like a mislabel.
 
 ### Phase E — Positional versatility
 The penalty model and derived quirks (§4). Independent of the clock, depends on D for the notion of a

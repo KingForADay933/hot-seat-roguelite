@@ -6,7 +6,6 @@ import {
   INSIGHT_MAX_FATIGUE_EVENTS,
   INSIGHT_WEAK_LINK_MIN_TARGETING_COUNT,
 } from '../constants'
-import { slotByPosition } from '../matchup'
 import { worstInteriorDefender, worstPerimeterDefender } from '../possession/playerSelector'
 import { tickFatigue } from '../rotation/fatigue'
 import type { RotationState } from '../rotation/rotationState'
@@ -74,8 +73,8 @@ function detectWeakLinkTargeting(
 
   for (const entry of possessionLog) {
     if (entry.offenseTeamId !== opponentTeamId) continue
-    const defenseIds = defendingTeamIsHome ? entry.homeOnCourtIds : entry.awayOnCourtIds
-    const defense = defenseIds.map((id) => resolvePlayer(id, playersById))
+    const defenseFive = defendingTeamIsHome ? entry.homeOnCourt : entry.awayOnCourt
+    const defense = defenseFive.map(({ playerId }) => resolvePlayer(playerId, playersById))
     const defender = weakLinkDefenderFor(entry.playCallUsed, entry.primaryPlayerId, defense, playersById)
     if (!defender) continue
 
@@ -138,19 +137,18 @@ function detectFatigueSubstitutionEvents(
 
   for (let i = 0; i < possessionLog.length; i++) {
     const entry = possessionLog[i]
-    const onCourtIds = teamIsHome ? entry.homeOnCourtIds : entry.awayOnCourtIds
-    // The log records who was on the floor, not which slot each filled, so this reconstructs slots
-    // from each player's own position. Identical to what the live sim did while every slot matches
-    // its occupant's position; if the log ever needs to survive out-of-position assignments, it will
-    // have to carry the slots too. Only fatigue is replayed here, and that reads ids alone.
-    state.onCourt = slotByPosition(onCourtIds.map((id) => resolvePlayer(id, playersById)))
+    const onCourt = teamIsHome ? entry.homeOnCourt : entry.awayOnCourt
+    // Slots come straight off the log now, so the replay reproduces the assignment the live sim
+    // actually used rather than guessing it from each player's listed position.
+    state.onCourt = onCourt.map(({ playerId, slot }) => ({ player: resolvePlayer(playerId, playersById), slot }))
     // The log's own duration, so the replay tracks the live sim exactly -- fatigue is time-based
     // now, and assuming a fixed slice per possession would drift from the real trajectory.
     tickFatigue(state, roster, entry.durationSeconds)
 
     const next = possessionLog[i + 1]
     if (!next) continue
-    const nextOnCourtIds = teamIsHome ? next.homeOnCourtIds : next.awayOnCourtIds
+    const onCourtIds = onCourt.map((o) => o.playerId)
+    const nextOnCourtIds = (teamIsHome ? next.homeOnCourt : next.awayOnCourt).map((o) => o.playerId)
     const nextSet = new Set(nextOnCourtIds)
     const onCourtSet = new Set(onCourtIds)
 

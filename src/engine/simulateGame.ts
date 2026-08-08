@@ -1,8 +1,8 @@
-import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
-import type { Game, Player, PossessionLogEntry, Team } from '../data/types'
+﻿import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
+import type { Game, OnCourtRecord, Player, PossessionLogEntry, Team } from '../data/types'
 import { deriveBoxScore } from './boxScore'
 import { OVERTIME_SECONDS, PERIOD_SECONDS, REGULATION_PERIODS } from './constants'
-import { playersOf } from './matchup'
+import { playersOf, type OnCourtPlayer } from './matchup'
 import { computeOffenseStrength, synergyMultiplier } from './possession/possessionStrength'
 import { getInvolvedPlayerIds, selectPlayers } from './possession/playerSelector'
 import { selectPlayCall } from './possession/playCallSelector'
@@ -14,6 +14,11 @@ import { tickFatigue } from './rotation/fatigue'
 import { createRotationState } from './rotation/rotationState'
 import { checkSubstitutions } from './rotation/substitution'
 import type { Rng } from './rng'
+
+/** Flattens a slot-assigned five into the form the possession log records it in. */
+function toOnCourtRecords(five: OnCourtPlayer[]): OnCourtRecord[] {
+  return five.map((entry) => ({ playerId: entry.player.id, slot: entry.slot }))
+}
 
 function resolveRoster(team: Team, playersById: Map<string, Player>): Player[] {
   return team.rosterPlayerIds.map((id) => {
@@ -81,7 +86,7 @@ export interface SimulationStep {
  *
  * Bench rotation: each team's on-court five starts as its startingFive and changes over the game
  * via fatigue/pace-driven substitutions (see engine/rotation) -- see each possession's logged
- * homeOnCourtIds/awayOnCourtIds for who was actually on the floor. Fatigue/rotation state carries
+ * homeOnCourt/awayOnCourt for who was on the floor and which slot each filled. Fatigue/rotation state carries
  * continuously from regulation into overtime, exactly like a real game, and both are measured in
  * game seconds so a fast break costs less than a ground-out post-up.
  *
@@ -195,8 +200,8 @@ export function* simulateGameSteps(
         offensiveRebound,
         isSecondChance,
         playersInvolved: getInvolvedPlayerIds(selection),
-        homeOnCourtIds: homeRotation.onCourt.map((entry) => entry.player.id),
-        awayOnCourtIds: awayRotation.onCourt.map((entry) => entry.player.id),
+        homeOnCourt: toOnCourtRecords(homeRotation.onCourt),
+        awayOnCourt: toOnCourtRecords(awayRotation.onCourt),
       }
       possessionLog.push(entry)
 

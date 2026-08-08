@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { Game, Player } from '../data/types'
 import { OVERTIME_MINUTES, REGULATION_MINUTES } from './constants'
 import { generateTeam } from './generator/randomTeam'
@@ -111,6 +111,24 @@ describe('simulateGame', () => {
     }
   })
 
+  it('records which slot each on-court player was filling, not just who was out there', () => {
+    const { home, away, playersById } = buildMatchup(13)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(17))
+
+    for (const entry of game.possessionLog) {
+      for (const five of [entry.homeOnCourt, entry.awayOnCourt]) {
+        expect(five).toHaveLength(5)
+        // One of each slot, every possession -- substitutions fill a slot rather than adding one.
+        expect(new Set(five.map((o) => o.slot)).size).toBe(5)
+      }
+    }
+
+    // The slot is recorded, not re-derived: a reader can recover the assignment without consulting
+    // Player.positions at all, which is what makes the log survive an out-of-position lineup.
+    const first = game.possessionLog[0]
+    expect(first.homeOnCourt.every((o) => typeof o.slot === 'string' && o.playerId.length > 0)).toBe(true)
+  })
+
   it('only rebounds its own misses, and second chances are quick putbacks', () => {
     const { home, away, playersById } = buildMatchup(11)
     const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(5))
@@ -212,16 +230,16 @@ describe('simulateGame', () => {
     const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, possessionsPerGame, createSeededRng(16))
 
     game.possessionLog.forEach((entry) => {
-      expect(entry.homeOnCourtIds).toHaveLength(5)
-      expect(entry.awayOnCourtIds).toHaveLength(5)
-      expect(new Set(entry.homeOnCourtIds).size).toBe(5)
-      expect(new Set(entry.awayOnCourtIds).size).toBe(5)
+      expect(entry.homeOnCourt).toHaveLength(5)
+      expect(entry.awayOnCourt).toHaveLength(5)
+      expect(new Set(entry.homeOnCourt).size).toBe(5)
+      expect(new Set(entry.awayOnCourt).size).toBe(5)
     })
 
     // Total possessions actually run can exceed possessionsPerGame if the game went to overtime --
     // the "exactly 5 credited per team, every possession" invariant holds regardless.
-    const homeOnCourtOccurrences = game.possessionLog.reduce((sum, e) => sum + e.homeOnCourtIds.length, 0)
-    const awayOnCourtOccurrences = game.possessionLog.reduce((sum, e) => sum + e.awayOnCourtIds.length, 0)
+    const homeOnCourtOccurrences = game.possessionLog.reduce((sum, e) => sum + e.homeOnCourt.length, 0)
+    const awayOnCourtOccurrences = game.possessionLog.reduce((sum, e) => sum + e.awayOnCourt.length, 0)
     expect(homeOnCourtOccurrences).toBe(game.possessionLog.length * 5)
     expect(awayOnCourtOccurrences).toBe(game.possessionLog.length * 5)
   })

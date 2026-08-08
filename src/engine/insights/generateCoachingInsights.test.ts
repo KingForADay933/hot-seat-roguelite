@@ -3,7 +3,7 @@ import type { Game, Player, PlayerId, PossessionLogEntry } from '../../data/type
 import { generateTeam } from '../generator/randomTeam'
 import { createSeededRng } from '../rng'
 import { simulateGame } from '../simulateGame'
-import { makeTestPlayer, makeTestTeam } from '../testFixtures'
+import { makeOnCourt, makeTestPlayer, makeTestTeam } from '../testFixtures'
 import { generateCoachingInsights } from './generateCoachingInsights'
 
 function playersMap(players: Player[]): Map<PlayerId, Player> {
@@ -52,8 +52,8 @@ describe('generateCoachingInsights', () => {
       offensiveRebound: false,
       isSecondChance: false,
       playersInvolved: [],
-      homeOnCourtIds: defenseFive.map((p) => p.id),
-      awayOnCourtIds: [attacker.id],
+      homeOnCourt: makeOnCourt(defenseFive.map((p) => p.id)),
+      awayOnCourt: makeOnCourt([attacker.id]),
     }))
 
     const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
@@ -98,8 +98,8 @@ describe('generateCoachingInsights', () => {
       offensiveRebound: false,
       isSecondChance: false,
       playersInvolved: [],
-      homeOnCourtIds: defenseFive.map((p) => p.id),
-      awayOnCourtIds: [attacker.id],
+      homeOnCourt: makeOnCourt(defenseFive.map((p) => p.id)),
+      awayOnCourt: makeOnCourt([attacker.id]),
     }))
 
     const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
@@ -138,8 +138,8 @@ describe('generateCoachingInsights', () => {
         offensiveRebound: false,
         isSecondChance: false,
         playersInvolved: [],
-        homeOnCourtIds: [starter.id],
-        awayOnCourtIds: [dummy.id],
+        homeOnCourt: makeOnCourt([starter.id]),
+        awayOnCourt: makeOnCourt([dummy.id]),
       })
     }
     possessionLog.push({
@@ -159,8 +159,8 @@ describe('generateCoachingInsights', () => {
       offensiveRebound: false,
       isSecondChance: false,
       playersInvolved: [],
-      homeOnCourtIds: [bench.id],
-      awayOnCourtIds: [dummy.id],
+      homeOnCourt: makeOnCourt([bench.id]),
+      awayOnCourt: makeOnCourt([dummy.id]),
     })
 
     const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
@@ -241,8 +241,8 @@ describe('generateCoachingInsights', () => {
       offensiveRebound: false,
       isSecondChance: false,
       playersInvolved: [],
-      homeOnCourtIds: [i < 20 ? starter.id : bench.id],
-      awayOnCourtIds: [dummy.id],
+      homeOnCourt: makeOnCourt([i < 20 ? starter.id : bench.id]),
+      awayOnCourt: makeOnCourt([dummy.id]),
     }))
 
     const a = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)

@@ -4,7 +4,6 @@ import { deriveBoxScore } from '../../engine/boxScore'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { createSeededRng } from '../../engine/rng'
 import { tickFatigue } from '../../engine/rotation/fatigue'
-import { slotByPosition } from '../../engine/matchup'
 import { createRotationState } from '../../engine/rotation/rotationState'
 import { simulateGameSteps, type SimulationStep } from '../../engine/simulateGame'
 import { advancePlayback, createPlaybackState, type PlaybackContext, type PlaybackState } from './playbackState'
@@ -72,11 +71,13 @@ describe('advancePlayback', () => {
     const state = foldAll(context, steps)
     const lastEntry = steps[steps.length - 1].entry
 
-    expect(state.homeOnCourtIds).toEqual(lastEntry.homeOnCourtIds)
-    expect(state.awayOnCourtIds).toEqual(lastEntry.awayOnCourtIds)
+    expect(state.homeOnCourt).toEqual(lastEntry.homeOnCourt)
+    expect(state.awayOnCourt).toEqual(lastEntry.awayOnCourt)
     // A full game should have rotated somebody in off the bench -- otherwise the assertion above is
     // just checking the starting five never moved.
-    const everOnCourt = new Set(steps.flatMap((s) => s.entry.homeOnCourtIds))
+    // Ids, not the records themselves -- every record is a distinct object, so a Set of them would
+    // count possessions rather than players and pass no matter what.
+    const everOnCourt = new Set(steps.flatMap((s) => s.entry.homeOnCourt.map((o) => o.playerId)))
     expect(everOnCourt.size).toBeGreaterThan(5)
   })
 
@@ -87,7 +88,7 @@ describe('advancePlayback', () => {
     // recorded -- exactly what simulateGameSteps did internally as it played.
     const rotation = createRotationState(homeTeam, playerById)
     for (const step of steps) {
-      rotation.onCourt = slotByPosition(step.entry.homeOnCourtIds.map((id) => playerById.get(id)!))
+      rotation.onCourt = step.entry.homeOnCourt.map(({ playerId, slot }) => ({ player: playerById.get(playerId)!, slot }))
       tickFatigue(rotation, context.homeRoster, step.entry.durationSeconds)
     }
 

@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest'
 import type { Game, Player, PlayerBoxScoreLine, PlayerId, PossessionLogEntry } from '../data/types'
-import { makeTestPlayer } from './testFixtures'
+import { makeOnCourt, makeTestPlayer } from './testFixtures'
 import { aggregateSeasonTotals, deriveBoxScore } from './boxScore'
 import type { Rng } from './rng'
 
@@ -13,7 +13,7 @@ function playersMap(players: Player[]): Map<PlayerId, Player> {
   return new Map(players.map((p) => [p.id, p]))
 }
 
-function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEntry, 'homeOnCourtIds' | 'awayOnCourtIds'>): PossessionLogEntry {
+function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEntry, 'homeOnCourt' | 'awayOnCourt'>): PossessionLogEntry {
   return {
     possessionNumber: 1,
     period: 1,
@@ -23,7 +23,7 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEn
     durationSeconds: 20,
     offenseTeamId: 'home-team',
     playCallUsed: 'isolation',
-    primaryPlayerId: overrides.homeOnCourtIds[0],
+    primaryPlayerId: overrides.homeOnCourt[0].playerId,
     secondaryPlayerIds: [],
     outcome: 'turnover',
     pointsScored: 0,
@@ -45,8 +45,8 @@ describe('deriveBoxScore', () => {
     const a2 = makeTestPlayer({ name: 'A2' })
     const homeTeamId = 'home-team'
     const awayTeamId = 'away-team'
-    const homeOnCourtIds = [h1.id, h2.id]
-    const awayOnCourtIds = [a1.id, a2.id]
+    const homeOnCourt = makeOnCourt([h1.id, h2.id])
+    const awayOnCourt = makeOnCourt([a1.id, a2.id])
 
     const log: PossessionLogEntry[] = [
       {
@@ -66,8 +66,8 @@ describe('deriveBoxScore', () => {
         offensiveRebound: false,
         isSecondChance: false,
         playersInvolved: [h1.id, a1.id],
-        homeOnCourtIds,
-        awayOnCourtIds,
+        homeOnCourt,
+        awayOnCourt,
       },
       {
         possessionNumber: 2,
@@ -86,8 +86,8 @@ describe('deriveBoxScore', () => {
         offensiveRebound: false,
         isSecondChance: false,
         playersInvolved: [a1.id, a2.id, h1.id],
-        homeOnCourtIds,
-        awayOnCourtIds,
+        homeOnCourt,
+        awayOnCourt,
       },
       {
         possessionNumber: 3,
@@ -106,8 +106,8 @@ describe('deriveBoxScore', () => {
         offensiveRebound: false,
         isSecondChance: false,
         playersInvolved: [h1.id, h2.id, a1.id],
-        homeOnCourtIds,
-        awayOnCourtIds,
+        homeOnCourt,
+        awayOnCourt,
       },
       {
         possessionNumber: 4,
@@ -126,8 +126,8 @@ describe('deriveBoxScore', () => {
         offensiveRebound: false,
         isSecondChance: false,
         playersInvolved: [a2.id, h1.id],
-        homeOnCourtIds,
-        awayOnCourtIds,
+        homeOnCourt,
+        awayOnCourt,
       },
       {
         possessionNumber: 5,
@@ -146,8 +146,8 @@ describe('deriveBoxScore', () => {
         offensiveRebound: false,
         isSecondChance: false,
         playersInvolved: [h2.id, a1.id],
-        homeOnCourtIds,
-        awayOnCourtIds,
+        homeOnCourt,
+        awayOnCourt,
       },
     ]
 
@@ -180,7 +180,7 @@ describe('deriveBoxScore', () => {
     const h1 = makeTestPlayer()
     const h2 = makeTestPlayer()
     const a1 = makeTestPlayer()
-    const log = [makeEntry({ homeOnCourtIds: [h1.id, h2.id], awayOnCourtIds: [a1.id] })]
+    const log = [makeEntry({ homeOnCourt: makeOnCourt([h1.id, h2.id]), awayOnCourt: makeOnCourt([a1.id]) })]
 
     const result = deriveBoxScore(log, 'home-team', playersMap([h1, h2, a1]), () => 0.5)
 
@@ -197,8 +197,8 @@ describe('deriveBoxScore', () => {
     const log = [1, 2, 3, 4, 5].map((n) =>
       makeEntry({
         possessionNumber: n,
-        homeOnCourtIds: n <= 3 ? [h1.id] : [makeTestPlayer().id],
-        awayOnCourtIds: [a1.id],
+        homeOnCourt: makeOnCourt(n <= 3 ? [h1.id] : [makeTestPlayer().id]),
+        awayOnCourt: makeOnCourt([a1.id]),
       }),
     )
 
@@ -215,8 +215,8 @@ describe('deriveBoxScore', () => {
     const opponent = makeTestPlayer()
     // A four-second fast break should cost a quarter of what a sixteen-second half-court set does.
     const log = [
-      makeEntry({ possessionNumber: 1, durationSeconds: 4, homeOnCourtIds: [starter.id], awayOnCourtIds: [opponent.id] }),
-      makeEntry({ possessionNumber: 2, durationSeconds: 16, homeOnCourtIds: [starter.id], awayOnCourtIds: [opponent.id] }),
+      makeEntry({ possessionNumber: 1, durationSeconds: 4, homeOnCourt: makeOnCourt([starter.id]), awayOnCourt: makeOnCourt([opponent.id]) }),
+      makeEntry({ possessionNumber: 2, durationSeconds: 16, homeOnCourt: makeOnCourt([starter.id]), awayOnCourt: makeOnCourt([opponent.id]) }),
     ]
 
     const result = deriveBoxScore(log, 'home-team', playersMap([starter, opponent]), () => 0.5)
@@ -231,11 +231,11 @@ describe('deriveBoxScore', () => {
     const a1 = makeTestPlayer()
 
     const log = [
-      makeEntry({ possessionNumber: 1, homeOnCourtIds: [h1.id, h2.id], awayOnCourtIds: [a1.id] }),
-      makeEntry({ possessionNumber: 2, homeOnCourtIds: [h1.id, h3.id], awayOnCourtIds: [a1.id] }),
-      makeEntry({ possessionNumber: 3, homeOnCourtIds: [h1.id, h3.id], awayOnCourtIds: [a1.id] }),
-      makeEntry({ possessionNumber: 4, homeOnCourtIds: [h1.id, h3.id], awayOnCourtIds: [a1.id] }),
-      makeEntry({ possessionNumber: 5, homeOnCourtIds: [h1.id, h3.id], awayOnCourtIds: [a1.id] }),
+      makeEntry({ possessionNumber: 1, homeOnCourt: makeOnCourt([h1.id, h2.id]), awayOnCourt: makeOnCourt([a1.id]) }),
+      makeEntry({ possessionNumber: 2, homeOnCourt: makeOnCourt([h1.id, h3.id]), awayOnCourt: makeOnCourt([a1.id]) }),
+      makeEntry({ possessionNumber: 3, homeOnCourt: makeOnCourt([h1.id, h3.id]), awayOnCourt: makeOnCourt([a1.id]) }),
+      makeEntry({ possessionNumber: 4, homeOnCourt: makeOnCourt([h1.id, h3.id]), awayOnCourt: makeOnCourt([a1.id]) }),
+      makeEntry({ possessionNumber: 5, homeOnCourt: makeOnCourt([h1.id, h3.id]), awayOnCourt: makeOnCourt([a1.id]) }),
     ]
 
     const result = deriveBoxScore(log, 'home-team', playersMap([h1, h2, h3, a1]), () => 0.5)
