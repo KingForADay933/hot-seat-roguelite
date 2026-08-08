@@ -37,6 +37,14 @@ export interface PossessionLogEntry {
    *  foul or bonus/penalty model, so free throws only ever arrive via outcome === 'foul'. */
   freeThrowsMade: number
   freeThrowsAttempted: number
+  /** True when the offense recovered its own miss and kept the ball, so the next entry is this same
+   *  team's second-chance shot. Only ever true on outcome === 'miss'. Decided by the simulation and
+   *  recorded here rather than re-rolled downstream, so the box score credits the board to the side
+   *  that actually kept possession. */
+  offensiveRebound: boolean
+  /** True when this attempt came off an offensive rebound -- a putback continuing the previous
+   *  trip, not a fresh possession. Distinguishes plays from possessions when reading the log. */
+  isSecondChance: boolean
   /** Union of offense + defense players credited, for box-score attribution. */
   playersInvolved: PlayerId[]
   /** The team's full on-court five (both teams play every possession, offense and defense) at the

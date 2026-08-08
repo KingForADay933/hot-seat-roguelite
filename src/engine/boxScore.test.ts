@@ -30,6 +30,8 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEn
     isThreePointAttempt: false,
     freeThrowsMade: 0,
     freeThrowsAttempted: 0,
+    offensiveRebound: false,
+    isSecondChance: false,
     playersInvolved: [],
     ...overrides,
   }
@@ -61,6 +63,8 @@ describe('deriveBoxScore', () => {
         isThreePointAttempt: false,
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [h1.id, a1.id],
         homeOnCourtIds,
         awayOnCourtIds,
@@ -79,6 +83,8 @@ describe('deriveBoxScore', () => {
         isThreePointAttempt: true,
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [a1.id, a2.id, h1.id],
         homeOnCourtIds,
         awayOnCourtIds,
@@ -97,6 +103,8 @@ describe('deriveBoxScore', () => {
         isThreePointAttempt: true,
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [h1.id, h2.id, a1.id],
         homeOnCourtIds,
         awayOnCourtIds,
@@ -115,6 +123,8 @@ describe('deriveBoxScore', () => {
         isThreePointAttempt: false,
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [a2.id, h1.id],
         homeOnCourtIds,
         awayOnCourtIds,
@@ -133,15 +143,18 @@ describe('deriveBoxScore', () => {
         isThreePointAttempt: false,
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
+        offensiveRebound: false,
+        isSecondChance: false,
         playersInvolved: [h2.id, a1.id],
         homeOnCourtIds,
         awayOnCourtIds,
       },
     ]
 
-    // Possession 3 is the only miss: rng[0]=0.9 forces the defense (away) to recover (>= the 0.25 offensive-rebound rate),
-    // rng[1]=0.1 lands in A1's weighted band (A1 is first in awayOnCourt with equal 50 rebounding, band [0,50) of a 100 total).
-    const rng = queue(0.9, 0.1)
+    // Possession 3 is the only miss, and its entry says offensiveRebound: false -- so the defending
+    // (away) five gets the board, no roll needed for which side. The single rng call left is which
+    // player: 0.1 lands in A1's weighted band (first in awayOnCourt, equal 50 rebounding, [0,50) of 100).
+    const rng = queue(0.1)
 
     const result = deriveBoxScore(log, homeTeamId, playersMap([h1, h2, a1, a2]), rng)
 

@@ -15,7 +15,7 @@ import { simulateGame } from './simulateGame'
  */
 function playLeagues(leagues: number, gamesPerLeague: number) {
   const scores: number[] = []
-  let possessions = 0
+  let trips = 0
   let games = 0
   let fgm = 0
   let fga = 0
@@ -23,6 +23,8 @@ function playLeagues(leagues: number, gamesPerLeague: number) {
   let tpa = 0
   let ftm = 0
   let fta = 0
+  let offensiveRebounds = 0
+  let rebounds = 0
 
   for (let seed = 0; seed < leagues; seed++) {
     const rng = createSeededRng(seed + 1)
@@ -48,7 +50,10 @@ function playLeagues(leagues: number, gamesPerLeague: number) {
       const played = simulateGame(blank, home, away, playersById, 200, rng)
 
       scores.push(played.result!.homeScore, played.result!.awayScore)
-      possessions += played.possessionLog.length / 2
+      // A trip, not a logged attempt: an offensive rebound keeps the ball, so one trip can span
+      // several entries. Pace is quoted in trips, the way real possession counts are.
+      trips += played.possessionLog.filter((e) => !e.isSecondChance).length / 2
+      offensiveRebounds += played.possessionLog.filter((e) => e.offensiveRebound).length
       games += 1
       for (const line of [...played.result!.boxScore.home, ...played.result!.boxScore.away]) {
         fgm += line.fieldGoalsMade
@@ -57,6 +62,7 @@ function playLeagues(leagues: number, gamesPerLeague: number) {
         tpa += line.threePointersAttempted
         ftm += line.freeThrowsMade
         fta += line.freeThrowsAttempted
+        rebounds += line.rebounds
       }
     }
   }
@@ -64,7 +70,10 @@ function playLeagues(leagues: number, gamesPerLeague: number) {
   const mean = scores.reduce((a, b) => a + b, 0) / scores.length
   return {
     mean,
-    possessionsPerTeam: possessions / games,
+    possessionsPerTeam: trips / games,
+    fieldGoalAttemptsPerTeam: fga / (games * 2),
+    offensiveReboundsPerTeam: offensiveRebounds / (games * 2),
+    reboundsPerTeam: rebounds / (games * 2),
     fgPct: fgm / fga,
     threePct: tpm / tpa,
     /** Everything that wasn't a three, so the two-vs-three difficulty gap is directly checkable. */
@@ -85,9 +94,28 @@ describe('scoring calibration', () => {
   })
 
   it('runs a realistic number of possessions', () => {
-    // Real NBA is ~99 a team a game.
+    // Real NBA is ~99 a team a game. Trips, not logged attempts -- offensive rebounds keep the ball.
     expect(league.possessionsPerTeam).toBeGreaterThan(92)
     expect(league.possessionsPerTeam).toBeLessThan(108)
+  })
+
+  it('takes a realistic number of shots, because second chances supply the extra attempts', () => {
+    // The reason offensive rebounds had to become retained possession: at one shot per trip the
+    // engine took ~80 attempts a team where a real one takes ~89, and the make rate had to be
+    // inflated to ~59% on twos to compensate. Now both the attempts and the percentage are real.
+    expect(league.fieldGoalAttemptsPerTeam).toBeGreaterThan(82)
+    expect(league.fieldGoalAttemptsPerTeam).toBeLessThan(95)
+    // Real league shoots ~53% on twos.
+    expect(league.twoPct).toBeGreaterThan(0.48)
+    expect(league.twoPct).toBeLessThan(0.6)
+  })
+
+  it('rebounds at a realistic rate on both ends', () => {
+    // Real NBA is ~10 offensive and ~43 total a team.
+    expect(league.offensiveReboundsPerTeam).toBeGreaterThan(6)
+    expect(league.offensiveReboundsPerTeam).toBeLessThan(15)
+    expect(league.reboundsPerTeam).toBeGreaterThan(35)
+    expect(league.reboundsPerTeam).toBeLessThan(52)
   })
 
   it('keeps 140-point games rare and sub-90 games rare', () => {

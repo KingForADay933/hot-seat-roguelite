@@ -88,8 +88,8 @@ describe('simulateGame', () => {
     const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(5))
 
     // Every period gets its own jump ball, so nothing forces home to start on offense -- just that
-    // possessions strictly alternate from whichever team won that period's tip. Grouping by the
-    // logged period is what makes this checkable without re-deriving period boundaries.
+    // the ball changes hands on every attempt EXCEPT one the offense rebounded, which keeps it.
+    // Grouping by the logged period is what makes this checkable without re-deriving boundaries.
     const byPeriod = new Map<number, typeof game.possessionLog>()
     for (const entry of game.possessionLog) {
       byPeriod.set(entry.period, [...(byPeriod.get(entry.period) ?? []), entry])
@@ -98,9 +98,37 @@ describe('simulateGame', () => {
     for (const entries of byPeriod.values()) {
       entries.forEach((entry, i) => {
         if (i === 0) return
-        expect(entry.offenseTeamId).not.toBe(entries[i - 1].offenseTeamId)
+        const previous = entries[i - 1]
+        if (previous.offensiveRebound) {
+          // Second chance: same team shoots again, and the entry is flagged as such.
+          expect(entry.offenseTeamId).toBe(previous.offenseTeamId)
+          expect(entry.isSecondChance).toBe(true)
+        } else {
+          expect(entry.offenseTeamId).not.toBe(previous.offenseTeamId)
+          expect(entry.isSecondChance).toBe(false)
+        }
       })
     }
+  })
+
+  it('only rebounds its own misses, and second chances are quick putbacks', () => {
+    const { home, away, playersById } = buildMatchup(11)
+    const game = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(5))
+
+    const offensiveRebounds = game.possessionLog.filter((e) => e.offensiveRebound)
+    expect(offensiveRebounds.length).toBeGreaterThan(0)
+    // Only a miss can be rebounded by the offense -- a make is inbounded, a turnover hands over,
+    // and a foul stops play for free throws.
+    expect(offensiveRebounds.every((e) => e.outcome === 'miss')).toBe(true)
+
+    const secondChances = game.possessionLog.filter((e) => e.isSecondChance)
+    expect(secondChances.length).toBe(offensiveRebounds.length)
+    // A putback is a shot already under the rim, not a fresh trip, so it costs far less clock.
+    const putbackMean = secondChances.reduce((sum, e) => sum + e.durationSeconds, 0) / secondChances.length
+    const tripMean =
+      game.possessionLog.filter((e) => !e.isSecondChance).reduce((sum, e) => sum + e.durationSeconds, 0) /
+      game.possessionLog.filter((e) => !e.isSecondChance).length
+    expect(putbackMean).toBeLessThan(tripMean / 2)
   })
 
   it("rollJumpBall is a neutral coin flip, not fixed to either team", () => {

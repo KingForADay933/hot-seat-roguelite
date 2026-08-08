@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Game,
   GameResult,
   PlayCallType,
@@ -17,10 +17,6 @@ import type { Rng } from './rng'
  *  Exported so the simcast's running box score credits assists by the same rule this one does,
  *  rather than a copy that could drift. */
 export const ASSIST_ELIGIBLE_PLAY_CALLS: PlayCallType[] = ['spot-up', 'cutting']
-
-/** There's no live rebound-triggered possession model in MVP, so a miss's rebound is approximated
- *  post-hoc: the offense recovers roughly as often as a real offensive-rebound rate, weighted by Rebounding. */
-const OFFENSIVE_REBOUND_RATE = 0.25
 
 function emptyLine(playerId: PlayerId): PlayerBoxScoreLine {
   return {
@@ -118,10 +114,13 @@ export function deriveBoxScore(
       primaryLine.fieldGoalsAttempted += 1
       if (entry.isThreePointAttempt) primaryLine.threePointersAttempted += 1
 
-      const offenseOnCourt = resolvePlayers(offenseIsHome ? entry.homeOnCourtIds : entry.awayOnCourtIds, playersById)
-      const defenseOnCourt = resolvePlayers(offenseIsHome ? entry.awayOnCourtIds : entry.homeOnCourtIds, playersById)
-      const reboundingTeam = rng() < OFFENSIVE_REBOUND_RATE ? offenseOnCourt : defenseOnCourt
-      const rebounder = weightedPick(reboundingTeam, (p) => p.attributes.rebounding, rng)
+      // Which side got the board is the simulation's decision -- it determined who kept the ball --
+      // so it's read off the log rather than re-rolled here. Only *which player* on that five came
+      // down with it is settled now, since nothing upstream needed to know.
+      const reboundingSideIsOffense = entry.offensiveRebound
+      const reboundingIsHome = reboundingSideIsOffense ? offenseIsHome : !offenseIsHome
+      const reboundingIds = reboundingIsHome ? entry.homeOnCourtIds : entry.awayOnCourtIds
+      const rebounder = weightedPick(resolvePlayers(reboundingIds, playersById), (p) => p.attributes.rebounding, rng)
       lineFor(rebounder.id).rebounds += 1
     } else if (entry.outcome === 'turnover') {
       primaryLine.turnovers += 1

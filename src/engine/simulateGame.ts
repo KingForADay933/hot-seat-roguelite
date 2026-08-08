@@ -6,6 +6,7 @@ import { computeOffenseStrength, synergyMultiplier } from './possession/possessi
 import { getInvolvedPlayerIds, selectPlayers } from './possession/playerSelector'
 import { selectPlayCall } from './possession/playCallSelector'
 import { possessionDurationSeconds } from './possession/possessionDuration'
+import { offensiveReboundProbability } from './possession/rebound'
 import { resolvePossession } from './possession/outcomeResolver'
 import { computeResistance } from './possession/resistance'
 import { tickFatigue } from './rotation/fatigue'
@@ -122,10 +123,12 @@ export function* simulateGameSteps(
   function* runPeriod(period: number, periodSeconds: number, homeStartsOnOffense: boolean): Generator<SimulationStep> {
     const isFinalPeriod = period >= REGULATION_PERIODS
     let clock = periodSeconds
-    let periodPossession = 0
+    let homeIsOffense = homeStartsOnOffense
+    // Set when the previous attempt was rebounded by its own offense, making this one a putback
+    // rather than a fresh trip up the floor.
+    let isSecondChance = false
 
     while (clock > 0) {
-      periodPossession += 1
       possessionNumber += 1
 
       // Snapshot both fives before checking either team's subs, so neither team's matchup-fit
@@ -135,7 +138,6 @@ export function* simulateGameSteps(
       checkSubstitutions(homeRotation, homeTeam, awayOnCourtBefore, playersById, elapsedSeconds)
       checkSubstitutions(awayRotation, awayTeam, homeOnCourtBefore, playersById, elapsedSeconds)
 
-      const homeIsOffense = homeStartsOnOffense ? periodPossession % 2 === 1 : periodPossession % 2 === 0
       const offenseTeam = homeIsOffense ? homeTeam : awayTeam
       const offenseOnCourt = homeIsOffense ? homeRotation.onCourt : awayRotation.onCourt
       const defenseOnCourt = homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt
@@ -150,10 +152,18 @@ export function* simulateGameSteps(
       const resistance = computeResistance(playCall, selection, scheme, offenseOnCourt, defenseOnCourt)
       const resolved = resolvePossession(playCall, selection, strength, resistance, clock, isFinalPeriod, scoreMargin, rng)
 
+      // Only a miss can be rebounded by the offense: a make is inbounded by the other team, a
+      // turnover hands it over, and a foul stops play for free throws.
+      const offensiveRebound =
+        resolved.outcome === 'miss' && rng() < offensiveReboundProbability(offenseOnCourt, defenseOnCourt)
+
       // Duration is sampled after resolution because the outcome shapes it -- a turnover cuts the
       // action short, a miss adds the rebound scramble. Clamped to the clock so a period never
       // runs long.
-      const durationSeconds = Math.min(clock, possessionDurationSeconds(playCall, resolved.outcome, possessionsPerGame, rng))
+      const durationSeconds = Math.min(
+        clock,
+        possessionDurationSeconds(playCall, resolved.outcome, possessionsPerGame, rng, isSecondChance),
+      )
       clock -= durationSeconds
       elapsedSeconds += durationSeconds
 
@@ -177,6 +187,8 @@ export function* simulateGameSteps(
         isThreePointAttempt: selection.isOutsideShotAction,
         freeThrowsMade: resolved.freeThrowsMade,
         freeThrowsAttempted: resolved.freeThrowsAttempted,
+        offensiveRebound,
+        isSecondChance,
         playersInvolved: getInvolvedPlayerIds(selection),
         homeOnCourtIds: homeRotation.onCourt.map((p) => p.id),
         awayOnCourtIds: awayRotation.onCourt.map((p) => p.id),
@@ -185,6 +197,11 @@ export function* simulateGameSteps(
 
       tickFatigue(homeRotation, homeRoster, durationSeconds)
       tickFatigue(awayRotation, awayRoster, durationSeconds)
+
+      // The ball only changes hands when the offense doesn't get its own miss back, which is what
+      // makes a trip able to span several attempts.
+      if (!offensiveRebound) homeIsOffense = !homeIsOffense
+      isSecondChance = offensiveRebound
 
       yield { entry, homeScore, awayScore }
     }

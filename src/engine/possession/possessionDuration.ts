@@ -4,6 +4,7 @@ import {
   POSSESSION_DURATION_BANDS,
   REBOUND_SECONDS,
   REGULATION_SECONDS,
+  SECOND_CHANCE_DURATION_BAND,
   TURNOVER_DURATION_FACTOR,
 } from '../constants'
 import type { Rng } from '../rng'
@@ -39,8 +40,14 @@ export function possessionDurationSeconds(
   outcome: PossessionOutcome,
   possessionsPerGame: number,
   rng: Rng,
+  isSecondChance = false,
 ): number {
-  const [min, max] = POSSESSION_DURATION_BANDS[playCall] ?? [NOMINAL_POSSESSION_SECONDS, NOMINAL_POSSESSION_SECONDS]
+  // A putback is a shot already under the rim, not a trip up the floor, so it ignores the play
+  // call's band entirely -- otherwise second chances would cost a full possession of clock and
+  // offensive rebounds would slow the game down instead of adding shots to it.
+  const [min, max] = isSecondChance
+    ? SECOND_CHANCE_DURATION_BAND
+    : (POSSESSION_DURATION_BANDS[playCall] ?? [NOMINAL_POSSESSION_SECONDS, NOMINAL_POSSESSION_SECONDS])
   const sampled = min + rng() * (max - min)
 
   const adjusted =

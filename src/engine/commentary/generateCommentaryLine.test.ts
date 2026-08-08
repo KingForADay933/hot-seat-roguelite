@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { PlayCallType, PlayerId, PossessionLogEntry, PossessionOutcome } from '../../data/types'
 import { makeTestPlayer } from '../testFixtures'
 import { generateCommentaryLine } from './generateCommentaryLine'
@@ -20,6 +20,8 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & { primaryPlayerId: P
     isThreePointAttempt: false,
     freeThrowsMade: 0,
     freeThrowsAttempted: 0,
+    offensiveRebound: false,
+    isSecondChance: false,
     playersInvolved: [],
     homeOnCourtIds: [],
     awayOnCourtIds: [],
