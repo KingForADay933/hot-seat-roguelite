@@ -3,6 +3,7 @@ import type { Game, OnCourtRecord, Player, PossessionLogEntry, Team } from '../d
 import { deriveBoxScore } from './boxScore'
 import { OVERTIME_SECONDS, PERIOD_SECONDS, REGULATION_PERIODS } from './constants'
 import { playersOf, type OnCourtPlayer } from './matchup'
+import { effectiveFive } from './positionFit'
 import { computeOffenseStrength, synergyMultiplier } from './possession/possessionStrength'
 import { getInvolvedPlayerIds, selectPlayers } from './possession/playerSelector'
 import { selectPlayCall } from './possession/playCallSelector'
@@ -145,8 +146,14 @@ export function* simulateGameSteps(
       checkSubstitutions(awayRotation, awayTeam, homeOnCourtBefore, playersById, elapsedSeconds)
 
       const offenseTeam = homeIsOffense ? homeTeam : awayTeam
-      const offenseFive = homeIsOffense ? homeRotation.onCourt : awayRotation.onCourt
-      const defenseFive = homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt
+      // Position-fit-adjusted for possession resolution only (rotation-charts.md Phase E):
+      // selectPlayers, computeOffenseStrength, computeResistance and offensiveReboundProbability all
+      // read player.attributes, so handing them the shifted five propagates an out-of-position
+      // penalty everywhere below this line with no further call-site changes. Rotation state itself
+      // (homeRotation.onCourt/awayRotation.onCourt) stays untouched -- fatigue, substitution choice
+      // and the possession log all still see the real players.
+      const offenseFive = effectiveFive(homeIsOffense ? homeRotation.onCourt : awayRotation.onCourt)
+      const defenseFive = effectiveFive(homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt)
       // Slot assignment matters to defender pairing; the team-average terms in strength, resistance
       // and rebounding only care who is out there, so they take the plain fives.
       const offenseOnCourt = playersOf(offenseFive)

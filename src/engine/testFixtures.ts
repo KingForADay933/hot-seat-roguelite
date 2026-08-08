@@ -52,6 +52,7 @@ export function makeTestPlayer(overrides: {
   positions?: Position[]
   name?: string
   age?: number
+  heightInches?: number
 } = {}): Player {
   idCounter += 1
   return {
@@ -59,7 +60,7 @@ export function makeTestPlayer(overrides: {
     name: overrides.name ?? `Test Player ${idCounter}`,
     age: overrides.age ?? 25,
     positions: overrides.positions ?? ['PG'],
-    heightInches: 74,
+    heightInches: overrides.heightInches ?? 74,
     jerseyNumber: idCounter,
     teamId: null,
     portraitPlaceholder: '',

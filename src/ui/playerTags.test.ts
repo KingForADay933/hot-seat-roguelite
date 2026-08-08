@@ -62,4 +62,17 @@ describe('playerTags', () => {
     const tag = playerTags(gunner).find((t) => t.label === 'Shoot-First')
     expect(tag?.tone).toBe('neutral')
   })
+
+  it('names a Positionless player from the same derivation the sim reads for the out-of-position penalty', () => {
+    // 81" sits inside both SF's and PF's height bands, and the default attribute profile is flat.
+    const swingman = makeTestPlayer({ positions: ['SF'], heightInches: 81 })
+    expect(labels(swingman)).toContain('Positionless')
+    expect(labels(swingman)).not.toContain('Specialist')
+  })
+
+  it('names a Specialist player instead when height or attributes are spiked for one slot', () => {
+    const shortGuard = makeTestPlayer({ positions: ['PG'], heightInches: 72 })
+    expect(labels(shortGuard)).toContain('Specialist')
+    expect(labels(shortGuard)).not.toContain('Positionless')
+  })
 })

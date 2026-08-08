@@ -7,6 +7,7 @@ import {
   ATTRIBUTE_STANDOUT_CHANCE,
   ATTRIBUTE_STANDOUT_MIN,
   ATTRIBUTE_STANDOUT_SPAN,
+  POSITION_HEIGHT_RANGE_INCHES,
 } from '../constants'
 import { average, clamp } from '../math'
 import type { Rng } from '../rng'
@@ -53,14 +54,6 @@ const POSITION_BIAS: Record<Position, Partial<Record<keyof PlayerAttributes, num
     lateralQuickness: -10,
     passing: -5,
   },
-}
-
-const HEIGHT_RANGE_INCHES: Record<Position, [number, number]> = {
-  PG: [72, 76],
-  SG: [74, 78],
-  SF: [77, 81],
-  PF: [80, 84],
-  C: [82, 88],
 }
 
 const FIRST_NAMES = [
@@ -137,7 +130,7 @@ export function generatePlayer(position: Position, rng: Rng, shift: number = 0):
     ]),
   ) as Record<AttributeKey, number>
 
-  const [minHeight, maxHeight] = HEIGHT_RANGE_INCHES[position]
+  const [minHeight, maxHeight] = POSITION_HEIGHT_RANGE_INCHES[position]
 
   return {
     id: createId('player'),
