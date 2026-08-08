@@ -6,7 +6,7 @@ import { createSeededRng } from '../../engine/rng'
 import { tickFatigue } from '../../engine/rotation/fatigue'
 import { createRotationState } from '../../engine/rotation/rotationState'
 import { simulateGameSteps, type SimulationStep } from '../../engine/simulateGame'
-import { advancePlayback, createPlaybackState, type PlaybackContext, type PlaybackState } from './playbackState'
+import { advancePlayback, createPlaybackState, entersNewOvertimePeriod, type PlaybackContext, type PlaybackState } from './playbackState'
 
 const POSSESSIONS_PER_GAME = 100
 
@@ -135,6 +135,15 @@ describe('advancePlayback', () => {
     expect([...numbers].sort((a, b) => b - a)).toEqual(numbers)
   })
 
+  it('tracks the raw period number alongside the display label', () => {
+    const { steps, context } = playOneGame(19)
+    let state = createPlaybackState(context)
+    for (const step of steps) {
+      state = advancePlayback(context, state, step)
+      expect(state.period).toBe(step.entry.period)
+    }
+  })
+
   it('leaves state untouched -- a folded step returns a new object', () => {
     const { steps, context } = playOneGame(16)
     const first = createPlaybackState(context)
@@ -155,5 +164,29 @@ describe('createPlaybackState', () => {
 
     expect(state.fatigue.size).toBe(everyone.length)
     for (const id of everyone) expect(state.fatigue.get(id)).toBe(0)
+  })
+
+  it('starts in period 1', () => {
+    const { context } = playOneGame(18)
+    expect(createPlaybackState(context).period).toBe(1)
+  })
+})
+
+describe('entersNewOvertimePeriod (rotation-charts.md Decision 5/Phase H)', () => {
+  it('is false advancing within regulation', () => {
+    expect(entersNewOvertimePeriod(1, 1)).toBe(false)
+    expect(entersNewOvertimePeriod(3, 4)).toBe(false)
+  })
+
+  it('is true the moment regulation ends and the first overtime period begins', () => {
+    expect(entersNewOvertimePeriod(4, 5)).toBe(true)
+  })
+
+  it('is true crossing from one overtime period into the next', () => {
+    expect(entersNewOvertimePeriod(5, 6)).toBe(true)
+  })
+
+  it('is false for possessions within the same overtime period', () => {
+    expect(entersNewOvertimePeriod(5, 5)).toBe(false)
   })
 })

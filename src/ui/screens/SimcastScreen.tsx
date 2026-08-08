@@ -79,7 +79,10 @@ function SimcastBroadcast({
   onAbandon: () => void
 }) {
   const { run } = bundle
-  const { state, status, finalGame, speed, setSpeed, togglePause, skipToEnd } = useSimcastPlayback(playbackContext, createSteps)
+  const { state, status, finalGame, speed, setSpeed, togglePause, skipToEnd, acknowledgeOvertimePrompt } = useSimcastPlayback(
+    playbackContext,
+    createSteps,
+  )
 
   const userIsHome = game.homeTeamId === run.teamId
   const userTeam = userIsHome ? homeTeam : awayTeam
@@ -90,6 +93,10 @@ function SimcastBroadcast({
   }, [finalGame, onCommit])
 
   const isFinal = status === 'final'
+  // Decision 5 (rotation-charts.md Phase H): the sim already carries the Q4 closing five into
+  // overtime on its own, so this is a beat to notice that happened, not a blocking decision --
+  // Skip to Final stays available rather than being trapped behind an extra click.
+  const isAwaitingOvertimePrompt = status === 'awaiting-substitutions'
 
   return (
     <main>
@@ -108,11 +115,25 @@ function SimcastBroadcast({
         userTeamId={run.teamId}
       />
 
+      {isAwaitingOvertimePrompt && (
+        <p className="section-note">
+          Overtime! The five that closed the fourth quarter carries on automatically -- hit Continue
+          when you're ready.
+        </p>
+      )}
+
       <div className="simcast-controls">
         {isFinal ? (
           <button className="primary" onClick={handleContinue}>
             Continue
           </button>
+        ) : isAwaitingOvertimePrompt ? (
+          <>
+            <button className="primary" onClick={acknowledgeOvertimePrompt}>
+              Continue to Overtime
+            </button>
+            <button onClick={skipToEnd}>Skip to Final</button>
+          </>
         ) : (
           <>
             <button onClick={togglePause}>{status === 'playing' ? 'Pause' : 'Resume'}</button>

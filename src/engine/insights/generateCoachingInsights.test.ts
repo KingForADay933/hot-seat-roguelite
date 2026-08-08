@@ -1,5 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest'
-import type { Game, Player, PlayerId, PossessionLogEntry } from '../../data/types'
+import type { Game, Player, PlayerId, PossessionLogEntry, RotationPlan } from '../../data/types'
+import { DURABILITY_NEUTRAL, PERIOD_SECONDS } from '../constants'
 import { generateTeam } from '../generator/randomTeam'
 import { createSeededRng } from '../rng'
 import { simulateGame } from '../simulateGame'
@@ -173,6 +174,99 @@ describe('generateCoachingInsights', () => {
     // The substitution happened on the home team (Starter/Bench are both on homeTeam's roster).
     const fatigueInsight = insights.find((i) => i.text.includes('heavy fatigue'))
     expect(fatigueInsight?.teamId).toBe(homeTeam.id)
+  })
+
+  describe('chart deviations (rotation-charts.md Phase H)', () => {
+    // 31 x 20s = 620 game seconds at 0.156 fatigue/s (neutral durability) -> ~97 fatigue, past
+    // FATIGUE_EMERGENCY_THRESHOLD (95), then one possession recording the substitution.
+    function buildLongStintLog(outgoingId: PlayerId, incomingId: PlayerId, dummyId: PlayerId): PossessionLogEntry[] {
+      const onCourtPossessions = 31
+      const log: PossessionLogEntry[] = []
+      for (let i = 0; i < onCourtPossessions; i++) {
+        log.push({
+          possessionNumber: i + 1,
+          period: 1,
+          clockSecondsRemaining: 700,
+          durationSeconds: 20,
+          offenseTeamId: dummyId,
+          playCallUsed: 'isolation',
+          primaryPlayerId: dummyId,
+          secondaryPlayerIds: [],
+          outcome: 'miss',
+          pointsScored: 0,
+          isThreePointAttempt: false,
+          freeThrowsMade: 0,
+          freeThrowsAttempted: 0,
+          offensiveRebound: false,
+          isSecondChance: false,
+          playersInvolved: [],
+          homeOnCourt: makeOnCourt([outgoingId]),
+          awayOnCourt: makeOnCourt([dummyId]),
+        })
+      }
+      log.push({
+        ...log[0],
+        possessionNumber: onCourtPossessions + 1,
+        homeOnCourt: makeOnCourt([incomingId]),
+      })
+      return log
+    }
+
+    it('names the deviation distinctly when the pulled player was actually charted into that slot', () => {
+      const starter = makeTestPlayer({ name: 'Starter', positions: ['PG'], hidden: { durability: DURABILITY_NEUTRAL } })
+      const bench = makeTestPlayer({ name: 'Bench', positions: ['PG'] })
+      const dummy = makeTestPlayer({ name: 'Dummy' })
+
+      const rotationPlan: RotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: PERIOD_SECONDS, fill: { kind: 'player', playerId: starter.id } }] } }
+      const homeTeam = makeTestTeam({ rosterPlayerIds: [starter.id, bench.id], rotationPlan })
+      const awayTeam = makeTestTeam({ rosterPlayerIds: [dummy.id] })
+      const playersById = playersMap([starter, bench, dummy])
+
+      const possessionLog = buildLongStintLog(starter.id, bench.id, dummy.id)
+      const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
+
+      const deviationInsight = insights.find((i) => i.text.includes('charted to stay'))
+      expect(deviationInsight).toBeDefined()
+      expect(deviationInsight?.text).toContain('Starter')
+      expect(deviationInsight?.text).toContain('Bench')
+      expect(deviationInsight?.teamId).toBe(homeTeam.id)
+    })
+
+    it('uses the plain fatigue message, not the deviation one, when there is no chart at all', () => {
+      const starter = makeTestPlayer({ name: 'Starter', positions: ['PG'], hidden: { durability: DURABILITY_NEUTRAL } })
+      const bench = makeTestPlayer({ name: 'Bench', positions: ['PG'] })
+      const dummy = makeTestPlayer({ name: 'Dummy' })
+
+      const homeTeam = makeTestTeam({ rosterPlayerIds: [starter.id, bench.id] })
+      const awayTeam = makeTestTeam({ rosterPlayerIds: [dummy.id] })
+      const playersById = playersMap([starter, bench, dummy])
+
+      const possessionLog = buildLongStintLog(starter.id, bench.id, dummy.id)
+      const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
+
+      expect(insights.some((i) => i.text.includes('charted to stay'))).toBe(false)
+      expect(insights.some((i) => i.text.includes('Starter') && i.text.includes('heavy fatigue'))).toBe(true)
+    })
+
+    it('uses the plain fatigue message when the chart named someone else for that slot, not the player who actually left', () => {
+      const starter = makeTestPlayer({ name: 'Starter', positions: ['PG'], hidden: { durability: DURABILITY_NEUTRAL } })
+      const bench = makeTestPlayer({ name: 'Bench', positions: ['PG'] })
+      const dummy = makeTestPlayer({ name: 'Dummy' })
+
+      // The chart says Bench should be the one at PG -- Starter being on the floor at all was
+      // already a deviation from some other decision, not this one, so pulling him isn't "the chart
+      // got overridden": the chart never had him there to begin with.
+      const rotationPlan: RotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: PERIOD_SECONDS, fill: { kind: 'player', playerId: bench.id } }] } }
+      const homeTeam = makeTestTeam({ rosterPlayerIds: [starter.id, bench.id], rotationPlan })
+      const awayTeam = makeTestTeam({ rosterPlayerIds: [dummy.id] })
+      const playersById = playersMap([starter, bench, dummy])
+
+      const possessionLog = buildLongStintLog(starter.id, bench.id, dummy.id)
+      const insights = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById)
+
+      expect(insights.some((i) => i.text.includes('charted to stay'))).toBe(false)
+      expect(insights.some((i) => i.text.includes('Starter') && i.text.includes('heavy fatigue'))).toBe(true)
+    })
   })
 
   it('produces at least one fatigue insight over a real, fully-simulated game long enough to force natural substitutions', () => {
