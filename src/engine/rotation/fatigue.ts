@@ -38,7 +38,7 @@ export function fatigueRecoveryPerSecond(player: Player): number {
  * how much clock it burned.
  */
 export function tickFatigue(state: RotationState, rosterPlayers: Player[], elapsedSeconds: number): void {
-  const onCourtIds = new Set(state.onCourt.map((p) => p.id))
+  const onCourtIds = new Set(state.onCourt.map((entry) => entry.player.id))
 
   rosterPlayers.forEach((player) => {
     const current = state.fatigue.get(player.id) ?? 0

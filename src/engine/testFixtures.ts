@@ -1,4 +1,4 @@
-import type { AttributeKey, Player, PlayerAttributes, PlayerDevelopment, PlayerHiddenTraits, Position, Team } from '../data/types'
+﻿import type { AttributeKey, OnCourtRecord, Player, PlayerAttributes, PlayerDevelopment, PlayerHiddenTraits, PlayerId, Position, Team } from '../data/types'
 import { SYNERGY_NEUTRAL } from './constants'
 
 let idCounter = 0
@@ -74,6 +74,16 @@ export function makeTestPlayer(overrides: {
 export function makeTestFive(): Player[] {
   const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
   return positions.map((position) => makeTestPlayer({ positions: [position] }))
+}
+
+/**
+ * Wraps bare player ids into the slot-assigned form a possession log records, handing out PG-through-C
+ * in order. Which slot each id lands in rarely matters to the tests that use this -- what matters is
+ * that the five is in the shape the log stores.
+ */
+export function makeOnCourt(ids: PlayerId[]): OnCourtRecord[] {
+  const slots: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
+  return ids.map((playerId, i) => ({ playerId, slot: slots[i % slots.length] }))
 }
 
 /** Test-only fixture builder for schedule/standings tests, which only care about a Team's id. */

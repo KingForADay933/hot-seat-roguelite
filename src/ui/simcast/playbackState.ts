@@ -1,4 +1,4 @@
-import type { Player, PlayerBoxScoreLine, PlayerId, TeamId } from '../../data/types'
+﻿import type { OnCourtRecord, Player, PlayerBoxScoreLine, PlayerId, TeamId } from '../../data/types'
 import { ASSIST_ELIGIBLE_PLAY_CALLS } from '../../engine/boxScore'
 import { generateCommentaryLine } from '../../engine/commentary/generateCommentaryLine'
 import { PERIOD_SECONDS, SECONDS_PER_MINUTE } from '../../engine/constants'
@@ -35,8 +35,10 @@ export interface PlaybackState {
   clockLabel: string
   /** Newest first, so the screen renders it top-down without reversing on every frame. */
   feed: FeedEntry[]
-  homeOnCourtIds: PlayerId[]
-  awayOnCourtIds: PlayerId[]
+  /** Who is on the floor and which slot each is filling, straight off the log -- so the panel can
+   *  show the assignment the sim used rather than each player's nominal position. */
+  homeOnCourt: OnCourtRecord[]
+  awayOnCourt: OnCourtRecord[]
   /** 0-100 for every rostered player on both teams, bench included. */
   fatigue: Map<PlayerId, number>
   lines: Map<PlayerId, LiveBoxScoreLine>
@@ -84,8 +86,8 @@ export function createPlaybackState(context: PlaybackContext): PlaybackState {
     periodLabel: getPeriodLabel(1),
     clockLabel: formatGameClock(PERIOD_SECONDS),
     feed: [],
-    homeOnCourtIds: [],
-    awayOnCourtIds: [],
+    homeOnCourt: [],
+    awayOnCourt: [],
     fatigue: new Map(roster.map((p) => [p.id, 0])),
     lines: new Map(roster.map((p) => [p.id, emptyLine(p.id)])),
     secondsOnCourt: new Map(roster.map((p) => [p.id, 0])),
@@ -126,11 +128,13 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
   const { entry } = step
 
   const fatigue = new Map(state.fatigue)
-  tickTeamFatigue(fatigue, context.homeRoster, entry.homeOnCourtIds, entry.durationSeconds)
-  tickTeamFatigue(fatigue, context.awayRoster, entry.awayOnCourtIds, entry.durationSeconds)
+  const homeIds = entry.homeOnCourt.map((o) => o.playerId)
+  const awayIds = entry.awayOnCourt.map((o) => o.playerId)
+  tickTeamFatigue(fatigue, context.homeRoster, homeIds, entry.durationSeconds)
+  tickTeamFatigue(fatigue, context.awayRoster, awayIds, entry.durationSeconds)
 
   const secondsOnCourt = new Map(state.secondsOnCourt)
-  for (const id of [...entry.homeOnCourtIds, ...entry.awayOnCourtIds]) {
+  for (const id of [...homeIds, ...awayIds]) {
     secondsOnCourt.set(id, (secondsOnCourt.get(id) ?? 0) + entry.durationSeconds)
   }
 
@@ -193,8 +197,8 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
     periodLabel,
     clockLabel: formatGameClock(entry.clockSecondsRemaining),
     feed: [feedEntry, ...state.feed].slice(0, FEED_LENGTH),
-    homeOnCourtIds: entry.homeOnCourtIds,
-    awayOnCourtIds: entry.awayOnCourtIds,
+    homeOnCourt: entry.homeOnCourt,
+    awayOnCourt: entry.awayOnCourt,
     fatigue,
     lines,
     secondsOnCourt,

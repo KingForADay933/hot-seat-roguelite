@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { makeTestPlayer } from '../testFixtures'
 import {
   DURABILITY_NEUTRAL,
@@ -7,6 +7,7 @@ import {
   FATIGUE_MULT_MIN,
   FATIGUE_RECOVERY_PER_SECOND,
 } from '../constants'
+import { slotByPosition } from '../matchup'
 import { fatigueGainPerSecond, fatigueRecoveryPerSecond, tickFatigue } from './fatigue'
 import type { RotationState } from './rotationState'
 
@@ -42,7 +43,7 @@ describe('fatigueGainPerSecond / fatigueRecoveryPerSecond', () => {
 describe('tickFatigue', () => {
   function stateWith(onCourtPlayer: ReturnType<typeof makeTestPlayer>, benchPlayer: ReturnType<typeof makeTestPlayer>, fatigue: [number, number]): RotationState {
     return {
-      onCourt: [onCourtPlayer],
+      onCourt: slotByPosition([onCourtPlayer]),
       fatigue: new Map([
         [onCourtPlayer.id, fatigue[0]],
         [benchPlayer.id, fatigue[1]],

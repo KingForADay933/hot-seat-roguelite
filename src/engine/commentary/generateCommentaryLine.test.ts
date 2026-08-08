@@ -23,8 +23,8 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & { primaryPlayerId: P
     offensiveRebound: false,
     isSecondChance: false,
     playersInvolved: [],
-    homeOnCourtIds: [],
-    awayOnCourtIds: [],
+    homeOnCourt: [],
+    awayOnCourt: [],
     ...overrides,
   }
 }

@@ -631,9 +631,15 @@ h3 {
   font-size: 14px;
 }
 
+.on-court-slot {
+  color: var(--accent);
+  font-size: 12px;
+}
+
 .on-court-list li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 60px 48px;
+  /* Slot first, so the five reads as a lineup card down the left edge. */
+  grid-template-columns: 2.2em minmax(0, 1fr) 60px 48px;
   align-items: center;
   gap: 8px;
   padding: 4px 0;

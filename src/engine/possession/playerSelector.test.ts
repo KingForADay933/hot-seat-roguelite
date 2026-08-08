@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { DEFENSIVE_SCHEMES } from '../../data/presets'
+import { slotByPosition } from '../matchup'
 import { createSeededRng } from '../rng'
 import { makeTestFive, makeTestPlayer } from '../testFixtures'
 import { getInvolvedPlayerIds, selectPlayers } from './playerSelector'
@@ -17,7 +18,7 @@ function tallyPrimaryUsage(
 ): Map<string, number> {
   const counts = new Map(offense.map((p) => [p.id, 0]))
   for (let seed = 0; seed < trials; seed++) {
-    const selection = selectPlayers(playCall, offense, defense, scheme, createSeededRng(seed))
+    const selection = selectPlayers(playCall, slotByPosition(offense), slotByPosition(defense), scheme, createSeededRng(seed))
     counts.set(selection.primary.id, (counts.get(selection.primary.id) ?? 0) + 1)
   }
   return counts
@@ -57,7 +58,7 @@ describe('selectPlayers', () => {
     const defense = makeTestFive()
 
     for (let seed = 0; seed < 20; seed++) {
-      const selection = selectPlayers('isolation', offense, defense, manToMan, createSeededRng(seed))
+      const selection = selectPlayers('isolation', slotByPosition(offense), slotByPosition(defense), manToMan, createSeededRng(seed))
       expect(selection.isOutsideShotAction).toBe(true)
     }
   })
@@ -65,7 +66,7 @@ describe('selectPlayers', () => {
   it('spot-up always flags as an outside-shot action regardless of shooter attributes', () => {
     const offense = makeTestFive()
     const defense = makeTestFive()
-    const selection = selectPlayers('spot-up', offense, defense, manToMan, createSeededRng(2))
+    const selection = selectPlayers('spot-up', slotByPosition(offense), slotByPosition(defense), manToMan, createSeededRng(2))
     expect(selection.isOutsideShotAction).toBe(true)
   })
 
@@ -74,7 +75,7 @@ describe('selectPlayers', () => {
     const defense = makeTestFive()
 
     for (let seed = 0; seed < 20; seed++) {
-      const selection = selectPlayers('pick-and-roll', offense, defense, manToMan, createSeededRng(seed))
+      const selection = selectPlayers('pick-and-roll', slotByPosition(offense), slotByPosition(defense), manToMan, createSeededRng(seed))
       const expectedDefender = defense[offense.indexOf(selection.primary)]
       expect(selection.primaryDefender).toBe(expectedDefender)
     }
@@ -88,7 +89,7 @@ describe('selectPlayers', () => {
     defense[2].attributes.perimeterDefense = 10
 
     for (let seed = 0; seed < 20; seed++) {
-      const selection = selectPlayers('pick-and-roll', offense, defense, switchEverything, createSeededRng(seed))
+      const selection = selectPlayers('pick-and-roll', slotByPosition(offense), slotByPosition(defense), switchEverything, createSeededRng(seed))
       expect(selection.primaryDefender).toBe(defense[2])
     }
   })
@@ -99,7 +100,7 @@ describe('selectPlayers', () => {
     defense[3].attributes.speed = 99 // PF is fastest, would not be matched to the ball handler normally
 
     for (let seed = 0; seed < 20; seed++) {
-      const selection = selectPlayers('transition', offense, defense, manToMan, createSeededRng(seed))
+      const selection = selectPlayers('transition', slotByPosition(offense), slotByPosition(defense), manToMan, createSeededRng(seed))
       expect(selection.primaryDefender).toBe(defense[3])
     }
   })
@@ -107,7 +108,7 @@ describe('selectPlayers', () => {
   it('getInvolvedPlayerIds returns a deduplicated union of all selected players', () => {
     const offense = makeTestFive()
     const defense = makeTestFive()
-    const selection = selectPlayers('pick-and-roll', offense, defense, manToMan, createSeededRng(3))
+    const selection = selectPlayers('pick-and-roll', slotByPosition(offense), slotByPosition(defense), manToMan, createSeededRng(3))
     const ids = getInvolvedPlayerIds(selection)
     expect(new Set(ids).size).toBe(ids.length)
     expect(ids).toContain(selection.primary.id)
@@ -117,6 +118,6 @@ describe('selectPlayers', () => {
   it('does not crash with a single-position roster edge case', () => {
     const offense = Array.from({ length: 5 }, () => makeTestPlayer({ positions: ['C'] }))
     const defense = Array.from({ length: 5 }, () => makeTestPlayer({ positions: ['C'] }))
-    expect(() => selectPlayers('post-up', offense, defense, manToMan, createSeededRng(4))).not.toThrow()
+    expect(() => selectPlayers('post-up', slotByPosition(offense), slotByPosition(defense), manToMan, createSeededRng(4))).not.toThrow()
   })
 })

@@ -1,6 +1,7 @@
 ﻿import type {
   Game,
   GameResult,
+  OnCourtRecord,
   PlayCallType,
   Player,
   PlayerBoxScoreLine,
@@ -46,16 +47,16 @@ function weightedPick(players: Player[], weight: (p: Player) => number, rng: Rng
   return players[players.length - 1]
 }
 
-function resolvePlayers(ids: PlayerId[], playersById: Map<PlayerId, Player>): Player[] {
-  return ids.map((id) => {
-    const player = playersById.get(id)
-    if (!player) throw new Error(`Player ${id} referenced in the possession log was not found`)
+function resolvePlayers(five: OnCourtRecord[], playersById: Map<PlayerId, Player>): Player[] {
+  return five.map(({ playerId }) => {
+    const player = playersById.get(playerId)
+    if (!player) throw new Error(`Player ${playerId} referenced in the possession log was not found`)
     return player
   })
 }
 
-/** Derived entirely from the possession log's per-possession homeOnCourtIds/awayOnCourtIds --
- *  the log is the sole source of truth for who was on the floor, including for substitutions. */
+/** Derived entirely from the possession log's per-possession homeOnCourt/awayOnCourt -- the log is
+ *  the sole source of truth for who was on the floor, including for substitutions. */
 export function deriveBoxScore(
   possessionLog: PossessionLogEntry[],
   homeTeamId: TeamId,
@@ -83,15 +84,15 @@ export function deriveBoxScore(
   let awayScore = 0
 
   for (const entry of possessionLog) {
-    entry.homeOnCourtIds.forEach((id) => {
-      homeIds.add(id)
-      bumpOnCourt(id, entry.durationSeconds)
-      lineFor(id)
+    entry.homeOnCourt.forEach(({ playerId }) => {
+      homeIds.add(playerId)
+      bumpOnCourt(playerId, entry.durationSeconds)
+      lineFor(playerId)
     })
-    entry.awayOnCourtIds.forEach((id) => {
-      awayIds.add(id)
-      bumpOnCourt(id, entry.durationSeconds)
-      lineFor(id)
+    entry.awayOnCourt.forEach(({ playerId }) => {
+      awayIds.add(playerId)
+      bumpOnCourt(playerId, entry.durationSeconds)
+      lineFor(playerId)
     })
 
     const offenseIsHome = entry.offenseTeamId === homeTeamId
@@ -119,8 +120,8 @@ export function deriveBoxScore(
       // down with it is settled now, since nothing upstream needed to know.
       const reboundingSideIsOffense = entry.offensiveRebound
       const reboundingIsHome = reboundingSideIsOffense ? offenseIsHome : !offenseIsHome
-      const reboundingIds = reboundingIsHome ? entry.homeOnCourtIds : entry.awayOnCourtIds
-      const rebounder = weightedPick(resolvePlayers(reboundingIds, playersById), (p) => p.attributes.rebounding, rng)
+      const reboundingFive = reboundingIsHome ? entry.homeOnCourt : entry.awayOnCourt
+      const rebounder = weightedPick(resolvePlayers(reboundingFive, playersById), (p) => p.attributes.rebounding, rng)
       lineFor(rebounder.id).rebounds += 1
     } else if (entry.outcome === 'turnover') {
       primaryLine.turnovers += 1

@@ -217,8 +217,10 @@ so a GM doesn't meet one set of names on the reveal card and another on the char
 - **Consumers taking `possessionsPerGame`:** `deriveBoxScore`, `getPeriodLabel`,
   `computeOvertimePossessions`, `isClutchTime`, `generateCoachingInsights`, `ChunkSimContext`,
   `playbackState`, `useSimcastPlayback`.
-- **Saves break, once.** `isValidBundleShape` rejects rather than migrates. Deriving quirks rather
-  than storing them keeps this to the possession-log change alone.
+- **Saves break on any possession-log change.** `isValidBundleShape` rejects rather than migrates.
+  Nothing has shipped, so this has been the cheap moment for those changes — it stops being cheap the
+  day there are players. Deriving quirks rather than storing them (§4) means Phase E needs no schema
+  change at all.
 
 ### The simcast hook for Decision 5
 
@@ -273,9 +275,21 @@ Countdown instead of a possession count. Fatigue in seconds. Minutes summed from
 in **both** `deriveBoxScore` and `playbackState`. Retune `BASE_POSSESSION_MS`. Heaviest phase;
 expect a full pass over `constants.ts` and the sim tests.
 
-### Phase D — Slot-assigned on-court state
-The `onCourt: Player[]` → `{ player, slot }[]` refactor (§3). Pure plumbing, no behavior change while
-every slot still matches `positions[0]`. Standalone so the diff stays reviewable.
+### Phase D — Slot-assigned on-court state — **done**
+`RotationState.onCourt` is now `OnCourtPlayer[]` (`{ player, slot }`). `buildMatchups` pairs slot
+against slot, `findAtSlot` replaces `findAtPosition`, and a substitution hands the *slot* to the
+incoming player rather than re-deriving it from them. `slotByPosition` builds the assignment from
+each player's own position — the fallback every chartless team, including all seven AI teams, will
+keep using.
+
+Verified behavior-neutral by fingerprinting a seeded 12-game slate before and after: identical
+scores and identical play count.
+
+The possession log stores the slots too: `homeOnCourt` / `awayOnCourt` are `OnCourtRecord[]`
+(`{ playerId, slot }`) rather than id arrays. `generateCoachingInsights` replays the assignment the
+sim actually used instead of reconstructing it from `positions[0]`, and the simcast's on-court panel
+shows each player's slot — so an out-of-position lineup will read as what the GM did rather than
+looking like a mislabel.
 
 ### Phase E — Positional versatility
 The penalty model and derived quirks (§4). Independent of the clock, depends on D for the notion of a

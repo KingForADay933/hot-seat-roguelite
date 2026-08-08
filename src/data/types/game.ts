@@ -1,4 +1,17 @@
-import type { GameId, LeagueId, PlayerId, TeamId } from './common'
+import type { GameId, LeagueId, PlayerId, Position, TeamId } from './common'
+
+/**
+ * One player on the floor, and the slot they were filling.
+ *
+ * The slot is recorded rather than re-derived from the player's own listed position because those
+ * two can differ: a GM may put someone out of position, and the slot is what the simulation paired
+ * matchups on. Anything replaying a possession -- Coaching Insights' fatigue reconstruction, a live
+ * broadcast panel -- needs the assignment that actually happened, not a guess at it.
+ */
+export interface OnCourtRecord {
+  playerId: PlayerId
+  slot: Position
+}
 
 export type PossessionOutcome = 'make' | 'miss' | 'turnover' | 'foul'
 
@@ -48,10 +61,11 @@ export interface PossessionLogEntry {
   /** Union of offense + defense players credited, for box-score attribution. */
   playersInvolved: PlayerId[]
   /** The team's full on-court five (both teams play every possession, offense and defense) at the
-   *  moment this possession was resolved. Always length 5. Makes the possession log fully
-   *  self-sufficient for box-score derivation (rebounds, minutes) even as substitutions happen. */
-  homeOnCourtIds: PlayerId[]
-  awayOnCourtIds: PlayerId[]
+   *  moment this possession was resolved, each with the slot they were filling. Always length 5.
+   *  Makes the possession log fully self-sufficient for box-score derivation (rebounds, minutes) and
+   *  for replaying who was matched up on whom, even as substitutions happen. */
+  homeOnCourt: OnCourtRecord[]
+  awayOnCourt: OnCourtRecord[]
 }
 
 export interface PlayerBoxScoreLine {

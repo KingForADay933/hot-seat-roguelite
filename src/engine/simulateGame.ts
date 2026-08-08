@@ -1,7 +1,8 @@
-import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
-import type { Game, Player, PossessionLogEntry, Team } from '../data/types'
+﻿import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
+import type { Game, OnCourtRecord, Player, PossessionLogEntry, Team } from '../data/types'
 import { deriveBoxScore } from './boxScore'
 import { OVERTIME_SECONDS, PERIOD_SECONDS, REGULATION_PERIODS } from './constants'
+import { playersOf, type OnCourtPlayer } from './matchup'
 import { computeOffenseStrength, synergyMultiplier } from './possession/possessionStrength'
 import { getInvolvedPlayerIds, selectPlayers } from './possession/playerSelector'
 import { selectPlayCall } from './possession/playCallSelector'
@@ -13,6 +14,11 @@ import { tickFatigue } from './rotation/fatigue'
 import { createRotationState } from './rotation/rotationState'
 import { checkSubstitutions } from './rotation/substitution'
 import type { Rng } from './rng'
+
+/** Flattens a slot-assigned five into the form the possession log records it in. */
+function toOnCourtRecords(five: OnCourtPlayer[]): OnCourtRecord[] {
+  return five.map((entry) => ({ playerId: entry.player.id, slot: entry.slot }))
+}
 
 function resolveRoster(team: Team, playersById: Map<string, Player>): Player[] {
   return team.rosterPlayerIds.map((id) => {
@@ -80,7 +86,7 @@ export interface SimulationStep {
  *
  * Bench rotation: each team's on-court five starts as its startingFive and changes over the game
  * via fatigue/pace-driven substitutions (see engine/rotation) -- see each possession's logged
- * homeOnCourtIds/awayOnCourtIds for who was actually on the floor. Fatigue/rotation state carries
+ * homeOnCourt/awayOnCourt for who was on the floor and which slot each filled. Fatigue/rotation state carries
  * continuously from regulation into overtime, exactly like a real game, and both are measured in
  * game seconds so a fast break costs less than a ground-out post-up.
  *
@@ -139,15 +145,19 @@ export function* simulateGameSteps(
       checkSubstitutions(awayRotation, awayTeam, homeOnCourtBefore, playersById, elapsedSeconds)
 
       const offenseTeam = homeIsOffense ? homeTeam : awayTeam
-      const offenseOnCourt = homeIsOffense ? homeRotation.onCourt : awayRotation.onCourt
-      const defenseOnCourt = homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt
+      const offenseFive = homeIsOffense ? homeRotation.onCourt : awayRotation.onCourt
+      const defenseFive = homeIsOffense ? awayRotation.onCourt : homeRotation.onCourt
+      // Slot assignment matters to defender pairing; the team-average terms in strength, resistance
+      // and rebounding only care who is out there, so they take the plain fives.
+      const offenseOnCourt = playersOf(offenseFive)
+      const defenseOnCourt = playersOf(defenseFive)
       const playbook = homeIsOffense ? homePlaybook : awayPlaybook
       const scheme = homeIsOffense ? awayScheme : homeScheme
       const synergy = homeIsOffense ? homeSynergy : awaySynergy
       const scoreMargin = homeIsOffense ? homeScore - awayScore : awayScore - homeScore
 
       const playCall = selectPlayCall(playbook, rng)
-      const selection = selectPlayers(playCall, offenseOnCourt, defenseOnCourt, scheme, rng)
+      const selection = selectPlayers(playCall, offenseFive, defenseFive, scheme, rng)
       const strength = computeOffenseStrength(playCall, selection, playbook, offenseOnCourt, synergy)
       const resistance = computeResistance(playCall, selection, scheme, offenseOnCourt, defenseOnCourt)
       const resolved = resolvePossession(playCall, selection, strength, resistance, clock, isFinalPeriod, scoreMargin, rng)
@@ -190,8 +200,8 @@ export function* simulateGameSteps(
         offensiveRebound,
         isSecondChance,
         playersInvolved: getInvolvedPlayerIds(selection),
-        homeOnCourtIds: homeRotation.onCourt.map((p) => p.id),
-        awayOnCourtIds: awayRotation.onCourt.map((p) => p.id),
+        homeOnCourt: toOnCourtRecords(homeRotation.onCourt),
+        awayOnCourt: toOnCourtRecords(awayRotation.onCourt),
       }
       possessionLog.push(entry)
 

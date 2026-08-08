@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestFive, makeTestPlayer } from './testFixtures'
-import { findAtPosition, rawOverallQuality, sortByPosition } from './matchup'
+import { buildMatchups, findAtSlot, rawOverallQuality, slotByPosition, sortByPosition } from './matchup'
 
 describe('sortByPosition', () => {
   it('orders players PG, SG, SF, PF, C', () => {
@@ -16,15 +16,46 @@ describe('sortByPosition', () => {
   })
 })
 
-describe('findAtPosition', () => {
-  it('returns the player occupying a given position', () => {
-    const five = makeTestFive()
-    expect(findAtPosition('SF', five)).toBe(five[2])
+describe('findAtSlot', () => {
+  it('returns whoever is filling a given slot', () => {
+    const five = slotByPosition(makeTestFive())
+    expect(findAtSlot('SF', five)).toBe(five[2].player)
   })
 
-  it('returns undefined when no player occupies that position', () => {
-    const guardsOnly = [makeTestPlayer({ positions: ['PG'] }), makeTestPlayer({ positions: ['SG'] })]
-    expect(findAtPosition('C', guardsOnly)).toBeUndefined()
+  it('returns undefined when nobody is filling that slot', () => {
+    const guardsOnly = slotByPosition([makeTestPlayer({ positions: ['PG'] }), makeTestPlayer({ positions: ['SG'] })])
+    expect(findAtSlot('C', guardsOnly)).toBeUndefined()
+  })
+
+  it('finds by slot, not by the occupant\'s own listed position', () => {
+    // A center filling the PG slot: findable at PG, absent at C.
+    const bigAtGuard = makeTestPlayer({ positions: ['C'] })
+    const five = [{ player: bigAtGuard, slot: 'PG' as const }]
+    expect(findAtSlot('PG', five)).toBe(bigAtGuard)
+    expect(findAtSlot('C', five)).toBeUndefined()
+  })
+})
+
+describe('buildMatchups', () => {
+  it('pairs slot against slot, PG through C', () => {
+    const offense = slotByPosition(makeTestFive())
+    const defense = slotByPosition(makeTestFive())
+
+    const matchups = buildMatchups(offense, defense)
+    offense.forEach((entry, i) => {
+      expect(matchups.get(entry.player.id)).toBe(defense[i].player)
+    })
+  })
+
+  it('honours an out-of-position assignment instead of re-sorting back into position order', () => {
+    // The whole reason slots exist: a guard charted at C should guard the opposing C, even though
+    // sorting by his own listed position would have put him on the PG.
+    const guard = makeTestPlayer({ positions: ['PG'], name: 'Guard at centre' })
+    const offense = [{ player: guard, slot: 'C' as const }]
+    const opposingCentre = makeTestPlayer({ positions: ['C'], name: 'Real centre' })
+    const defense = [{ player: opposingCentre, slot: 'C' as const }]
+
+    expect(buildMatchups(offense, defense).get(guard.id)).toBe(opposingCentre)
   })
 })
 

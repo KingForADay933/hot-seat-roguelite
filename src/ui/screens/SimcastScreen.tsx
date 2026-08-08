@@ -145,13 +145,13 @@ function SimcastBroadcast({
         <aside className="simcast-floor">
           <OnCourtPanel
             label={`${awayTeam.abbreviation} on the floor`}
-            onCourtIds={state.awayOnCourtIds}
+            onCourt={state.awayOnCourt}
             playerById={playbackContext.playerById}
             fatigue={state.fatigue}
           />
           <OnCourtPanel
             label={`${homeTeam.abbreviation} on the floor`}
-            onCourtIds={state.homeOnCourtIds}
+            onCourt={state.homeOnCourt}
             playerById={playbackContext.playerById}
             fatigue={state.fatigue}
           />

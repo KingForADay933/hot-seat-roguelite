@@ -8,6 +8,7 @@ import {
   MIN_SHIFT_SECONDS,
   PACE_CHECK_MIN_SECONDS,
 } from '../constants'
+import { slotByPosition } from '../matchup'
 import { checkSubstitutions, rotationValue } from './substitution'
 import type { RotationState } from './rotationState'
 
@@ -35,7 +36,7 @@ function buildFixture(opts: {
   ])
 
   const state: RotationState = {
-    onCourt: [starter],
+    onCourt: slotByPosition([starter]),
     fatigue: new Map([
       [starter.id, opts.starterFatigue ?? 0],
       [bench.id, opts.benchFatigue ?? 0],
@@ -60,7 +61,7 @@ describe('checkSubstitutions', () => {
       shiftEnteredAtSeconds: 0,
     })
     checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS - 1)
-    expect(state.onCourt[0]).toBe(starter)
+    expect(state.onCourt[0].player).toBe(starter)
   })
 
   it('subs out at the fatigue threshold once past the cooldown, bringing in the rested bench player', () => {
@@ -70,7 +71,23 @@ describe('checkSubstitutions', () => {
       shiftEnteredAtSeconds: 0,
     })
     checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
-    expect(state.onCourt[0]).toBe(bench)
+    expect(state.onCourt[0].player).toBe(bench)
+  })
+
+  it('hands the slot to the incoming player rather than re-deriving it from him', () => {
+    // The slot is the assignment, not a property of whoever happens to be filling it. Today the
+    // replacement's own position always matches anyway; this pins the direction of the dependency
+    // so free-form lineups can relax the candidate filter without the slot drifting with it.
+    const { state, team, playersById } = buildFixture({
+      starterFatigue: FATIGUE_SUB_OUT_THRESHOLD,
+      benchFatigue: 0,
+      shiftEnteredAtSeconds: 0,
+    })
+    const slotBefore = state.onCourt[0].slot
+
+    checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
+
+    expect(state.onCourt[0].slot).toBe(slotBefore)
   })
 
   it('the emergency threshold bypasses the shift cooldown', () => {
@@ -80,7 +97,7 @@ describe('checkSubstitutions', () => {
       shiftEnteredAtSeconds: 0,
     })
     checkSubstitutions(state, team, [], playersById, 1) // well within the normal cooldown window
-    expect(state.onCourt[0]).toBe(bench)
+    expect(state.onCourt[0].player).toBe(bench)
   })
 
   it('leaves the outgoing player in if every same-position bench player is also too tired', () => {
@@ -90,7 +107,7 @@ describe('checkSubstitutions', () => {
       shiftEnteredAtSeconds: 0,
     })
     checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
-    expect(state.onCourt[0]).toBe(starter)
+    expect(state.onCourt[0].player).toBe(starter)
   })
 
   it('never selects a cross-position bench player even if more rested', () => {
@@ -101,9 +118,9 @@ describe('checkSubstitutions', () => {
       shiftEnteredAtSeconds: 0,
     })
     checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
-    expect(state.onCourt[0]).not.toBe(offPosition)
-    expect(state.onCourt[0]).toBe(starter) // falls back to "stays in", not the wrong-position player
-    expect(state.onCourt[0]).not.toBe(bench)
+    expect(state.onCourt[0].player).not.toBe(offPosition)
+    expect(state.onCourt[0].player).toBe(starter) // falls back to "stays in", not the wrong-position player
+    expect(state.onCourt[0].player).not.toBe(bench)
   })
 
   it('triggers a pace-overage sub for a low-target-minutes player running ahead of pace, even below the fatigue threshold', () => {
@@ -115,9 +132,9 @@ describe('checkSubstitutions', () => {
       shiftEnteredAtSeconds: 0,
     })
     // give the starter a small target so their pace is clearly over
-    team.rotationMinutes[state.onCourt[0].id] = 5 // 5/48 target share, against a 240/240 actual
+    team.rotationMinutes[state.onCourt[0].player.id] = 5 // 5/48 target share, against a 240/240 actual
     checkSubstitutions(state, team, [], playersById, 240)
-    expect(state.onCourt[0]).toBe(bench)
+    expect(state.onCourt[0].player).toBe(bench)
   })
 
   it('skips the pace check entirely before PACE_CHECK_MIN_SECONDS', () => {
@@ -128,7 +145,7 @@ describe('checkSubstitutions', () => {
     })
     team.rotationMinutes[starter.id] = 1 // tiny target, would trigger pace overage if checked
     checkSubstitutions(state, team, [], playersById, PACE_CHECK_MIN_SECONDS - 1)
-    expect(state.onCourt[0]).toBe(starter)
+    expect(state.onCourt[0].player).toBe(starter)
   })
 
   it('does not double-book a bench player across two simultaneous outgoing slots', () => {
@@ -147,7 +164,7 @@ describe('checkSubstitutions', () => {
       [onlyBench.id, onlyBench],
     ])
     const state: RotationState = {
-      onCourt: [starter1, starter2],
+      onCourt: slotByPosition([starter1, starter2]),
       fatigue: new Map([
         [starter1.id, FATIGUE_SUB_OUT_THRESHOLD],
         [starter2.id, FATIGUE_SUB_OUT_THRESHOLD],
@@ -166,7 +183,7 @@ describe('checkSubstitutions', () => {
 
     checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1)
 
-    const onCourtIds = state.onCourt.map((p) => p.id)
+    const onCourtIds = state.onCourt.map((entry) => entry.player.id)
     expect(new Set(onCourtIds).size).toBe(2) // no duplicate
     expect(onCourtIds).toContain(onlyBench.id) // one slot got the only candidate
   })

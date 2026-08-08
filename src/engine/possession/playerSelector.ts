@@ -1,7 +1,7 @@
 import type { DefensiveScheme } from '../../data/presets'
 import type { PlayCallType, Player, PlayerId } from '../../data/types'
 import { USAGE_WEIGHT_EXPONENT } from '../constants'
-import { avgInteriorDefense, avgPerimeterDefense, buildMatchups, pickBest } from '../matchup'
+import { avgInteriorDefense, avgPerimeterDefense, buildMatchups, pickBest, playersOf, type OnCourtPlayer } from '../matchup'
 import type { Rng } from '../rng'
 
 export interface PlaySelection {
@@ -49,14 +49,20 @@ const scoreTransitionHandler = (p: Player) => (p.attributes.speed + p.attributes
 const scoreRebounder = (p: Player) => p.attributes.rebounding
 const scoreSpeed = (p: Player) => p.attributes.speed
 
+/**
+ * Takes slot-assigned fives because defender assignment pairs on slots, but scores candidates on
+ * the plain players -- who executes a play call is about ability, not where they're standing.
+ */
 export function selectPlayers(
   playCall: PlayCallType,
-  offense: Player[],
-  defense: Player[],
+  offenseFive: OnCourtPlayer[],
+  defenseFive: OnCourtPlayer[],
   scheme: DefensiveScheme,
   rng: Rng,
 ): PlaySelection {
-  const matchups = buildMatchups(offense, defense)
+  const offense = playersOf(offenseFive)
+  const defense = playersOf(defenseFive)
+  const matchups = buildMatchups(offenseFive, defenseFive)
   const assignedDefenderOf = (p: Player) => matchups.get(p.id) ?? defense[0]
 
   switch (playCall) {
