@@ -7,6 +7,7 @@ import { CampPurchaseForm } from '../components/CampPurchaseForm'
 import { CoachingUpgradeCard } from '../components/CoachingUpgradeCard'
 import { ConsumableCard } from '../components/ConsumableCard'
 import { ConsumableInventoryRow } from '../components/ConsumableInventoryRow'
+import { splitRoster } from '../rosterGroups'
 
 export function ShopScreen({
   bundle,
@@ -31,10 +32,18 @@ export function ShopScreen({
   onContinue: () => void
   onSimSeason: () => void
 }) {
-  const { run, players, shop } = bundle
+  const { run, teams, players, shop } = bundle
   if (!shop) return null
 
+  const team = teams.find((t) => t.id === run.teamId)
   const roster = players.filter((p) => p.teamId === run.teamId)
+  // Starters first, then bench -- same split the roster screens use, so the camp dropdown lists
+  // players in the order a GM already thinks about them.
+  const { starters, bench } = team ? splitRoster(team, roster) : { starters: [], bench: roster }
+  const campTargets = [
+    { label: 'Starting Five', players: starters },
+    { label: 'Bench', players: bench },
+  ]
   const inventoryFull = run.consumableInventory.length >= CONSUMABLE_INVENTORY_CAPACITY
   const canBuyConsumable = !inventoryFull && run.budget >= CONSUMABLE_COST
   const nothingLeftToBuy =
@@ -56,7 +65,7 @@ export function ShopScreen({
         cost={PLAYER_CAMP_COST}
         remaining={shop.playerCampsRemaining}
         budget={run.budget}
-        players={roster}
+        playerGroups={campTargets}
         onBuy={(attribute, playerId) => playerId && onBuyPlayerCamp(playerId, attribute)}
       />
 

@@ -118,6 +118,12 @@ th.numeric {
   color: var(--positive);
 }
 
+/** Growth-left-to-potential suffix in the roster sheet -- deliberately quieter than the rating. */
+.headroom {
+  color: var(--positive);
+  font-size: 12px;
+}
+
 .text-negative {
   color: var(--negative);
 }

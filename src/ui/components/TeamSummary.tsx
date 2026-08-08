@@ -1,6 +1,6 @@
 import type { Player, StandingsRow, Team } from '../../data/types'
-import { POSITION_ORDER } from '../../engine/matchup'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
+import { splitRoster } from '../rosterGroups'
 
 function average(values: number[]): number {
   return values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0
@@ -13,13 +13,7 @@ function formatWinPct(pct: number): string {
 }
 
 export function TeamSummary({ team, roster, record }: { team: Team; roster: Player[]; record?: StandingsRow }) {
-  const starters = team.startingFive
-    .map((id) => roster.find((p) => p.id === id))
-    .filter((p): p is Player => p !== undefined)
-    .sort((a, b) => POSITION_ORDER.indexOf(a.positions[0]) - POSITION_ORDER.indexOf(b.positions[0]))
-
-  const starterIds = new Set(starters.map((p) => p.id))
-  const bench = roster.filter((p) => !starterIds.has(p.id))
+  const { starters, bench } = splitRoster(team, roster)
   const groups: { label: string; players: Player[] }[] = [
     { label: 'Starting Five', players: starters },
     { label: 'Bench', players: bench },

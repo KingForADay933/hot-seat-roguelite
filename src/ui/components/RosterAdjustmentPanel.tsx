@@ -1,15 +1,6 @@
 import type { AttributeKey, Player, Team } from '../../data/types'
-import { POSITION_ORDER } from '../../engine/matchup'
-import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
-
-/** The single focused attribute this UI wrote for a player, if any -- setTrainingFocus (RunProvider)
- *  only ever writes a single-key override, so the first key is always the whole answer. */
-function currentFocus(team: Team, playerId: string): AttributeKey | null {
-  const override = team.trainingFocus[playerId]
-  if (!override) return null
-  const keys = Object.keys(override) as AttributeKey[]
-  return keys[0] ?? null
-}
+import { splitRoster } from '../rosterGroups'
+import { MinutesInput, TrainingFocusSelect } from './RotationControls'
 
 function RosterAdjustmentGroup({
   label,
@@ -42,27 +33,10 @@ function RosterAdjustmentGroup({
             <tr key={player.id}>
               <td>{player.name}</td>
               <td className="numeric">
-                <input
-                  type="number"
-                  min={0}
-                  max={48}
-                  value={team.rotationMinutes[player.id] ?? 0}
-                  onChange={(e) => onSetMinutes(player.id, Number(e.target.value))}
-                  style={{ width: '4em' }}
-                />
+                <MinutesInput team={team} playerId={player.id} onSetMinutes={onSetMinutes} />
               </td>
               <td>
-                <select
-                  value={currentFocus(team, player.id) ?? ''}
-                  onChange={(e) => onSetFocus(player.id, (e.target.value || null) as AttributeKey | null)}
-                >
-                  <option value="">Auto</option>
-                  {ATTRIBUTE_COLUMNS.map((col) => (
-                    <option key={col.key} value={col.key}>
-                      {col.label}
-                    </option>
-                  ))}
-                </select>
+                <TrainingFocusSelect team={team} playerId={player.id} onSetFocus={onSetFocus} />
               </td>
             </tr>
           ))}
@@ -83,15 +57,9 @@ export function RosterAdjustmentPanel({
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
-  // Same starters-vs-bench split as TeamSummary -- listing all ~10-13 roster players in one
-  // undifferentiated table read as confusing (playtesting feedback); grouping under two headers
-  // matches how a GM actually thinks about the roster.
-  const starters = team.startingFive
-    .map((id) => roster.find((p) => p.id === id))
-    .filter((p): p is Player => p !== undefined)
-    .sort((a, b) => POSITION_ORDER.indexOf(a.positions[0]) - POSITION_ORDER.indexOf(b.positions[0]))
-  const starterIds = new Set(starters.map((p) => p.id))
-  const bench = roster.filter((p) => !starterIds.has(p.id))
+  // Listing all ~10-13 roster players in one undifferentiated table read as confusing (playtesting
+  // feedback); grouping under two headers matches how a GM actually thinks about the roster.
+  const { starters, bench } = splitRoster(team, roster)
 
   return (
     <>
