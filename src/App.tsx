@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { RunProvider } from './ui/state/RunProvider'
 import { useRun } from './ui/state/useRun'
+import { AbandonRunScreen } from './ui/screens/AbandonRunScreen'
 import { RunStartScreen } from './ui/screens/RunStartScreen'
 import { RunDraftScreen } from './ui/screens/RunDraftScreen'
 import { TeamRevealScreen } from './ui/screens/TeamRevealScreen'
@@ -17,6 +18,9 @@ function AppContent() {
   // it's a view toggle, and a refresh landing back on the screen that actually needs an action
   // (shop, checkpoint) is the better default anyway.
   const [viewingMyTeam, setViewingMyTeam] = useState(false)
+  // Whether the abandon confirmation is up. Same local-view-toggle rationale as viewingMyTeam --
+  // and deliberately not persisted, so a refresh mid-decision keeps the run rather than the prompt.
+  const [confirmingAbandon, setConfirmingAbandon] = useState(false)
   const {
     bundle,
     draft,
@@ -25,6 +29,7 @@ function AppContent() {
     fireAcknowledged,
     liveGame,
     acknowledgeFired,
+    abandonRun,
     beginDraft,
     confirmDraft,
     lockSystem,
@@ -107,6 +112,18 @@ function AppContent() {
     return <SeasonResultsScreen bundle={bundle} onContinue={bundle.run.status === 'fired' ? acknowledgeFired : openShop} />
   }
 
+  if (confirmingAbandon) {
+    return (
+      <AbandonRunScreen
+        bundle={bundle}
+        onAbandon={() => {
+          setConfirmingAbandon(false)
+          void abandonRun()
+        }}
+        onCancel={() => setConfirmingAbandon(false)}
+      />
+    )
+  }
   if (viewingMyTeam) {
     return (
       <MyTeamScreen
@@ -118,12 +135,17 @@ function AppContent() {
     )
   }
 
-  // Every screen of a live run gets the same entry point -- the roster sheet informs shop buys,
-  // rotation changes and "do I bother" reads alike, so it shouldn't be tied to one of them.
+  // Every screen of a live run gets the same entry points -- the roster sheet informs shop buys,
+  // rotation changes and "do I bother" reads alike, and quitting shouldn't require reaching a
+  // particular screen either. Both sit behind the simcast check above, so neither interrupts a
+  // game already in motion.
   return (
     <>
       <nav>
         <button onClick={() => setViewingMyTeam(true)}>My Team</button>
+        <button className="link-button nav-quit" onClick={() => setConfirmingAbandon(true)}>
+          Abandon Run
+        </button>
       </nav>
       {runScreen()}
     </>

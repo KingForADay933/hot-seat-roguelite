@@ -56,9 +56,22 @@ h2 {
 nav {
   display: flex;
   gap: 8px;
+  align-items: center;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 12px;
+}
+
+/* Pushed to the far end and styled as a link, not a button -- quitting is always available but
+   should never sit shoulder to shoulder with the navigation as an equal option. */
+.nav-quit {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.nav-quit:hover {
+  color: var(--negative);
 }
 
 button {
@@ -84,6 +97,18 @@ button.primary {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+}
+
+/* Destructive confirmations only -- outlined rather than filled so it never reads as the
+   default action sitting next to a filled .primary. */
+button.danger {
+  color: var(--negative);
+  border-color: var(--negative);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--negative);
+  color: #fff;
 }
 
 table {

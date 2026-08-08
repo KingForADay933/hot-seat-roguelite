@@ -78,6 +78,23 @@ export function RunProvider({ children }: { children: ReactNode }) {
   }, [])
 
   /**
+   * Quits the run in progress and returns to the start screen. Same erasure beginDraft performs
+   * before rolling a new league, split out so quitting and starting again are separate acts: a GM
+   * walking away from a run shouldn't be dropped straight into another one's draft picks.
+   *
+   * There is nothing to keep -- the roguelite has no run history, and the fired epilogue is the
+   * only retrospective it has ever shown -- so this is a delete, not an archive.
+   */
+  const abandonRun = useCallback(async () => {
+    setFireAcknowledged(false)
+    setLiveGame(null)
+    await clearRunBundle()
+    setBundle(null)
+    setDraft(null)
+    setReveal(null)
+  }, [])
+
+  /**
    * Phase one of setup. Both picks here rewrite the roster -- the quirk shifts attributes and can
    * re-age players, the house rule can swap starters or waive the back of the bench -- so they're
    * applied in that order and the result becomes the roster the reveal screen shows. No run is
@@ -576,6 +593,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     fireAcknowledged,
     liveGame,
     acknowledgeFired,
+    abandonRun,
     beginDraft,
     confirmDraft,
     lockSystem,
