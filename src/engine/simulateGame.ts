@@ -8,7 +8,7 @@ import { computeOffenseStrength, synergyMultiplier } from './possession/possessi
 import { getInvolvedPlayerIds, selectPlayers } from './possession/playerSelector'
 import { selectPlayCall } from './possession/playCallSelector'
 import { possessionDurationSeconds } from './possession/possessionDuration'
-import { offensiveReboundProbability } from './possession/rebound'
+import { offensiveReboundProbability, pickRebounder } from './possession/rebound'
 import { resolvePossession } from './possession/outcomeResolver'
 import { computeResistance } from './possession/resistance'
 import { tickFatigue } from './rotation/fatigue'
@@ -174,6 +174,13 @@ export function* simulateGameSteps(
       // turnover hands it over, and a foul stops play for free throws.
       const offensiveRebound =
         resolved.outcome === 'miss' && rng() < offensiveReboundProbability(offenseOnCourt, defenseOnCourt)
+      // Who actually came down with it, decided here rather than in deriveBoxScore so the rebounder
+      // exists while the possession is still happening -- the live box score and commentary both
+      // read the log, and neither can see a stat that isn't settled until the final buzzer.
+      const rebounderId =
+        resolved.outcome === 'miss'
+          ? pickRebounder(offensiveRebound ? offenseOnCourt : defenseOnCourt, rng).id
+          : null
 
       // Duration is sampled after resolution because the outcome shapes it -- a turnover cuts the
       // action short, a miss adds the rebound scramble. Clamped to the clock so a period never
@@ -206,6 +213,7 @@ export function* simulateGameSteps(
         freeThrowsMade: resolved.freeThrowsMade,
         freeThrowsAttempted: resolved.freeThrowsAttempted,
         offensiveRebound,
+        rebounderId,
         isSecondChance,
         playersInvolved: getInvolvedPlayerIds(selection),
         homeOnCourt: toOnCourtRecords(homeRotation.onCourt),
@@ -235,7 +243,7 @@ export function* simulateGameSteps(
     yield* runPeriod(REGULATION_PERIODS + overtimePeriods, OVERTIME_SECONDS, rollJumpBall(rng))
   }
 
-  const result = deriveBoxScore(possessionLog, homeTeam.id, playersById, rng)
+  const result = deriveBoxScore(possessionLog, homeTeam.id)
 
   return {
     ...game,

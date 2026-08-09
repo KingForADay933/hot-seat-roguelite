@@ -360,3 +360,48 @@ describe('rollJumpBall', () => {
     expect(rollJumpBall(() => 0.99)).toBe(false)
   })
 })
+
+describe('rebound attribution', () => {
+  it('names a rebounder on every miss, from the five that actually kept the ball', () => {
+    const { home, away, playersById } = buildMatchup(31)
+    const played = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(31))
+
+    let misses = 0
+    let offensiveBoards = 0
+    for (const entry of played.possessionLog) {
+      if (entry.outcome !== 'miss') {
+        // A make is inbounded, a turnover hands it over, a shooting foul stops play -- no board.
+        expect(entry.rebounderId, `possession ${entry.possessionNumber} (${entry.outcome})`).toBeNull()
+        continue
+      }
+
+      misses += 1
+      expect(entry.rebounderId, `possession ${entry.possessionNumber}`).not.toBeNull()
+
+      // The rebounder must be on the floor for the side that kept the ball: the offense when they
+      // got their own board, the defense otherwise.
+      const offenseIsHome = entry.offenseTeamId === home.id
+      const keptByHome = entry.offensiveRebound ? offenseIsHome : !offenseIsHome
+      const expectedFive = keptByHome ? entry.homeOnCourt : entry.awayOnCourt
+      expect(expectedFive.map((r) => r.playerId)).toContain(entry.rebounderId)
+
+      if (entry.offensiveRebound) offensiveBoards += 1
+    }
+
+    // Guards the loop against passing vacuously on a log with no misses, and confirms both branches
+    // are exercised rather than only the defensive-rebound one.
+    expect(misses).toBeGreaterThan(20)
+    expect(offensiveBoards).toBeGreaterThan(0)
+    expect(offensiveBoards).toBeLessThan(misses)
+  })
+
+  it('agrees with the box score: total rebounds equal the number of misses', () => {
+    const { home, away, playersById } = buildMatchup(32)
+    const played = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(32))
+
+    const misses = played.possessionLog.filter((e) => e.outcome === 'miss').length
+    const credited = [...played.result!.boxScore.home, ...played.result!.boxScore.away].reduce((sum, l) => sum + l.rebounds, 0)
+
+    expect(credited).toBe(misses)
+  })
+})

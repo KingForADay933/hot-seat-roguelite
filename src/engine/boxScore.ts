@@ -1,16 +1,5 @@
-﻿import type {
-  Game,
-  GameResult,
-  OnCourtRecord,
-  PlayCallType,
-  Player,
-  PlayerBoxScoreLine,
-  PlayerId,
-  PossessionLogEntry,
-  TeamId,
-} from '../data/types'
+﻿import type { Game, GameResult, PlayCallType, PlayerBoxScoreLine, PlayerId, PossessionLogEntry, TeamId } from '../data/types'
 import { SECONDS_PER_MINUTE } from './constants'
-import type { Rng } from './rng'
 
 /** Pass-originated play calls where a make credits an assist to secondaries[0]. Other play calls
  *  (Pick-and-Roll, Isolation, Post-Up, Transition) are modeled as the primary scoring unassisted --
@@ -37,31 +26,19 @@ function emptyLine(playerId: PlayerId): PlayerBoxScoreLine {
   }
 }
 
-function weightedPick(players: Player[], weight: (p: Player) => number, rng: Rng): Player {
-  const total = players.reduce((sum, p) => sum + weight(p), 0)
-  let roll = rng() * total
-  for (const p of players) {
-    if (roll < weight(p)) return p
-    roll -= weight(p)
-  }
-  return players[players.length - 1]
-}
-
-function resolvePlayers(five: OnCourtRecord[], playersById: Map<PlayerId, Player>): Player[] {
-  return five.map(({ playerId }) => {
-    const player = playersById.get(playerId)
-    if (!player) throw new Error(`Player ${playerId} referenced in the possession log was not found`)
-    return player
-  })
-}
-
-/** Derived entirely from the possession log's per-possession homeOnCourt/awayOnCourt -- the log is
- *  the sole source of truth for who was on the floor, including for substitutions. */
+/**
+ * Derived entirely from the possession log -- the log is the sole source of truth for who was on
+ * the floor, including for substitutions, and now for who grabbed each rebound.
+ *
+ * A pure function of the log. It used to take an `Rng` solely to roll the rebounder, which made the
+ * official box score non-deterministic with respect to the log it was derived from: the same log
+ * could produce two different rebound columns. Now the same log always produces the same box score,
+ * which is what lets the simcast's running tally and the final table agree by construction rather
+ * than by coincidence.
+ */
 export function deriveBoxScore(
   possessionLog: PossessionLogEntry[],
   homeTeamId: TeamId,
-  playersById: Map<PlayerId, Player>,
-  rng: Rng,
 ): GameResult {
   const lines = new Map<PlayerId, PlayerBoxScoreLine>()
   const lineFor = (id: PlayerId): PlayerBoxScoreLine => {
@@ -115,14 +92,11 @@ export function deriveBoxScore(
       primaryLine.fieldGoalsAttempted += 1
       if (entry.isThreePointAttempt) primaryLine.threePointersAttempted += 1
 
-      // Which side got the board is the simulation's decision -- it determined who kept the ball --
-      // so it's read off the log rather than re-rolled here. Only *which player* on that five came
-      // down with it is settled now, since nothing upstream needed to know.
-      const reboundingSideIsOffense = entry.offensiveRebound
-      const reboundingIsHome = reboundingSideIsOffense ? offenseIsHome : !offenseIsHome
-      const reboundingFive = reboundingIsHome ? entry.homeOnCourt : entry.awayOnCourt
-      const rebounder = weightedPick(resolvePlayers(reboundingFive, playersById), (p) => p.attributes.rebounding, rng)
-      lineFor(rebounder.id).rebounds += 1
+      // Both which side got the board and which player came down with it are the simulation's
+      // decisions, read straight off the log. The rebounder used to be rolled here instead, which
+      // meant the official box score and anything watching the game live could disagree about who
+      // got it; now there is one answer, settled when the possession happened.
+      if (entry.rebounderId) lineFor(entry.rebounderId).rebounds += 1
     } else if (entry.outcome === 'turnover') {
       primaryLine.turnovers += 1
     } else if (entry.outcome === 'foul') {

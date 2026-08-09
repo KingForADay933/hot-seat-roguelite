@@ -1,17 +1,7 @@
 ﻿import { describe, expect, it } from 'vitest'
-import type { Game, Player, PlayerBoxScoreLine, PlayerId, PossessionLogEntry } from '../data/types'
+import type { Game, PlayerBoxScoreLine, PlayerId, PossessionLogEntry } from '../data/types'
 import { makeOnCourt, makeTestPlayer } from './testFixtures'
 import { aggregateSeasonTotals, deriveBoxScore } from './boxScore'
-import type { Rng } from './rng'
-
-function queue(...values: number[]): Rng {
-  let i = 0
-  return () => values[i++]
-}
-
-function playersMap(players: Player[]): Map<PlayerId, Player> {
-  return new Map(players.map((p) => [p.id, p]))
-}
 
 function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEntry, 'homeOnCourt' | 'awayOnCourt'>): PossessionLogEntry {
   return {
@@ -31,6 +21,7 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEn
     freeThrowsMade: 0,
     freeThrowsAttempted: 0,
     offensiveRebound: false,
+    rebounderId: null,
     isSecondChance: false,
     playersInvolved: [],
     ...overrides,
@@ -64,6 +55,7 @@ describe('deriveBoxScore', () => {
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
         offensiveRebound: false,
+        rebounderId: null,
         isSecondChance: false,
         playersInvolved: [h1.id, a1.id],
         homeOnCourt,
@@ -84,6 +76,7 @@ describe('deriveBoxScore', () => {
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
         offensiveRebound: false,
+        rebounderId: null,
         isSecondChance: false,
         playersInvolved: [a1.id, a2.id, h1.id],
         homeOnCourt,
@@ -104,6 +97,9 @@ describe('deriveBoxScore', () => {
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
         offensiveRebound: false,
+        // The defending five got the board and A1 came down with it -- both settled by the
+        // simulation and read straight off the log, not re-rolled here.
+        rebounderId: a1.id,
         isSecondChance: false,
         playersInvolved: [h1.id, h2.id, a1.id],
         homeOnCourt,
@@ -124,6 +120,7 @@ describe('deriveBoxScore', () => {
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
         offensiveRebound: false,
+        rebounderId: null,
         isSecondChance: false,
         playersInvolved: [a2.id, h1.id],
         homeOnCourt,
@@ -144,6 +141,7 @@ describe('deriveBoxScore', () => {
         freeThrowsMade: 0,
         freeThrowsAttempted: 0,
         offensiveRebound: false,
+        rebounderId: null,
         isSecondChance: false,
         playersInvolved: [h2.id, a1.id],
         homeOnCourt,
@@ -151,12 +149,9 @@ describe('deriveBoxScore', () => {
       },
     ]
 
-    // Possession 3 is the only miss, and its entry says offensiveRebound: false -- so the defending
-    // (away) five gets the board, no roll needed for which side. The single rng call left is which
-    // player: 0.1 lands in A1's weighted band (first in awayOnCourt, equal 50 rebounding, [0,50) of 100).
-    const rng = queue(0.1)
-
-    const result = deriveBoxScore(log, homeTeamId, playersMap([h1, h2, a1, a2]), rng)
+    // Possession 3 is the only miss, and its entry names A1 as the rebounder. deriveBoxScore takes
+    // no rng at all now -- the same log always produces the same box score.
+    const result = deriveBoxScore(log, homeTeamId)
 
     expect(result.homeScore).toBe(2)
     expect(result.awayScore).toBe(3)
@@ -182,7 +177,7 @@ describe('deriveBoxScore', () => {
     const a1 = makeTestPlayer()
     const log = [makeEntry({ homeOnCourt: makeOnCourt([h1.id, h2.id]), awayOnCourt: makeOnCourt([a1.id]) })]
 
-    const result = deriveBoxScore(log, 'home-team', playersMap([h1, h2, a1]), () => 0.5)
+    const result = deriveBoxScore(log, 'home-team')
 
     expect(result.boxScore.home.map((l) => l.playerId).sort()).toEqual([h1.id, h2.id].sort())
     expect(result.boxScore.away.map((l) => l.playerId)).toEqual([a1.id])
@@ -202,7 +197,7 @@ describe('deriveBoxScore', () => {
       }),
     )
 
-    const result = deriveBoxScore(log, 'home-team', playersMap([h1, a1]), () => 0.5)
+    const result = deriveBoxScore(log, 'home-team')
 
     const h1Line = result.boxScore.home.find((l) => l.playerId === h1.id)!
     expect(h1Line.minutesPlayed).toBeCloseTo((3 * 20) / 60, 5)
@@ -219,7 +214,7 @@ describe('deriveBoxScore', () => {
       makeEntry({ possessionNumber: 2, durationSeconds: 16, homeOnCourt: makeOnCourt([starter.id]), awayOnCourt: makeOnCourt([opponent.id]) }),
     ]
 
-    const result = deriveBoxScore(log, 'home-team', playersMap([starter, opponent]), () => 0.5)
+    const result = deriveBoxScore(log, 'home-team')
 
     expect(result.boxScore.home[0].minutesPlayed).toBeCloseTo(20 / 60, 5)
   })
@@ -238,7 +233,7 @@ describe('deriveBoxScore', () => {
       makeEntry({ possessionNumber: 5, homeOnCourt: makeOnCourt([h1.id, h3.id]), awayOnCourt: makeOnCourt([a1.id]) }),
     ]
 
-    const result = deriveBoxScore(log, 'home-team', playersMap([h1, h2, h3, a1]), () => 0.5)
+    const result = deriveBoxScore(log, 'home-team')
 
     expect(result.boxScore.home.find((l) => l.playerId === h2.id)!.minutesPlayed).toBeCloseTo((1 * 20) / 60, 5)
     expect(result.boxScore.home.find((l) => l.playerId === h3.id)!.minutesPlayed).toBeCloseTo((4 * 20) / 60, 5)
