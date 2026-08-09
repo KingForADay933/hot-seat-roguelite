@@ -192,7 +192,7 @@ Things the player *chooses*, from a small rolled hand -- the answer to Tier 3's 
 
 - Roster quirk: roll 2 candidates, pick 1.
 - House rule: roll 2 candidates, pick 1.
-- System (see Tier 6): roll 3 candidates, pick 1.
+- System (see Tier 6): roll 4 candidates, pick 1. Widened from 3 once the system came to be chosen with the roster already on screen -- a wider hand is more freedom rather than more guesswork, and four cards fill the reveal grid evenly (SYSTEM_DRAFT_SIZE).
 - Shared `pickDistinct` draft-pool mechanic and a reusable `DraftOptionCard` UI, both built to be reused by future shop/draft screens (now also powering Tier 7's shop offer cards).
 
 ---
@@ -281,6 +281,7 @@ Not part of the original phase plan. A 2K-style rotation chart, and the engine r
 **Planned -- Phase 10 -- scheduled M1**
 
 - Post-run summary screen powered by Hoop Sim's Coaching Insights engine, re-aimed from "what happened in this game" to "what actually got you fired" across the whole run.
+- **Decide the shape at M1, not later:** whether this screen is *screenshot-shaped* (a compact recap card a player would post -- stretches cleared, seasons survived, what got you fired) is nearly free while building it and a rewrite afterwards. See Parked, "Shareable run recap card." The sharing affordance itself can wait; the layout decision can't.
 - **Promoted to M1, the first milestone.** Section 1's fourth pillar calls commentary and insights "the emotional payoff of every run's ending," and Section 4 names the post-run summary specifically as that payoff. Right now the run just stops -- a roguelite whose ending is flat wastes everything that led to it, and it's the single biggest gap between what the design doc promises and what the build delivers.
 - Cheap for what it gives: `generateCoachingInsights` already reconstructs narratives from possession logs (fatigue substitutions, chart overrides) and already filters to the user's team and deduplicates across games. The work is aggregating across a whole run rather than a chunk, choosing which threads make a verdict, and a screen -- not new analysis machinery.
 - **Watch for:** possession logs are discarded after each chunk's insights are pulled (Tier 1.5), so a run-level summary can only be built from what was retained at the time. Decide early what to keep per chunk; retrofitting a longer retention window after the fact means the data simply isn't there for runs already in progress.
@@ -291,7 +292,7 @@ Not part of the original phase plan. A 2K-style rotation chart, and the engine r
 **Planned -- Phase 11** (leaderboard) **/ Idea, unscoped** (unlocks)
 
 - **Local leaderboard** (planned): longest survival streak, best single-season record. No backend, matches the local-only architecture.
-- **Cross-run unlocks** (idea only): new house-rule/system/upgrade content unlocking the more you play. Explicitly distinct from Tier 5's Budget, which resets every run -- this would be the *only* thing that persists across runs. Not yet scoped; may not be needed if Tier 7's shop pool alone provides enough variety.
+- **Cross-run unlocks** (idea only): new house-rule/system/upgrade content unlocking the more you play. Explicitly distinct from Tier 5's Budget, which resets every run -- this would be the *only* thing that persists across runs. Not yet scoped; may not be needed if Tier 7's shop pool alone provides enough variety. **There is a counter-argument for promoting this** -- in a roguelite it is often the biggest lever on whether anyone plays a sixth run -- see Parked, "Cross-run meta-progression." Decide with M2 data.
 
 ---
 
@@ -434,6 +435,94 @@ prototype-low-and-raise discipline Tier 14 needs.
 
 ---
 
+## Parked
+
+Raised and worth doing, but not scheduled. Grouped by the problem each one solves rather than by
+feature area. Nothing here blocks the Build Order; revisit after M2, when playtest feedback says
+which problems are real.
+
+**Two of these have sequencing consequences and shouldn't sit here quietly** — see the callouts.
+
+### Retention and replay
+
+- **Cross-run meta-progression.** Already in Tier 9 as an idea, and there's an argument for promoting
+  it: in a roguelite, meta-progression is often the biggest single lever on whether someone plays run
+  6 or stops after run 1. Right now getting fired is a strong beat but nothing carries forward except
+  what the player remembers. Even a thin version — one new system, quirk or cosmetic unlocked after a
+  first fired-out run — gives a reason to come back after a bad ending.
+
+  **The counter-argument is already recorded in Tier 9 and still stands:** it may not be needed if the
+  shop pool alone provides enough variety, and it would be the *only* thing that persists across runs,
+  which cuts against the "bounded runs, no ongoing save" pillar. Worth deciding with M2 data rather
+  than on instinct — if playtesters stop after one or two runs, that settles it.
+
+- **Shareable seeds / weekly challenge.** Everyone gets the same imposed variation (quirk, house rule,
+  market size, wildcard rolls) and compares outcomes. **Cheaper than it looks:** the engine is already
+  seed-deterministic by design — `createSeededRng` exists and seed-reproducibility has been a
+  constraint throughout — so the work is seeding *run creation* (which currently uses `defaultRng`)
+  and surfacing the seed, not making the sim reproducible. Pairs with Tier 9's local leaderboard.
+
+  Honest caveat: with no backend, "compare outcomes" means players posting results themselves. That's
+  the intended low-cost reach mechanism rather than a limitation, but it only works if there are
+  enough players to compare against — so it's a post-audience feature, not a launch one.
+
+- **Shareable run recap card** — screenshot-shaped end-of-run summary: stretches cleared, best win,
+  seasons survived, what got you fired.
+
+  > ⚠️ **This is not really a parked item — it's an M1 design input.** Tier 8's run-end summary is
+  > being built at M1 anyway. Whether it's *screenshot-shaped* is nearly free if decided while
+  > building it, and a rewrite if retrofitted later. Decide the shape at M1 even if the sharing
+  > affordance itself waits.
+
+### Feel and comprehension
+
+- **Audio.** Completely absent today — there is no audio infrastructure of any kind. Named here so it
+  doesn't fall through the gap rather than because it should happen soon. The simcast is the obvious
+  hook: a buzzer, a whistle on a foul, a crowd swell on a big shot, all driven by possession outcomes
+  the log already carries. High feel-per-unit-effort at this stage. Note browser autoplay policies
+  need a user gesture before anything can play.
+
+- **Onboarding / tutorial.** Also absent — no tooltips, no first-run guidance. The roguelite framing
+  will pull in players who've never touched a possession-log sim and have no idea what a synergy score
+  or an out-of-position penalty means. The Draft and Chart Editor screens are where that bites hardest.
+
+  > ⚠️ **Sequencing note.** The argument that this protects playtest feedback from "I didn't understand
+  > what I was doing" is real, but it applies to a *public* audience more than to M2. A private
+  > playtest of 3-5 people can be briefed verbally, and their confusion is itself useful signal about
+  > where onboarding is needed. So: don't block M2 on this — but do take notes during M2 on exactly
+  > what needed explaining, and build from those notes rather than from guesses. Before M7, not before
+  > M2.
+
+### Steam-readiness and quality of life
+
+- **Achievements.** Trivial to add late and a natural wrapper around the stretch-clearing escalation
+  that already exists. Tier 10's Steam step already plans a swappable interface for leaderboards; the
+  same pattern covers achievements.
+
+- **Delegation / auto-handling.** A run repeats the same decision types across many seasons, and by
+  season 3 of a stretch that risks decision fatigue. Worth knowing that **partial delegation already
+  exists**: unfilled chart time falls through to the coach heuristic, `rotationMinutes` is an
+  auto-fallback for everything uncharted, and Sim Season / Sim Stretch already skip the per-game flow.
+  The genuine gaps are shop purchases and chart authoring — an "apply last season's chart" or "spend
+  the budget sensibly" escape valve, not a new system.
+
+- **Mod support / custom rosters.** Recognised as valuable by the audience (direct comps advertise it),
+  but real scope for a solo dev. Note there's no import/export of any kind today — the save is a single
+  IndexedDB blob — so this starts with serialisation work. Tier 12's league configuration is a partial
+  prerequisite. Only if playtesting shows demand, and not before M4/M5.
+
+### Deliberately not doing before 1.0
+
+Recorded so they stay decided rather than getting relitigated:
+
+- **Multiplayer / pass-and-play.** Established competitors own that space, and the differentiation here
+  is the run structure, not social or league features. Protecting scope around that is worth more than
+  feature parity.
+- **A live transaction market.** Already parked post-launch in Tier 15, and only with real demand. The
+  chosen shop-based acquisition covers the need it would serve.
+
+---
+
 ## At a Glance
 
 | Tier | What | Status | Milestone |
@@ -458,3 +547,4 @@ prototype-low-and-raise discipline Tier 14 needs.
 | 13 | In-game decisions (timeouts, subs, schemes, matchups) | Planned | M3, M6 |
 | 14 | Risk & attrition (injuries, foul trouble) | Planned, needs design | M5 |
 | 15 | Roster turnover (retirement, poaching, shop signings) | Planned / trades post-launch | M5 |
+| — | [Parked](#parked) — meta-progression, seeds, audio, onboarding, achievements, delegation, mods | Raised, not scheduled | revisit after M2 |
