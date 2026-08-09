@@ -22,6 +22,9 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & Pick<PossessionLogEn
     freeThrowsAttempted: 0,
     offensiveRebound: false,
     rebounderId: null,
+    stolenById: null,
+
+    blockedById: null,
     isSecondChance: false,
     playersInvolved: [],
     ...overrides,
@@ -56,6 +59,9 @@ describe('deriveBoxScore', () => {
         freeThrowsAttempted: 0,
         offensiveRebound: false,
         rebounderId: null,
+        stolenById: null,
+
+        blockedById: null,
         isSecondChance: false,
         playersInvolved: [h1.id, a1.id],
         homeOnCourt,
@@ -77,6 +83,9 @@ describe('deriveBoxScore', () => {
         freeThrowsAttempted: 0,
         offensiveRebound: false,
         rebounderId: null,
+        stolenById: null,
+
+        blockedById: null,
         isSecondChance: false,
         playersInvolved: [a1.id, a2.id, h1.id],
         homeOnCourt,
@@ -100,6 +109,9 @@ describe('deriveBoxScore', () => {
         // The defending five got the board and A1 came down with it -- both settled by the
         // simulation and read straight off the log, not re-rolled here.
         rebounderId: a1.id,
+        stolenById: null,
+
+        blockedById: null,
         isSecondChance: false,
         playersInvolved: [h1.id, h2.id, a1.id],
         homeOnCourt,
@@ -121,6 +133,9 @@ describe('deriveBoxScore', () => {
         freeThrowsAttempted: 0,
         offensiveRebound: false,
         rebounderId: null,
+        stolenById: null,
+
+        blockedById: null,
         isSecondChance: false,
         playersInvolved: [a2.id, h1.id],
         homeOnCourt,
@@ -142,6 +157,9 @@ describe('deriveBoxScore', () => {
         freeThrowsAttempted: 0,
         offensiveRebound: false,
         rebounderId: null,
+        stolenById: null,
+
+        blockedById: null,
         isSecondChance: false,
         playersInvolved: [h2.id, a1.id],
         homeOnCourt,
@@ -253,6 +271,9 @@ function makeStatLine(playerId: PlayerId, overrides: Partial<PlayerBoxScoreLine>
     freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
+    steals: 0,
+
+    blocks: 0,
     turnovers: 0,
     fouls: 0,
     minutesPlayed: 0,

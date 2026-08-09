@@ -20,6 +20,8 @@ function emptyLine(playerId: PlayerId): PlayerBoxScoreLine {
     freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
+    steals: 0,
+    blocks: 0,
     turnovers: 0,
     fouls: 0,
     minutesPlayed: 0,
@@ -97,8 +99,12 @@ export function deriveBoxScore(
       // meant the official box score and anything watching the game live could disagree about who
       // got it; now there is one answer, settled when the possession happened.
       if (entry.rebounderId) lineFor(entry.rebounderId).rebounds += 1
+      // A blocked shot is still the shooter's missed attempt above -- this only adds the defender's credit.
+      if (entry.blockedById) lineFor(entry.blockedById).blocks += 1
     } else if (entry.outcome === 'turnover') {
       primaryLine.turnovers += 1
+      // Only forced turnovers have someone to credit, so steals are always fewer than turnovers.
+      if (entry.stolenById) lineFor(entry.stolenById).steals += 1
     } else if (entry.outcome === 'foul') {
       // The whistle lands on the offensive player who drew it, not a defender's personal foul count
       // -- there's still no defensive foul attribution model. The free throws it produced do score.
@@ -141,6 +147,8 @@ export interface SeasonTotals {
   freeThrowsAttempted: number
   assists: number
   rebounds: number
+  steals: number
+  blocks: number
   turnovers: number
   fouls: number
   minutesPlayed: number
@@ -158,6 +166,8 @@ function emptySeasonTotals(): SeasonTotals {
     freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
+    steals: 0,
+    blocks: 0,
     turnovers: 0,
     fouls: 0,
     minutesPlayed: 0,
@@ -183,6 +193,8 @@ export function aggregateSeasonTotals(games: Game[]): Map<PlayerId, SeasonTotals
       current.freeThrowsAttempted += line.freeThrowsAttempted
       current.assists += line.assists
       current.rebounds += line.rebounds
+      current.steals += line.steals
+      current.blocks += line.blocks
       current.turnovers += line.turnovers
       current.fouls += line.fouls
       current.minutesPlayed += line.minutesPlayed

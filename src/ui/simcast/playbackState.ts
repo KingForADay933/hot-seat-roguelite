@@ -77,6 +77,8 @@ function emptyLine(playerId: PlayerId): LiveBoxScoreLine {
     freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
+    steals: 0,
+    blocks: 0,
     turnovers: 0,
     fouls: 0,
     minutesPlayed: 0,
@@ -182,8 +184,10 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
       if (entry.isThreePointAttempt) line.threePointersAttempted += 1
     })
     if (entry.rebounderId) bump(entry.rebounderId, (line) => (line.rebounds += 1))
+    if (entry.blockedById) bump(entry.blockedById, (line) => (line.blocks += 1))
   } else if (entry.outcome === 'turnover') {
     bump(entry.primaryPlayerId, (line) => (line.turnovers += 1))
+    if (entry.stolenById) bump(entry.stolenById, (line) => (line.steals += 1))
   } else if (entry.outcome === 'foul') {
     // Same attribution deriveBoxScore uses: the whistle lands on the offensive player who drew it,
     // since there's no defensive foul model. The free throws it produced do score.

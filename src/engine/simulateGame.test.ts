@@ -139,8 +139,23 @@ describe('simulateGame', () => {
     // and a foul stops play for free throws.
     expect(offensiveRebounds.every((e) => e.outcome === 'miss')).toBe(true)
 
-    const secondChances = game.possessionLog.filter((e) => e.isSecondChance)
-    expect(secondChances.length).toBe(offensiveRebounds.length)
+    const log = game.possessionLog
+    const secondChances = log.filter((e) => e.isSecondChance)
+
+    // Every second chance is the possession right after an offensive rebound in the same period.
+    log.forEach((entry, i) => {
+      if (!entry.isSecondChance) return
+      const previous = log[i - 1]
+      expect(previous, `possession ${entry.possessionNumber} has no predecessor`).toBeDefined()
+      expect(previous.offensiveRebound).toBe(true)
+      expect(previous.period).toBe(entry.period)
+    })
+
+    // And every offensive rebound produces one -- except a board on a period's final possession,
+    // where the buzzer goes before the putback can happen. isSecondChance resets each period, so
+    // those boards are real but simply have no follow-up trip.
+    const boardsWithTimeLeft = log.filter((entry, i) => entry.offensiveRebound && log[i + 1]?.period === entry.period)
+    expect(secondChances.length).toBe(boardsWithTimeLeft.length)
     // A putback is a shot already under the rim, not a fresh trip, so it costs far less clock.
     const putbackMean = secondChances.reduce((sum, e) => sum + e.durationSeconds, 0) / secondChances.length
     const tripMean =

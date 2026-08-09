@@ -31,6 +31,8 @@ export function LiveBoxScore({
             <th className="numeric">FT</th>
             <th className="numeric">AST</th>
             <th className="numeric">REB</th>
+            <th className="numeric">STL</th>
+            <th className="numeric">BLK</th>
             <th className="numeric">TO</th>
             <th className="numeric">PF</th>
           </tr>
@@ -52,6 +54,8 @@ export function LiveBoxScore({
               </td>
               <td className="numeric">{line.assists}</td>
               <td className="numeric">{line.rebounds}</td>
+              <td className="numeric">{line.steals}</td>
+              <td className="numeric">{line.blocks}</td>
               <td className="numeric">{line.turnovers}</td>
               <td className="numeric">{line.fouls}</td>
             </tr>

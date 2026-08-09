@@ -214,6 +214,8 @@ export function* simulateGameSteps(
         freeThrowsAttempted: resolved.freeThrowsAttempted,
         offensiveRebound,
         rebounderId,
+        stolenById: resolved.stolenById,
+        blockedById: resolved.blockedById,
         isSecondChance,
         playersInvolved: getInvolvedPlayerIds(selection),
         homeOnCourt: toOnCourtRecords(homeRotation.onCourt),

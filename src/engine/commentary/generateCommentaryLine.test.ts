@@ -22,6 +22,8 @@ function makeEntry(overrides: Partial<PossessionLogEntry> & { primaryPlayerId: P
     freeThrowsAttempted: 0,
     offensiveRebound: false,
     rebounderId: null,
+    stolenById: null,
+    blockedById: null,
     isSecondChance: false,
     playersInvolved: [],
     homeOnCourt: [],
