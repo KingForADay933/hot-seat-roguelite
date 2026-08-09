@@ -6,26 +6,31 @@ import { advancePlayback, createPlaybackState, entersNewOvertimePeriod, type Pla
 /**
  * Multipliers on BASE_POSSESSION_MS -- ascending, so the control row reads slowest-to-fastest.
  *
- * Against a measured ~219 possessions a game: 0.75x runs about 4m20s, 1x about 3m20s, 2x about
- * 1m40s, 4x about 50s, and 16x about 12 seconds -- closer to a highlight reel than a broadcast.
+ * Against a measured ~219 possessions a game: 0.5x runs about 11 minutes, 0.75x about 7m20s, 1x
+ * about 5m30s, 2x about 2m45s, 4x about 1m20s, and 16x about 20 seconds -- closer to a highlight
+ * reel than a broadcast.
  *
- * 0.75x exists because 1x is the reading speed for the play-by-play and some possessions (a long
- * commentary line, a scramble for an offensive rebound) want a beat longer than that.
+ * The slow end is deliberately generous. 1x is meant to be the speed you *read* the play-by-play at,
+ * and that turned out to be much slower than the pacing this screen originally shipped with, so the
+ * ladder now extends well past it rather than bottoming out at the default.
  */
-export const PLAYBACK_SPEEDS = [0.75, 1, 2, 4, 16] as const
+export const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 2, 4, 16] as const
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
 
 /**
  * Wall-clock milliseconds per possession at 1x.
  *
- * Briefly 450, halved from this value when the clock rewrite doubled the possession count on the
- * theory that a broadcast should stay the same length in wall-clock terms. In practice that made
- * 1x too fast to read -- a full game went by in about 100 seconds, and the comment above still
- * claimed three minutes because it was written against the pre-halving value. Restored, so 1x is
- * paced for reading the play-by-play rather than for finishing quickly; anyone who wants the old
- * speed has 2x, which is exactly what 1x used to be.
+ * History worth knowing, because this constant has now been wrong in both directions. It was 900,
+ * halved to 450 when the clock rewrite doubled the possession count -- reasoned from wall-clock
+ * parity, so a broadcast would stay the same length as it had been at ~100 possessions. That was a
+ * sound argument for the wrong target: parity with the old build doesn't matter, being readable
+ * does. Restoring 900 fixed the arithmetic but still played faster than anyone actually reads, so
+ * this is now set by feel rather than derived from anything.
+ *
+ * If it needs to move again, move it here rather than adding multipliers -- every speed scales off
+ * it, and the ladder above already spans roughly 20 seconds to 11 minutes a game.
  */
-const BASE_POSSESSION_MS = 900
+const BASE_POSSESSION_MS = 1500
 
 export type PlaybackStatus = 'playing' | 'paused' | 'awaiting-substitutions' | 'final'
 
