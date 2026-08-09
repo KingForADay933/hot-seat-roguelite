@@ -3,14 +3,29 @@ import type { Game } from '../../data/types'
 import type { SimulationStep } from '../../engine/simulateGame'
 import { advancePlayback, createPlaybackState, entersNewOvertimePeriod, type PlaybackContext, type PlaybackState } from './playbackState'
 
-/** Multipliers on BASE_POSSESSION_MS. 1x runs a full game in about three minutes -- slow enough to
- *  read the play-by-play; 16x is closer to a highlight reel than a broadcast. */
-export const PLAYBACK_SPEEDS = [1, 2, 4, 16] as const
+/**
+ * Multipliers on BASE_POSSESSION_MS -- ascending, so the control row reads slowest-to-fastest.
+ *
+ * Against a measured ~219 possessions a game: 0.75x runs about 4m20s, 1x about 3m20s, 2x about
+ * 1m40s, 4x about 50s, and 16x about 12 seconds -- closer to a highlight reel than a broadcast.
+ *
+ * 0.75x exists because 1x is the reading speed for the play-by-play and some possessions (a long
+ * commentary line, a scramble for an offensive rebound) want a beat longer than that.
+ */
+export const PLAYBACK_SPEEDS = [0.75, 1, 2, 4, 16] as const
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
 
-/** Halved when the clock doubled the possession count, so a broadcast still runs about as long in
- *  wall-clock terms as it did at ~100 possessions. */
-const BASE_POSSESSION_MS = 450
+/**
+ * Wall-clock milliseconds per possession at 1x.
+ *
+ * Briefly 450, halved from this value when the clock rewrite doubled the possession count on the
+ * theory that a broadcast should stay the same length in wall-clock terms. In practice that made
+ * 1x too fast to read -- a full game went by in about 100 seconds, and the comment above still
+ * claimed three minutes because it was written against the pre-halving value. Restored, so 1x is
+ * paced for reading the play-by-play rather than for finishing quickly; anyone who wants the old
+ * speed has 2x, which is exactly what 1x used to be.
+ */
+const BASE_POSSESSION_MS = 900
 
 export type PlaybackStatus = 'playing' | 'paused' | 'awaiting-substitutions' | 'final'
 

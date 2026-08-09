@@ -53,7 +53,7 @@ list totals roughly 65–100 days: at two solid days a week that's 8–11 months
 | Milestone | Contents | Tiers | Days |
 | --- | --- | --- | --- |
 | **M0 — itch page** | Store copy, screenshots, a simcast GIF. Created as a **draft, not published**. Copy drafted in `itch-page-draft.md`. | — | 1 |
-| **M1 — Complete run** | Simcast pacing · chronological game order · rebounds in-sim + defensive stats · run-end summary | 7.5, 1.5, 11, 8 | 10–14 |
+| **M1 — Complete run** | ~~Simcast pacing~~ ✅ · chronological game order · rebounds in-sim + defensive stats · run-end summary | 7.5, 1.5, 11, 8 | 10–14 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
 | **M3 — Tactical axis** | In-game decisions tiers 1–2 (scheme/focus switching) · position-fit tuning | 13, 7.6 | 8–12 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations | 12 | 12–18 |
@@ -257,7 +257,8 @@ Not part of the original phase plan. Watching a game happen, rather than only re
 - Simcast screen: live scoreboard and clock, running box score, on-court panel showing each player's slot, and the broadcast commentary feed narrating as it goes. Play/pause, speed multipliers, Skip to Final.
 - Games can be simmed instantly or watched call by call, per game, from the stretch screen.
 - **Overtime prompt** -- playback pauses at the start of each overtime period with score and clock frozen at the buzzer, so the GM gets a beat to notice it happened. Acknowledge to resume. The Q4 closing five carries over by default, which needed no engine change (rotation state already persisted across periods).
-- **Planned -- slower default pacing** (M1): `BASE_POSSESSION_MS` is 450, down from an original 900 -- the clock rewrite (Tier 7.6) roughly doubled the possessions in a game and the halving kept the same wall-clock feel. Current pacing runs a full game in about three minutes at 1x and reads as too fast. Fix is to raise the constant; the speed multipliers scale off it automatically. Pick the number by watching a game rather than by arithmetic, and consider whether the *default multiplier* should change instead, which would leave 1x meaning what it means today.
+- **Shipped -- slower default pacing** (M1): `BASE_POSSESSION_MS` restored to 900 from the 450 the clock rewrite (Tier 7.6) had halved it to. Measured at ~219 possessions a game, 1x now runs about 3m20s instead of about 100 seconds, and every multiplier scaled with it -- anyone who wants the old speed has 2x, which is exactly what 1x used to be. Worth noting the halving had also quietly falsified the comment above it, which claimed "about three minutes" while describing the pre-halving value; that claim is true again.
+- **Shipped -- 0.75x speed option**: `PLAYBACK_SPEEDS` is now `[0.75, 1, 2, 4, 16]`, ascending so the control row reads slowest-to-fastest. 1x is the reading speed for the play-by-play; 0.75x (~4m20s a game) exists for the possessions that want a beat longer than that. Verified by sampling the live feed in-browser: 1x ticks at 898ms and 0.75x at 1200ms, against 900 and 1200 intended.
 - **Idea, unscoped** -- live lineup editing during the overtime pause. Deliberately not built: injecting a GM's mid-game edit means threading a live mutable channel into what is otherwise a pure, seed-deterministic simulation -- the same `simulateGameSteps` that also runs every AI-vs-AI game with no UI attached. Folded into Tier 13, which has to solve that problem anyway.
 - **Deepens into Tier 7.7** -- the labeled-court-view simcast (`detailed-simcast.md`) renders the same possession log this tier already produces; it's an alternate presentation, not a replacement.
 
@@ -578,7 +579,7 @@ Recorded so they stay decided rather than getting relitigated:
 | 6 | Systems & synergy | Shipped | — |
 | 6.5 | Player roles & team specializations | Idea, unscoped | — |
 | 7 | Shop, camps, upgrades, consumables | Shipped | — |
-| 7.5 | Live playback (simcast) | Shipped / slower pacing planned | M1 |
+| 7.5 | Live playback (simcast) | Shipped (incl. M1 pacing + 0.75x) | — |
 | 7.6 | Rotation charts & lineup control | Shipped / tuning + paint mode planned | M3, M7 |
 | 7.7 | Detailed simcast (labeled court view, player/ball movement) | Planned, unscheduled | after Tier 13 |
 | 8 | Run-end summary | Planned | **M1** |
