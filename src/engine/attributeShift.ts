@@ -25,6 +25,20 @@ export function shiftPlayerAttribute(player: Player, attribute: AttributeKey, sh
   return { ...player, attributes, overallRating: Math.round(average(Object.values(attributes))) }
 }
 
+/** Applies a different +/- shift to each of several named attributes at once (each clamped to the
+ *  generation floor/ceiling), recomputing overallRating once at the end rather than once per
+ *  attribute. Roster quirks that describe a *skill shape* rather than a flat bump (Section 3) trade
+ *  one group of attributes against another -- "shooters who can't finish" is +outsideShot and
+ *  -insideShot in the same breath, and applying those as two separate shifts would recompute the
+ *  rating against a half-applied profile. */
+export function shiftPlayerAttributesBy(player: Player, shifts: Partial<Record<AttributeKey, number>>): Player {
+  const attributes = { ...player.attributes }
+  for (const [key, shift] of Object.entries(shifts) as [AttributeKey, number][]) {
+    attributes[key] = clamp(attributes[key] + shift, ATTRIBUTE_FLOOR, ATTRIBUTE_CEILING)
+  }
+  return { ...player, attributes, overallRating: Math.round(average(Object.values(attributes))) }
+}
+
 /** Applies a +/- shift to a single numeric hidden trait (clamped to the same generation floor/
  *  ceiling every other rating uses) -- the hidden-trait counterpart to shiftPlayerAttribute, for
  *  coaching upgrades (Section 8.6) that nudge Clutch/Consistency/Durability instead of a visible

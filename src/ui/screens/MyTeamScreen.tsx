@@ -126,7 +126,7 @@ export function MyTeamScreen({
         before that player&apos;s fixed potential. Minutes and training focus can be changed here at any time -- they
         take effect from the next stretch of games.
       </p>
-      <RosterDetailPanel team={team} roster={roster} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+      <RosterDetailPanel team={team} roster={roster} houseRule={run.houseRule} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
 
       <h2>Rotation Chart</h2>
       <RotationChartEditor team={team} roster={roster} playersById={playersById} onSetRotationPlan={onSetRotationPlan} />

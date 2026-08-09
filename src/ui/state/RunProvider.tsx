@@ -430,9 +430,10 @@ export function RunProvider({ children }: { children: ReactNode }) {
       const team = bundle.teams.find((t) => t.id === bundle.run.teamId)
       if (!team) return
       // Bounded by what's left at this player's own position rather than by a flat 0-48, so the
-      // minutes a GM hands out are minutes that actually exist to give (run/minutesBudget.ts).
+      // minutes a GM hands out are minutes that actually exist to give (run/minutesBudget.ts), and
+      // narrowed further by the run's house rule where one caps or floors a player's minutes.
       const roster = bundle.players.filter((p) => p.teamId === team.id)
-      const clamped = clampToPositionBudget(team, roster, playerId, minutes)
+      const clamped = clampToPositionBudget(team, roster, playerId, minutes, bundle.run.houseRule)
       const withNewMinutes = bundle.teams.map((t) =>
         t.id === bundle.run.teamId ? { ...t, rotationMinutes: { ...t.rotationMinutes, [playerId]: clamped } } : t,
       )
