@@ -15,11 +15,40 @@ import { chartedPlayerId } from '../rotation/rotationPlan'
 import type { RotationState } from '../rotation/rotationState'
 import { getPeriodLabel } from '../simulateGame'
 
+/**
+ * What an insight is *about*, so callers can tell them apart without matching on prose.
+ *
+ * The distinction that matters: the first two describe a standing problem with the team or the
+ * GM's instructions, and tend to recur game after game until something changes. The third is
+ * routine rotation management -- worth surfacing at a checkpoint, not worth remembering for the
+ * length of a run. run/runInsights.ts is the consumer that cares.
+ */
+export type CoachingInsightKind =
+  /** The opponent found the weakest defender on the floor and kept going at him. */
+  | 'weak-link-targeting'
+  /** A charted player was pulled anyway, because fatigue hit the emergency threshold. The GM's
+   *  explicit instruction lost to the coach heuristic. */
+  | 'chart-override'
+  /** An ordinary fatigue substitution -- the rotation working as intended. */
+  | 'fatigue-substitution'
+
 export interface CoachingInsight {
   text: string
   /** Which team this insight is about -- lets a caller (Section 9's chunk checkpoints) filter
    *  down to just the user's own team rather than showing observations about the AI opponent. */
   teamId: TeamId
+  kind: CoachingInsightKind
+  /**
+   * The player the observation is *about* -- the defender being hunted, or the player pulled.
+   *
+   * Carried structurally rather than left implicit in `text`, because the text embeds per-game
+   * specifics ("62 possessions this game, allowing 57 points") and so differs every time even when
+   * the underlying problem is identical. Anything asking "is this the same problem recurring?"
+   * -- run/runInsights.ts -- has to compare something stabler than the prose.
+   */
+  subjectId: PlayerId
+  /** Denormalised so a consumer that outlives the roster lookup can still name them. */
+  subjectName: string
 }
 
 function resolvePlayer(id: PlayerId, playersById: Map<PlayerId, Player>): Player {
@@ -102,6 +131,9 @@ function detectWeakLinkTargeting(
   const possessionWord = top.count === 1 ? 'possession' : 'possessions'
   return {
     teamId: defendingTeam.id,
+    kind: 'weak-link-targeting',
+    subjectId: topId,
+    subjectName: defenderName,
     text: `${scheme.name} defense got picked on: ${defenderName} was matched up on ${top.count} ${possessionWord} this game, allowing ${top.pointsAllowed} points.`,
   }
 }
@@ -232,7 +264,13 @@ export function generateCoachingInsights(
     const text = event.wasChartedDeviation
       ? `${outName} was charted to stay on the floor but got pulled with emergency fatigue in the ${period} -- ${inName} covered instead.`
       : `${outName} was pulled with heavy fatigue in the ${period}, ${inName} checked in.`
-    insights.push({ teamId: event.teamId, text })
+    insights.push({
+      teamId: event.teamId,
+      kind: event.wasChartedDeviation ? 'chart-override' : 'fatigue-substitution',
+      subjectId: event.outPlayerId,
+      subjectName: outName,
+      text,
+    })
   }
 
   return insights

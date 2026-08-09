@@ -53,7 +53,7 @@ list totals roughly 65–100 days: at two solid days a week that's 8–11 months
 | Milestone | Contents | Tiers | Days |
 | --- | --- | --- | --- |
 | **M0 — itch page** | Store copy, screenshots, a simcast GIF. Created as a **draft, not published**. Copy drafted in `itch-page-draft.md`. | — | 1 |
-| **M1 — Complete run** | ~~Simcast pacing~~ ✅ · ~~chronological game order~~ ✅ · ~~rebounds in-sim + defensive stats~~ ✅ · run-end summary | 7.5, 1.5, 11, 8 | 10–14 |
+| **M1 — Complete run** ✅ | ~~Simcast pacing~~ · ~~chronological game order~~ · ~~rebounds in-sim + defensive stats~~ · ~~run-end summary~~ — **complete** | 7.5, 1.5, 11, 8 | 10–14 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
 | **M3 — Tactical axis** | In-game decisions tiers 1–2 (scheme/focus switching) · position-fit tuning | 13, 7.6 | 8–12 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations | 12 | 12–18 |
@@ -71,11 +71,13 @@ list totals roughly 65–100 days: at two solid days a week that's 8–11 months
   (`itch-page-draft.md`) surfaced that the pitch has no summit — there's no way to write "make the
   playoffs" or "win a title" today, and "finish top half" is a materially weaker hook. That's a
   sharper argument for Tier 12 than the one it was originally scheduled on.
-- **M1 is "a run that feels finished."** The run-end summary is the highest value-per-hour item on the
-  whole list and was previously buried at Tier 8 — the design doc's own pillars call Coaching Insights
-  "the emotional payoff of every run's ending," and right now the run just stops. It's cheap because
-  the Insights engine already reconstructs narratives from possession logs; this is re-aiming existing
-  machinery.
+- **M1 was "a run that feels finished," and it's done.** The run-end summary was the highest
+  value-per-hour item on the list and had been buried at Tier 8 — the design doc's own pillars call
+  the ending "the emotional payoff," and the run just stopped. Worth recording how the estimate
+  moved: it was scheduled on the assumption that Coaching Insights could be re-aimed at a run, but
+  possession logs don't survive the chunk that produced them, so the summary is built by replaying
+  the run's own state machine over retained standings instead. Different mechanism, same milestone,
+  and a better fit — see Tier 8.
 - **M2 comes before the big features on purpose.** The "too forgiving" difficulty problem is the one
   thing that genuinely can't be solved alone — you know where the seams are and playtesters don't.
   Doing it after M1 means the balance data arrives before three more milestones get tuned on top of
@@ -320,13 +322,17 @@ real time.
 ---
 
 ## Tier 8 — Run Conclusion
-**Planned -- Phase 10 -- scheduled M1**
+**Shipped -- Phase 10 (M1)**
 
-- Post-run summary screen powered by Hoop Sim's Coaching Insights engine, re-aimed from "what happened in this game" to "what actually got you fired" across the whole run.
-- **Decide the shape at M1, not later:** whether this screen is *screenshot-shaped* (a compact recap card a player would post -- stretches cleared, seasons survived, what got you fired) is nearly free while building it and a rewrite afterwards. See Parked, "Shareable run recap card." The sharing affordance itself can wait; the layout decision can't.
-- **Promoted to M1, the first milestone.** Section 1's fourth pillar calls commentary and insights "the emotional payoff of every run's ending," and Section 4 names the post-run summary specifically as that payoff. Right now the run just stops -- a roguelite whose ending is flat wastes everything that led to it, and it's the single biggest gap between what the design doc promises and what the build delivers.
-- Cheap for what it gives: `generateCoachingInsights` already reconstructs narratives from possession logs (fatigue substitutions, chart overrides) and already filters to the user's team and deduplicates across games. The work is aggregating across a whole run rather than a chunk, choosing which threads make a verdict, and a screen -- not new analysis machinery.
-- **Watch for:** possession logs are discarded after each chunk's insights are pulled (Tier 1.5), so a run-level summary can only be built from what was retained at the time. Decide early what to keep per chunk; retrofitting a longer retention window after the fact means the data simply isn't there for runs already in progress.
+Post-run epilogue: "what actually got you fired" across the whole run, replacing three lines of "you survived N seasons."
+
+- **This was the biggest gap between what the design doc promised and what the build delivered.** Section 1's fourth pillar calls commentary and insights "the emotional payoff of every run's ending," and the run just stopped.
+- **Built from retained standings, not Coaching Insights** -- and that turned out to be the right source rather than a compromise. Insights derive from possession logs, which are discarded as each chunk resolves (Tier 1.5), so nothing play-level survives to the end of a run. What does survive is `League.seasonHistory`: one row of final standings per completed season, kept deliberately for this. Insights explain a *game*; a run's ending is a question about *seasons*.
+- **Insights now survive the run too, in a small structured residue** (`run/runInsights.ts`). A few notable observations are kept per season as each chunk resolves, so the epilogue can say *how* the team kept losing rather than only that it did. Storage is bounded per season, not overall, so every season stays represented and growth is RUN_INSIGHTS_PER_SEASON x seasons played -- a rounding error beside the logs they came from.
+- **The arc is reconstructed by replaying the state machine.** Standings don't record which stretch a season belonged to, or what the bar was at the time, since the target tightens as stretches clear. Both are recoverable: the transitions are deterministic, so `run/runSummary.ts` replays `evaluateSeasonEnd` forward over the retained rows. Its tests drive the *real* state machine over the same fixtures rather than hand-setting run state, so the replay can't quietly drift from `runState.ts`.
+- Surfaces a per-season table (needed vs. finished, record, differential, cleared or missed by how many wins), a verdict line that reads differently depending on whether the run was ever close, run totals, and the build that produced it.
+- The **Needed** column shows the resolved rank, not the fraction it came from: "top 10%" of an eight-team league means 1st, and making the reader convert buries the point. Side by side with Finish, the escalation reads as a ladder -- 4th, 4th, 3rd, 2nd, 1st.
+- **Still open -- make it screenshot-shaped.** See Parked, "Shareable run recap card." The layout is now set, so this is no longer free; it's a compact-recap variant of a screen that exists rather than a decision to make while building it. Cheaper than a rewrite, dearer than it would have been.
 
 ---
 
@@ -582,7 +588,7 @@ Recorded so they stay decided rather than getting relitigated:
 | 7.5 | Live playback (simcast) | Shipped (incl. M1 pacing + 0.75x) | — |
 | 7.6 | Rotation charts & lineup control | Shipped / tuning + paint mode planned | M3, M7 |
 | 7.7 | Detailed simcast (labeled court view, player/ball movement) | Planned, unscheduled | after Tier 13 |
-| 8 | Run-end summary | Planned | **M1** |
+| 8 | Run-end summary | Shipped | — |
 | 9 | Leaderboard / unlocks | Planned / Idea | post-launch |
 | 10 | itch.io → Electron → Steam | Planned | M7 |
 | 11 | Simulation fidelity (defensive stats, in-sim rebounds) | Shipped | — |

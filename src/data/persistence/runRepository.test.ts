@@ -50,6 +50,7 @@ function makeTestBundle(): RunBundle {
     lastBudgetEarned: 0,
     shop: null,
     lastChunkInsights: [],
+    runInsights: [],
     stretchInProgress: false,
     pendingChunkInsights: [],
   }
