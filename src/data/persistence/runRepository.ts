@@ -1,5 +1,6 @@
 import type { Game, League, Player, Team } from '../types'
 import type { CoachingInsight } from '../../engine/insights/generateCoachingInsights'
+import type { RunInsightRecord } from '../../run/runInsights'
 import type { ShopVisit } from '../../run/shop'
 import type { RunState } from '../../run/types'
 import type { WildcardEventOutcome } from '../../run/variation/wildcardEvents'
@@ -45,6 +46,10 @@ export interface RunBundle {
    *  possession log as it goes, so by then there's nothing left to derive them from. Empty
    *  whenever stretchInProgress is false. */
   pendingChunkInsights: CoachingInsight[]
+  /** The few notable insights kept from every season of the run, for the fired epilogue -- see
+   *  run/runInsights.ts. Unlike lastChunkInsights (overwritten each chunk) this accumulates, which
+   *  is the only reason anything play-level survives to the end of a run at all. */
+  runInsights: RunInsightRecord[]
 }
 
 function isValidBundleShape(data: unknown): data is RunBundle {
@@ -89,7 +94,13 @@ export async function loadRunBundle(adapter: StorageAdapter = indexedDbAdapter):
   try {
     const parsed: unknown = JSON.parse(raw)
     if (!isValidBundleShape(parsed)) throw new Error('Saved run does not match the expected shape')
-    return parsed
+    // runInsights is defaulted rather than validated, deliberately breaking with the reject-don't-
+    // migrate policy above. Everything that policy guards is state a screen can't describe without
+    // -- a half-played chunk, a run with no market size. This is a display-only history of what
+    // already happened, so a save from before it existed is perfectly playable with an epilogue
+    // that has nothing to add. Discarding someone's run over a missing recap would be the worse
+    // outcome by a distance.
+    return { ...parsed, runInsights: parsed.runInsights ?? [] }
   } catch (err) {
     console.warn('Failed to load saved run -- starting fresh.', err)
     return null

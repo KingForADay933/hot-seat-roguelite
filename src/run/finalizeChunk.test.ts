@@ -67,8 +67,8 @@ describe('finalizeChunk', () => {
     const { league, teams, players } = generateLeague({ teamCount: 8, leagueName: 'Test League', rng })
     const run = createRun(teams[0].id, 'stacked-guards', 'youth-movement', 'mid')
 
-    const repeated: CoachingInsight = { teamId: run.teamId, text: 'Same line, three games running.' }
-    const distinct: CoachingInsight = { teamId: run.teamId, text: 'Something else entirely.' }
+    const repeated: CoachingInsight = { teamId: run.teamId, kind: 'fatigue-substitution', subjectId: 'p1', subjectName: 'P One', text: 'Same line, three games running.' }
+    const distinct: CoachingInsight = { teamId: run.teamId, kind: 'weak-link-targeting', subjectId: 'p2', subjectName: 'P Two', text: 'Something else entirely.' }
 
     const outcome = finalizeChunk(run, league, teams, players, [], [repeated, repeated, distinct, repeated])
 

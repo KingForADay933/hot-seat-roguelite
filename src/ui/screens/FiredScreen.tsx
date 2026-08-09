@@ -2,6 +2,7 @@ import type { RunBundle } from '../../data/persistence/runRepository'
 import { OFFENSIVE_PLAYBOOKS } from '../../data/presets'
 import { COACHING_UPGRADES } from '../../run/coachingUpgrades'
 import { MARKET_SIZES } from '../../run/marketSize'
+import { aggregateRunInsights, describeRunInsight } from '../../run/runInsights'
 import { buildRunSummary, type RunSummary, type SeasonRecap } from '../../run/runSummary'
 import { HOUSE_RULES } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS } from '../../run/variation/rosterQuirks'
@@ -75,13 +76,22 @@ function SeasonRow({ season }: { season: SeasonRecap }) {
  * The run's epilogue (Tier 8) -- what the design doc calls the emotional payoff, and what used to be
  * three lines of "you survived N seasons."
  *
- * Everything here comes from `League.seasonHistory`, the one thing retained across rollovers. See
- * run/runSummary.ts for why that's the source rather than Coaching Insights.
+ * Two sources, because they answer different halves of "what got you fired":
+ *
+ * - **The arc** -- which target you missed and by how much -- is reconstructed from
+ *   `League.seasonHistory` by replaying the run's own state machine (run/runSummary.ts).
+ * - **The pattern** -- what kept going wrong -- comes from `bundle.runInsights`, a small residue of
+ *   notable Coaching Insights kept as each chunk resolved (run/runInsights.ts). Insights can't be
+ *   recomputed at the end of a run, because the possession logs they derive from are discarded as
+ *   the games are played, so anything not captured at the time is gone.
+ *
+ * The standings say the run failed. The insights say how.
  */
 export function FiredScreen({ bundle, onNewRun }: { bundle: RunBundle; onNewRun: () => void }) {
   const { run, league, teams } = bundle
   const team = teams.find((t) => t.id === run.teamId)
   const summary = buildRunSummary(run, league)
+  const runProblems = aggregateRunInsights(bundle.runInsights)
 
   const quirk = ROSTER_QUIRKS[run.rosterQuirk]
   const houseRule = HOUSE_RULES[run.houseRule]
@@ -129,6 +139,23 @@ export function FiredScreen({ bundle, onNewRun }: { bundle: RunBundle; onNewRun:
         {summary.bestSeason && ` · best finish ${ordinal(summary.bestSeason.rank)} in season ${summary.bestSeason.seasonNumber}`}
         {' · '}${run.budget} left unspent
       </p>
+
+      {runProblems.length > 0 && (
+        <>
+          <h2>What Kept Happening</h2>
+          <p>
+            The patterns that repeated across the run -- a defender the opposition kept hunting, a rotation chart that kept
+            getting overruled, a starter who kept running out of legs. One-off nights aren&apos;t listed.
+          </p>
+          <div className="team-summary">
+            <ul>
+              {runProblems.map((problem) => (
+                <li key={`${problem.kind}-${problem.subjectId}`}>{describeRunInsight(problem)}</li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
 
       <h2>What You Built</h2>
       <div className="team-summary">
