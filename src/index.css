@@ -153,6 +153,12 @@ th.numeric {
   color: var(--negative);
 }
 
+/** Per-position minutes allocation above the roster tables (run/minutesBudget.ts) -- a readout
+    explaining why a minutes input stops where it does, so it sits quieter than the tables. */
+.position-minutes {
+  font-size: 13px;
+}
+
 tr.user-row {
   background: var(--user-row-bg);
   font-weight: 700;

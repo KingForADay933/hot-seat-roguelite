@@ -29,6 +29,53 @@ export function rotationValue(candidate: Player, opponent: Player | undefined): 
   return ROTATION_QUALITY_WEIGHT * quality + ROTATION_MATCHUP_WEIGHT * matchupFit
 }
 
+/**
+ * Whoever the chart insists on for each slot right now, aligned to `five`'s own indices, with null
+ * for every slot the fatigue/pace heuristic should handle instead.
+ *
+ * Resolved for all five slots up front rather than slot-by-slot inside the loop because a chart can
+ * name the same player in two slots at once. The editor flags that in red
+ * (run/rotationChartValidation.ts's doubleBookedConflicts) but doesn't block saving one, so an
+ * unsatisfiable plan genuinely reaches the engine -- and honoring it slot-by-slot seated one player
+ * twice, leaving four bodies on the floor and a duplicate whose minutes deriveBoxScore counted once
+ * per slot. Doubled minutes then flow into season development (engine/development/seasonMinutes.ts
+ * feeds dpFormula), so the corruption outlived the game it happened in.
+ *
+ * A claimed player wins the first slot that asks for them in POSITION_ORDER and the losing slot
+ * falls through to the heuristic -- the same fallback an Auto span and an exhausted charted player
+ * already use, so a double-book degrades to ordinary coaching rather than to a broken five.
+ */
+function resolveChartedFive(
+  five: OnCourtPlayer[],
+  team: Team,
+  playersById: Map<PlayerId, Player>,
+  fatigue: Map<PlayerId, number>,
+  period: number,
+  secondsIntoPeriod: number,
+): (Player | null)[] {
+  const claimed = new Set<PlayerId>()
+
+  return five.map(({ player: current, slot }) => {
+    const chartedId = chartedPlayerId(team.rotationPlan, period, slot, secondsIntoPeriod)
+    if (chartedId === null) return null
+
+    // Phase H's deviation rule, unchanged -- an exhausted charted player is not brought in or kept
+    // in, and doesn't claim the slot against another that could still legitimately use them.
+    const chartedFatigue = fatigue.get(chartedId) ?? 0
+    const deputyIsIn = current.id !== chartedId
+    if (chartedFatigue >= FATIGUE_EMERGENCY_THRESHOLD || (deputyIsIn && chartedFatigue > FATIGUE_SUB_OUT_THRESHOLD)) {
+      return null
+    }
+
+    if (claimed.has(chartedId)) return null // double-booked -- an earlier slot already has them
+    const charted = playersById.get(chartedId)
+    if (!charted) return null // plan names someone off this roster; nothing to seat
+
+    claimed.add(chartedId)
+    return charted
+  })
+}
+
 function shouldConsiderSubOut(
   state: RotationState,
   player: Player,
@@ -57,13 +104,15 @@ function shouldConsiderSubOut(
  * the same incoming bench player. No rng -- substitution decisions are deterministic (coaching
  * decisions are structural, like defender assignment, not usage).
  *
- * The replacement inherits the *slot*, not the outgoing player's listed position -- those are the
- * same thing today, since candidates are still filtered to players whose own position matches the
- * slot, but it's the slot the incoming player will be evaluated as. Relaxing that filter is what
- * free-form lineups will do.
+ * The replacement inherits the *slot*, not the outgoing player's listed position, since the slot is
+ * what the incoming player will be evaluated as. The heuristic's own candidates are still filtered
+ * to players whose position matches the slot, so it never creates a mismatch by itself -- only a
+ * GM's chart does, and engine/positionFit.ts prices it when they do.
  *
  * `team.rotationPlan` (rotation-charts.md Phase F) is consulted first, per slot: a charted segment
- * is law (Decision 3) and wins outright, bypassing the fatigue/pace heuristic below entirely.
+ * is law (Decision 3) and wins outright, bypassing the fatigue/pace heuristic below entirely. All
+ * five slots are resolved against the chart before any of them is applied (resolveChartedFive), so
+ * a plan naming one player in two slots at once can't seat them twice -- see that function.
  *
  * The one exception is Phase H's deviation rule: a charted player who has actually hit
  * FATIGUE_EMERGENCY_THRESHOLD is not brought in or kept in -- the slot falls through to the
@@ -87,41 +136,45 @@ export function checkSubstitutions(
   secondsIntoPeriod: number,
 ): void {
   const nextFive = [...state.onCourt]
+  const charted = resolveChartedFive(nextFive, team, playersById, state.fatigue, period, secondsIntoPeriod)
 
   for (let i = 0; i < nextFive.length; i++) {
     const { player: outgoing, slot } = nextFive[i]
 
-    const chartedId = chartedPlayerId(team.rotationPlan, period, slot, secondsIntoPeriod)
-    if (chartedId !== null) {
-      const chartedFatigue = state.fatigue.get(chartedId) ?? 0
-      const deputyIsIn = outgoing.id !== chartedId
-      const deviating = chartedFatigue >= FATIGUE_EMERGENCY_THRESHOLD || (deputyIsIn && chartedFatigue > FATIGUE_SUB_OUT_THRESHOLD)
-
-      if (!deviating) {
-        if (chartedId !== outgoing.id) {
-          const incoming = playersById.get(chartedId)
-          if (incoming) {
-            nextFive[i] = { player: incoming, slot }
-            state.shiftEnteredAtSeconds.set(incoming.id, elapsedSeconds)
-          }
-        }
-        continue // charted spans are law
+    const chartedPlayer = charted[i]
+    if (chartedPlayer) {
+      if (chartedPlayer.id !== outgoing.id) {
+        nextFive[i] = { player: chartedPlayer, slot }
+        state.shiftEnteredAtSeconds.set(chartedPlayer.id, elapsedSeconds)
       }
-      // else fall through to the heuristic below -- see this function's doc comment.
+      continue // charted spans are law
     }
+    // Otherwise the chart is silent, deviating, or unsatisfiable here -- fall through to the
+    // heuristic, exactly as an Auto span does.
 
-    if (!shouldConsiderSubOut(state, outgoing, elapsedSeconds, team.rotationMinutes)) continue
+    // An earlier slot's charted assignment may have taken this slot's occupant, since a GM can
+    // chart the same player into PG for one span and SG for the next. That leaves them standing in
+    // two places at once, so the vacated slot has to be refilled now whether or not the ordinary
+    // sub-out triggers fire -- a five with a duplicate in it isn't a lineup the sim can resolve.
+    const displaced = nextFive.some((entry, j) => j !== i && entry.player.id === outgoing.id)
+    if (!displaced && !shouldConsiderSubOut(state, outgoing, elapsedSeconds, team.rotationMinutes)) continue
 
     const onCourtIdsNow = new Set(nextFive.map((entry) => entry.player.id))
-    const candidates = team.rosterPlayerIds
+    const available = team.rosterPlayerIds
       .filter((id) => !onCourtIdsNow.has(id))
       .map((id) => {
         const p = playersById.get(id)
         if (!p) throw new Error(`Player ${id} on ${team.name}'s roster was not found`)
         return p
       })
-      .filter((p) => p.positions[0] === slot)
-      .filter((p) => (state.fatigue.get(p.id) ?? 0) <= FATIGUE_SUB_IN_MAX)
+
+    const atSlot = available.filter((p) => p.positions[0] === slot)
+    const rested = atSlot.filter((p) => (state.fatigue.get(p.id) ?? 0) <= FATIGUE_SUB_IN_MAX)
+
+    // A displaced slot has to be filled by someone, so its preferences relax in turn: the usual
+    // rested same-position pick first, then a tired one, then anyone left on the bench. An ordinary
+    // fatigue/pace sub keeps the strict filter and simply doesn't happen when nobody qualifies.
+    const candidates = displaced ? (rested.length > 0 ? rested : atSlot.length > 0 ? atSlot : available) : rested
 
     if (candidates.length === 0) continue // whole position group too tired -- outgoing stays in
 

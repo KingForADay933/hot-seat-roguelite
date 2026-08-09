@@ -7,8 +7,10 @@ import { fatigueGainPerSecond, fatigueRecoveryPerSecond } from '../engine/rotati
 import { CHARTABLE_PERIODS, getSegments } from './rotationChart'
 
 /** Live-validation reads on a rotation chart (rotation-charts.md Phase G): what a GM sees while
- *  charting, not anything the engine itself checks -- Phase F's checkSubstitutions trusts the plan
- *  it's handed, so surfacing problems here is what makes that trust safe. */
+ *  charting. Advisory, not a gate -- nothing here blocks saving a flawed plan. The engine defends
+ *  itself separately against the one flaw it can't resolve (substitution.ts's resolveChartedFive
+ *  refuses to seat a double-booked player twice); the point of surfacing problems here is that the
+ *  GM finds out at authoring time rather than from a box score. */
 
 interface ChartedSpan {
   startSeconds: number
@@ -69,8 +71,10 @@ export interface DoubleBookedConflict {
 
 /**
  * Each slot's timeline is edited independently, so nothing stops a GM from naming the same player
- * in two slots at once -- a plan shape checkSubstitutions was never asked to resolve (it trusts the
- * plan it's handed). Surfacing every overlapping pair here is what keeps that trust warranted.
+ * in two slots at once. The sim no longer breaks on it -- substitution.ts's resolveChartedFive
+ * gives the player to the first slot that asks and sends the loser to the coach heuristic -- but
+ * that's damage control, not what the GM meant. Surfacing every overlapping pair here is how they
+ * get to fix it themselves instead of quietly getting a lineup they didn't chart.
  */
 export function doubleBookedConflicts(team: Team): DoubleBookedConflict[] {
   const conflicts: DoubleBookedConflict[] = []

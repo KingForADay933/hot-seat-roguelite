@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { RotationPlan } from '../data/types'
 import { PERIOD_SECONDS } from '../engine/constants'
 import { MIN_ROTATION_SEGMENT_SECONDS } from './constants'
-import { getSegments, hasAnyChartedSegment, mergeWithNext, moveBoundary, setSegmentFill, splitSegment } from './rotationChart'
+import { chartedMinutes, getSegments, hasAnyChartedSegment, mergeWithNext, moveBoundary, setSegmentFill, splitSegment } from './rotationChart'
 
 describe('getSegments', () => {
   it('defaults to one Auto segment spanning the whole period when nothing is charted', () => {
@@ -149,5 +149,45 @@ describe('hasAnyChartedSegment', () => {
   it('is true once any segment anywhere names a player', () => {
     const plan: RotationPlan = { 3: { C: [{ startSeconds: 500, endSeconds: PERIOD_SECONDS, fill: { kind: 'player', playerId: 'closer' } }] } }
     expect(hasAnyChartedSegment(plan)).toBe(true)
+  })
+})
+
+describe('chartedMinutes', () => {
+  it('is empty with no plan', () => {
+    const { byPlayer, bySlot } = chartedMinutes(undefined)
+    expect(byPlayer.size).toBe(0)
+    expect(bySlot.size).toBe(0)
+  })
+
+  it('ignores Auto spans -- nobody is assigned to them', () => {
+    const plan: RotationPlan = { 1: { PG: [{ startSeconds: 0, endSeconds: PERIOD_SECONDS, fill: { kind: 'auto' } }] } }
+    expect(chartedMinutes(plan).byPlayer.size).toBe(0)
+    expect(chartedMinutes(plan).bySlot.size).toBe(0)
+  })
+
+  it('sums a player across periods and slots, and each slot across players', () => {
+    const plan: RotationPlan = {
+      1: {
+        PG: [
+          { startSeconds: 0, endSeconds: 360, fill: { kind: 'player', playerId: 'a' } },
+          { startSeconds: 360, endSeconds: PERIOD_SECONDS, fill: { kind: 'player', playerId: 'b' } },
+        ],
+      },
+      // Same player again, in a different period and at a different slot -- both count toward him.
+      2: { SF: [{ startSeconds: 0, endSeconds: 360, fill: { kind: 'player', playerId: 'a' } }] },
+    }
+
+    const { byPlayer, bySlot } = chartedMinutes(plan)
+    expect(byPlayer.get('a')).toBe(12) // 6 minutes at PG in Q1 + 6 at SF in Q2
+    expect(byPlayer.get('b')).toBe(6)
+    expect(bySlot.get('PG')).toBe(12) // the whole Q1 period, split between two players
+    expect(bySlot.get('SF')).toBe(6)
+  })
+
+  it('counts only the four regulation periods the editor can author', () => {
+    const overtimeOnly: RotationPlan = {
+      5: { C: [{ startSeconds: 0, endSeconds: PERIOD_SECONDS, fill: { kind: 'player', playerId: 'closer' } }] },
+    }
+    expect(chartedMinutes(overtimeOnly).byPlayer.size).toBe(0)
   })
 })

@@ -4,17 +4,24 @@ Planning notes for a 2K-style rotation chart: a per-quarter timeline where the G
 who is on the floor, when, and for how long. This document records what the engine does today, what
 has to change, in what order, and the decisions already settled.
 
-Written against master as of the simcast (#8) and team-reveal/system-fit (#9) merges. Phases 0
-through E are now done (see Section 6) -- Sections 1-2 below describe the possession-counted engine
-those phases replaced, and are kept as the historical record of why the clock and pace changes were
-needed, not as a description of the engine as it stands today.
+Written against master as of the simcast (#8) and team-reveal/system-fit (#9) merges. Every phase in
+Section 6 is now done -- Sections 1-2 below describe the possession-counted engine those phases
+replaced, and are kept as the historical record of why the clock and pace changes were needed, not as
+a description of the engine as it stands today. The same goes for each phase's own writeup: they
+record what was true when that phase landed.
+
+This is the deep-dive doc for the rotation feature specifically — it corresponds to **Tier 7.6** in
+`HotSeatFeatureTiers.md`, which is the project-wide feature catalog and build order. The rotation
+follow-ons still open (penalty tuning, paint mode) are listed there as well as in Section 8 below.
+`Roguelite-Basketball-GM-Design-Document.md` is the "why" doc behind both.
 
 ---
 
-## 0. Fix first: synergy goes stale when minutes change
+## 0. Fix first: synergy goes stale when minutes change — **fixed, see Phase 0**
 
 Not part of the rotation chart, but it has to be fixed before one is built, because a chart is a far
-bigger minutes change than nudging a single slider.
+bigger minutes change than nudging a single slider. Kept in the present tense below as the record of
+what the bug was; the fix is Phase 0 in Section 6.
 
 `computeInitialSynergyScore(playbook, roster, rotationMinutes)` is **minutes-weighted**.
 `systemDraft.ts`'s `availability()` turns each player's rotation minutes into the weight used for
@@ -216,7 +223,8 @@ so a GM doesn't meet one set of names on the reveal card and another on the char
 - **Development is downstream.** `aggregateSeasonMinutes` feeds `dpFormula`, so the chart directly
   drives who develops. Chart mistakes compound across a season.
 - **`rotationMinutes` becomes the Auto fallback** and stays the only input AI teams need. It also
-  remains a synergy input (§0), so a chart must feed the same recompute.
+  remains a synergy input (§0), so a chart must feed the same recompute. Since Phase I it is also a
+  per-position budget rather than a free number per player (`run/minutesBudget.ts`).
 - **Consumers taking `possessionsPerGame`:** `deriveBoxScore`, `getPeriodLabel`,
   `computeOvertimePossessions`, `isClutchTime`, `generateCoachingInsights`, `ChunkSimContext`,
   `playbackState`, `useSimcastPlayback`.
@@ -249,8 +257,11 @@ The pivot underneath all of this: **possession-counted game → clock-driven gam
 `for (possession of 1..100)` becomes `while (clock > 0)`, and possessions per game stops being an
 input and becomes an outcome.
 
-### Phase 0 — Recompute synergy on rotation change
-§0. Small, independent, and a live bug today.
+### Phase 0 — Recompute synergy on rotation change — **done**
+§0. `setRotationMinutes` (`RunProvider.tsx`) now routes through the same `teamsWithRecomputedSynergy`
+the camp and coaching-upgrade purchases use, recomputing on top of the just-edited teams rather than
+the stale pre-edit bundle, and re-adding `computeSynergyUpgradeBonus` as that helper's doc comment
+requires. The number on My Team no longer goes stale the moment a GM touches a minutes box.
 
 ### Phase A — Real periods — **done**
 `simulateGameSteps` runs four actual `REGULATION_PERIODS`, each with its own `rollJumpBall`, plus
@@ -346,9 +357,10 @@ the same period-relative value `getPeriodLabel` and the clock display already ke
 
 **Deliberately not done here:** `systemDraft.ts`'s `availability()` still approximates from
 `rotationMinutes` rather than reading a chart exactly, as this section originally floated. Left alone
-because there is no way yet to construct a real chart to approximate *instead of* -- every plan in
-existence right now is a synthetic test fixture. Worth revisiting once Phase G's editor exists and a
-GM can actually produce one.
+because there was no way yet to construct a real chart to approximate *instead of* -- every plan in
+existence at the time was a synthetic test fixture.
+
+**That blocker is now gone** (Phase G shipped the editor), and Phase J below does the work.
 
 ### Phase G — The chart editor — **done**
 Lives in `MyTeamScreen` as planned, as a new "Rotation Chart" section alongside (not replacing) the
@@ -385,8 +397,8 @@ movement.
   give an Auto span isn't knowable before the game runs.
 - *Empty slots*, generalized to a real problem the free-editing-per-slot design actually has: nothing
   stops the same player being named in two slots at once. `doubleBookedConflicts` finds every
-  overlapping pair and the summary panel surfaces it in red -- this is what keeps `checkSubstitutions`
-  safe in trusting the plan it's handed (Phase F never validates this itself).
+  overlapping pair and the summary panel surfaces it in red. **This was originally the only defense,
+  and it wasn't enough** -- see Phase I below.
 - *Out-of-position penalty badge* -- a small red `!` on any segment where the named player's own
   position doesn't match the charted slot, computed inline with `engine/positionFit.ts`'s
   `slotSlideDistance` (the same function the in-sim penalty uses) rather than a parallel check.
@@ -477,6 +489,101 @@ Overtime" correctly resumes into a ticking OT clock with the right score. `Skip 
 same paused state was exercised via the pending-step fix's unit coverage rather than re-triggering
 another live overtime game for it specifically.
 
+### Phase I — Unsatisfiable charts, and minutes as a real budget — **done**
+
+Two follow-ons found by reading the finished feature back against the engine.
+
+**A double-booked chart corrupted the sim.** Phase G's `doubleBookedConflicts` warning is advisory --
+it colors text red, it doesn't block `setRotationPlan` -- so a plan naming one player in two slots at
+once reached `checkSubstitutions` intact, and Phase F's per-slot "charted spans are law" branch
+happily seated him in both. The result was four bodies on the floor and a duplicate `OnCourtRecord`
+in every possession of that span, which `deriveBoxScore` counts once *per record*: up to 2x minutes
+for that player, flowing on into `aggregateSeasonMinutes` and `dpFormula`. A double-booked young
+high-potential player was a development exploit, not just a cosmetic lineup bug.
+
+The fix resolves the chart for all five slots up front (`resolveChartedFive`) instead of slot by
+slot. A claimed player wins the first slot to ask for him in `POSITION_ORDER`; the losing slot falls
+through to the coach heuristic, the same fallback an Auto span and an exhausted charted player
+already use, so an unsatisfiable plan degrades to ordinary coaching rather than to a broken five.
+Two cases beyond the obvious one had to be handled: a chart legitimately *moving* a player between
+slots vacates his old one mid-loop, so that slot is refilled whether or not the ordinary sub-out
+triggers fire (with its candidate preferences relaxing in turn -- rested same-position, then any
+same-position, then anyone -- since "leave the incumbent in" isn't available when the incumbent is
+standing somewhere else); and Phase H's emergency deviation must *not* count as claiming a player,
+or declining him at PG would wrongly deny him to SG. Five unit tests cover these; all twenty
+pre-existing substitution tests pass untouched, so satisfiable charts are behavior-neutral.
+
+**Rotation minutes are now allocated per position.** `rotationMinutes` accepted any 0-48 value per
+player, so a GM could hand out minutes that didn't exist -- five 40-minute point guards was a legal
+chart input. It's now a per-position budget of `REGULATION_MINUTES`, 240 across the team, held by
+`run/minutesBudget.ts` and enforced in `setRotationMinutes`.
+
+This enforces an invariant the codebase already had rather than inventing one: `randomTeam.ts`'s
+`computeRotationMinutes` normalizes `ROTATION_DEPTH_WEIGHTS` to sum to `REGULATION_MINUTES` *within
+each position group*, and that constant's doc comment says so outright. Nothing held GM edits to it.
+So no migration and no regeneration -- a test asserts generated teams already comply. Grouping is by
+`positions[0]`, which is the same grouping the heuristic substitutes within, so a group's minutes are
+genuinely only spendable on that group.
+
+Ceilings round *down*: generated targets are unrounded thirds and seventeenths of 48, and rounding up
+would let a group creep past budget by a fraction. A group can also sit legitimately *under* budget --
+a roster-trimming house rule (Short Bench) drops players after the generator has allocated their
+share -- which is benign, since a slot is still occupied for all 48 minutes; only the targets sum low.
+Both were caught in the browser rather than by the unit tests, which is worth remembering about this
+layer: the fractional-ceiling bug was invisible until an `<input max>` rendered `33.88235294117647`.
+
+Each minutes input caps at its own player's ceiling, and a `PositionMinutesSummary` above both
+minutes tables reads `PG 38/48 +10 free · SG 48/48 · ...` so a capped input reads as "that time is
+committed" rather than as a stuck control. Verified live through a real run: an over-cap write
+clamped, freeing a backup's minutes raised the starter's ceiling by exactly that much, the edit
+survived a reload, and both editing surfaces (My Team, and the checkpoint's Adjust the Rotation)
+render the readout.
+
+### Phase J — The chart feeds synergy and projected usage — **done**
+
+Closes Phase F's deliberate deferral: `systemDraft.ts`'s `availability()` now reads the chart, so the
+thing that actually decides who plays finally reaches the projection that assumes it knows.
+
+The model splits the game the way the engine does. **Charted spans are known exactly** and count at
+face value, including time at a slot that isn't the player's own -- he's on the floor either way.
+**`rotationMinutes` governs the rest**, because that is precisely what the coach heuristic reads for
+Auto time, prorated by how much of that slot's budget the chart hasn't already spent:
+
+```
+availability[p] = chartedMinutes[p] + rotationMinutes[p] × (unchartedMinutesAt(p's slot) / 48)
+```
+
+Chart the PG slot end to end and the backup point guard's target minutes are worth nothing, because
+there is no Auto time left for him to take -- which is exactly what will happen in the game.
+
+Two properties worth keeping. It **reduces to the old behavior identically** when there's no chart:
+uncharted is the whole game, the proration factor is 1, and every player is weighted by his raw
+target minutes as before. And it's **continuous** rather than a mode switch -- one 60-second segment
+moves the weights by one segment's worth, so there's no discontinuity the first time a GM touches the
+editor. Both matter because this function sets `Team.synergyScore`, which multiplies offense strength
+in every possession of every game.
+
+The `POSITION_MINUTES_BUDGET` denominator is Phase I's per-position budget, which is what makes the
+proration meaningful: a group's `rotationMinutes` are its share of a slot's 48, so the two systems
+compose rather than each having a private idea of what a full game is.
+
+**Section 8's last open question is settled with it.** `setRotationPlan` (`RunProvider.tsx`) now
+routes through `teamsWithRecomputedSynergy` exactly as `setRotationMinutes` does, because a
+chart-only edit finally has something for that recompute to see. Phase 0's precedent -- recompute
+immediately, on every edit -- was indeed the answer.
+
+The three public entry points (`computeInitialSynergyScore`, `computeProjectedUsageShares`,
+`computeSystemFitBreakdown`) now take a `RotationSource` (`Partial<Pick<Team, 'rotationMinutes' |
+'rotationPlan'>>`) instead of a bare minutes record, so callers hand over the team itself and can't
+supply one half of the rotation picture while silently dropping the other.
+
+Verified by nine new unit tests (all-Auto plan is a genuine no-op; a fully charted slot hands its
+backup nothing; proration sits strictly between those; charted time at a foreign slot still counts;
+charting the post unit rates Twin Towers above charting the guards) plus `chartedMinutes`' own
+coverage. In-browser against a real run: charting a post center into the PG slot moved a Motion
+Offense team's synergy 76 → 75 → 74 as it went from one period to four, monotonically and in the
+right direction, and the new score survived a reload.
+
 ---
 
 ## 7. Decisions settled
@@ -494,10 +601,11 @@ another live overtime game for it specifically.
 
 - **Penalty magnitude is now a real, tunable first cut, not settled.** `POSITION_FIT_SLIDE_PENALTY_PER_SLOT`
   (6) and `POSITION_FIT_HEIGHT_PENALTY_PER_INCH` (3) in `constants.ts` are estimates: a max four-slot
-  slide docks the hardest-leaned-on attributes 24 points before the height term. Nothing has exercised
-  these against a real chart yet (Phase F/G don't exist), so they still need tuning once a GM can
-  actually build a lineup -- watch the synergy knock-on (`computeInitialSynergyScore` reads the same
-  attributes through `possessionRoles.ts`) as well as the per-possession effect, as originally planned.
+  slide docks the hardest-leaned-on attributes 24 points before the height term. A GM can build a
+  real out-of-position lineup now (Phase G), so the thing that was blocking this tuning is gone --
+  but nothing has actually been tuned against one yet. Watch the synergy knock-on
+  (`computeInitialSynergyScore` reads the same attributes through `possessionRoles.ts`) as well as
+  the per-possession effect, as originally planned.
 - **Quirk derivation thresholds are now real, tunable numbers, not settled.**
   `POSITIONLESS_MIN_HEIGHT_BANDS` / `POSITIONLESS_ATTRIBUTE_SPREAD_MAX` / `SPECIALIST_ATTRIBUTE_SPREAD_MIN`
   / `SPECIALIST_HEIGHT_EDGE_INCHES` in `constants.ts`. One consequence worth knowing before tuning
@@ -522,10 +630,7 @@ another live overtime game for it specifically.
   actually has room for. The numeric side isn't gone, just relocated: the summary panel's fatigue and
   charted-minutes columns are exact numbers, just not the attribute-dock severity itself. Revisit if a
   GM wants to know *how bad* before committing, not just *that* it's bad.
-- **Does the chart feed synergy continuously, or only at stretch boundaries? Still open, and now
-  concretely deferred rather than abstractly open:** `setRotationPlan` (`RunProvider.tsx`) does not
-  call `teamsWithRecomputedSynergy` at all, because `computeInitialSynergyScore` still only reads
-  `rotationMinutes` (Phase F's deliberate deferral of `availability()`) -- a chart-only edit has
-  nothing new for that recompute to see yet. Once `availability()` is taught to read a real chart,
-  this question becomes live again, and Phase 0's precedent (recompute immediately, on every edit)
-  is the likely answer.
+- **Does the chart feed synergy continuously, or only at stretch boundaries? Resolved (Phase J):
+  continuously.** `setRotationPlan` recomputes on every edit, the same as `setRotationMinutes`,
+  now that `availability()` reads the chart and a chart-only edit has something for the recompute to
+  see. Phase 0's precedent held.
