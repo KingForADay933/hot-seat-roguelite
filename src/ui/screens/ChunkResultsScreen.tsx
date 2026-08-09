@@ -58,7 +58,7 @@ export function ChunkResultsScreen({
 
       <h2>Adjust the Rotation</h2>
       <p>Respond to what the Insights above are telling you before the next stretch of games plays out.</p>
-      <RosterAdjustmentPanel team={team} roster={roster} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+      <RosterAdjustmentPanel team={team} roster={roster} houseRule={run.houseRule} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
 
       <div className="stretch-actions">
         <button className="primary" onClick={onContinue}>

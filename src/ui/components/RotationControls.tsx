@@ -1,5 +1,6 @@
 import type { AttributeKey, Player, Team } from '../../data/types'
-import { maxMinutesFor, positionMinutesSummary, POSITION_MINUTES_BUDGET } from '../../run/minutesBudget'
+import { maxMinutesFor, minMinutesFor, positionMinutesSummary, POSITION_MINUTES_BUDGET } from '../../run/minutesBudget'
+import type { HouseRuleId } from '../../run/variation/houseRules'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 import { currentTrainingFocus } from '../playerDisplay'
 
@@ -12,23 +13,28 @@ export function MinutesInput({
   team,
   roster,
   playerId,
+  houseRule,
   onSetMinutes,
 }: {
   team: Team
   roster: Player[]
   playerId: string
+  houseRule: HouseRuleId
   onSetMinutes: (playerId: string, minutes: number) => void
 }) {
-  // Capped by what's left at this player's position, not a flat 48 -- setRotationMinutes clamps to
-  // the same ceiling on write (run/minutesBudget.ts), so the spinner stops where the write would.
-  const max = maxMinutesFor(team, roster, playerId)
+  // Capped by what's left at this player's position, not a flat 48, and narrowed again by any house
+  // rule that caps or floors minutes -- setRotationMinutes clamps to the same window on write
+  // (run/minutesBudget.ts), so the spinner stops exactly where the write would.
+  const max = maxMinutesFor(team, roster, playerId, houseRule)
+  const min = minMinutesFor(roster, playerId, houseRule)
   const position = roster.find((p) => p.id === playerId)?.positions[0]
+  const budgetNote = `${position}'s ${POSITION_MINUTES_BUDGET} less what his positional teammates hold`
   return (
     <input
       type="number"
-      min={0}
+      min={min}
       max={max}
-      title={`Up to ${max} min — ${position}'s ${POSITION_MINUTES_BUDGET} less what his positional teammates hold`}
+      title={min > 0 ? `${min}-${max} min — ${budgetNote}, and your house rule keeps him in the rotation` : `Up to ${max} min — ${budgetNote}`}
       // Auto-generated targets are unrounded thirds/seventeenths of 48; setRotationMinutes rounds
       // on write anyway, so showing the rounded value is what the GM is actually editing.
       value={Math.round(team.rotationMinutes[playerId] ?? 0)}

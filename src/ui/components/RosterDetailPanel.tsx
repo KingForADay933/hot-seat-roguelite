@@ -1,4 +1,5 @@
 import type { AttributeKey, Player, Team } from '../../data/types'
+import type { HouseRuleId } from '../../run/variation/houseRules'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 import { formatHeight } from '../playerDisplay'
 import { splitRoster } from '../rosterGroups'
@@ -20,6 +21,7 @@ function RosterDetailGroup({
   players,
   team,
   roster,
+  houseRule,
   onSetMinutes,
   onSetFocus,
 }: {
@@ -27,6 +29,7 @@ function RosterDetailGroup({
   players: Player[]
   team: Team
   roster: Player[]
+  houseRule: HouseRuleId
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
@@ -64,7 +67,7 @@ function RosterDetailGroup({
                 <td className="numeric">{formatHeight(player.heightInches)}</td>
                 <td className="numeric">{player.overallRating}</td>
                 <td className="numeric">
-                  <MinutesInput team={team} roster={roster} playerId={player.id} onSetMinutes={onSetMinutes} />
+                  <MinutesInput team={team} roster={roster} playerId={player.id} houseRule={houseRule} onSetMinutes={onSetMinutes} />
                 </td>
                 <td>
                   <TrainingFocusSelect team={team} playerId={player.id} onSetFocus={onSetFocus} />
@@ -96,11 +99,13 @@ function RosterDetailGroup({
 export function RosterDetailPanel({
   team,
   roster,
+  houseRule,
   onSetMinutes,
   onSetFocus,
 }: {
   team: Team
   roster: Player[]
+  houseRule: HouseRuleId
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
@@ -114,10 +119,19 @@ export function RosterDetailPanel({
         players={starters}
         team={team}
         roster={roster}
+        houseRule={houseRule}
         onSetMinutes={onSetMinutes}
         onSetFocus={onSetFocus}
       />
-      <RosterDetailGroup label="Bench" players={bench} team={team} roster={roster} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+      <RosterDetailGroup
+        label="Bench"
+        players={bench}
+        team={team}
+        roster={roster}
+        houseRule={houseRule}
+        onSetMinutes={onSetMinutes}
+        onSetFocus={onSetFocus}
+      />
     </>
   )
 }

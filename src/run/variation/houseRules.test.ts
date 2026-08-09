@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { createSeededRng } from '../../engine/rng'
 import { makeTestPlayer, makeTestTeam } from '../../engine/testFixtures'
 import type { Player, Position, Team } from '../../data/types'
-import { applyHouseRule, HOUSE_RULES, pickRandomHouseRules } from './houseRules'
+import {
+  applyHouseRule,
+  HOMEGROWN_MIN_MINUTES,
+  HOUSE_RULES,
+  houseRuleMinutesCap,
+  houseRuleProtectedPlayerIds,
+  pickRandomHouseRules,
+} from './houseRules'
 
 function buildTeam(ages: Record<Position, number[]>): { team: Team; players: Player[] } {
   const players: Player[] = []
@@ -79,6 +86,119 @@ describe('applyHouseRule / short-bench', () => {
     const { team, players } = buildTeam(ages)
     const result = applyHouseRule('short-bench', team, players)
     expect(result.team.rosterPlayerIds).toEqual(team.rosterPlayerIds)
+  })
+})
+
+/** Roster with an explicit quality ranking and minutes -- makeTestPlayer pins overallRating at 50,
+ *  and the three new rules all read one or both of those. */
+function buildRankedTeam(minutesByRank: number[]): { team: Team; players: Player[] } {
+  const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
+  const players = minutesByRank.map((_, i) =>
+    ({ ...makeTestPlayer({ positions: [positions[i % positions.length]] }), overallRating: 90 - i * 5 }),
+  )
+  const team = makeTestTeam({
+    rosterPlayerIds: players.map((p) => p.id),
+    startingFive: players.slice(0, 5).map((p) => p.id),
+    rotationMinutes: Object.fromEntries(players.map((p, i) => [p.id, minutesByRank[i]])),
+  })
+  players.forEach((p) => (p.teamId = team.id))
+  return { team, players }
+}
+
+describe('applyHouseRule / minutes-cap', () => {
+  it('pulls anyone over the cap down to it and leaves everyone else alone', () => {
+    const { team, players } = buildRankedTeam([40, 36, 30, 20, 12])
+    const result = applyHouseRule('minutes-cap', team, players)
+    const minutes = players.map((p) => result.team.rotationMinutes[p.id])
+
+    expect(minutes).toEqual([30, 30, 30, 20, 12])
+  })
+
+  it('frees the minutes rather than handing them to someone else -- that is the GM decision', () => {
+    const { team, players } = buildRankedTeam([40, 36, 30, 20, 12])
+    const before = Object.values(team.rotationMinutes).reduce((a, b) => a + b, 0)
+    const result = applyHouseRule('minutes-cap', team, players)
+    const after = Object.values(result.team.rotationMinutes).reduce((a, b) => a + b, 0)
+
+    expect(after).toBeLessThan(before)
+  })
+
+  it('exposes its cap to the minutes budget, and no other rule does', () => {
+    expect(houseRuleMinutesCap('minutes-cap')).toBe(30)
+    expect(houseRuleMinutesCap('short-bench')).toBeNull()
+    expect(houseRuleMinutesCap('homegrown-mandate')).toBeNull()
+  })
+})
+
+describe('applyHouseRule / deep-bench', () => {
+  it('drops exactly the worst four to replacement level and keeps the roster full', () => {
+    const { team, players } = buildRankedTeam([32, 30, 28, 24, 20, 16, 12, 10, 8, 6])
+    const result = applyHouseRule('deep-bench', team, players)
+    const byId = new Map(result.players.map((p) => [p.id, p]))
+
+    expect(result.team.rosterPlayerIds).toEqual(team.rosterPlayerIds) // nobody is cut, unlike short-bench
+    expect(result.players.every((p) => p.teamId === team.id)).toBe(true)
+
+    const worstFour = new Set(players.slice(-4).map((p) => p.id))
+    for (const player of players) {
+      const after = byId.get(player.id)!
+      if (worstFour.has(player.id)) expect(after.overallRating).toBeLessThan(player.overallRating)
+      else expect(after.overallRating).toBe(player.overallRating)
+    }
+  })
+})
+
+describe('applyHouseRule / homegrown-mandate', () => {
+  it('protects the two best players and nobody else', () => {
+    const { players } = buildRankedTeam([32, 30, 28, 24, 20])
+    const ids = houseRuleProtectedPlayerIds('homegrown-mandate', players)
+
+    expect(ids).toEqual(new Set([players[0].id, players[1].id]))
+    expect(houseRuleProtectedPlayerIds('short-bench', players).size).toBe(0)
+  })
+
+  it('leaves an already-compliant rotation untouched', () => {
+    const { team, players } = buildRankedTeam([32, 30, 28, 24, 20])
+    const result = applyHouseRule('homegrown-mandate', team, players)
+    expect(result.team.rotationMinutes).toEqual(team.rotationMinutes)
+  })
+
+  it('raises a benched protected player to the floor, paying for it from his own position', () => {
+    // Ten players, so PG holds ranks 0 and 5. The best player is parked at 4 minutes while his
+    // positional backup holds 40 -- the shortfall has to come out of that backup.
+    const { team, players } = buildRankedTeam([4, 30, 28, 24, 20, 40, 12, 10, 8, 6])
+    const result = applyHouseRule('homegrown-mandate', team, players)
+
+    expect(result.team.rotationMinutes[players[0].id]).toBe(HOMEGROWN_MIN_MINUTES)
+    expect(result.team.rotationMinutes[players[5].id]).toBe(40 - (HOMEGROWN_MIN_MINUTES - 4))
+    // The position group's total is conserved, so the floor never pushes it past its 48.
+    const pgTotal = [players[0], players[5]].reduce((sum, p) => sum + result.team.rotationMinutes[p.id], 0)
+    expect(pgTotal).toBe(44)
+  })
+
+  it('keeps a position inside its budget when both protected players share it', () => {
+    // The case a real run threw up: the roster's two best were both PGs, generated at 32 and 16.
+    // Raising the second to his floor has to come out of the first, because there is nobody else at
+    // the position -- and a first cut that refused to touch a protected teammate pushed the group to
+    // 52 of its 48, leaving the ceiling below the floor.
+    const positions: Position[] = ['PG', 'PG', 'SG', 'SF', 'PF']
+    const players = positions.map((position, i) => ({
+      ...makeTestPlayer({ positions: [position] }),
+      overallRating: 90 - i * 5,
+    }))
+    const team = makeTestTeam({
+      rosterPlayerIds: players.map((p) => p.id),
+      startingFive: players.map((p) => p.id),
+      rotationMinutes: Object.fromEntries(players.map((p, i) => [p.id, [32, 16, 48, 48, 48][i]])),
+    })
+    players.forEach((p) => (p.teamId = team.id))
+
+    const result = applyHouseRule('homegrown-mandate', team, players)
+    const [best, second] = players
+
+    expect(result.team.rotationMinutes[second.id]).toBe(HOMEGROWN_MIN_MINUTES)
+    expect(result.team.rotationMinutes[best.id]).toBeGreaterThanOrEqual(HOMEGROWN_MIN_MINUTES) // donated, but not below his own floor
+    expect(result.team.rotationMinutes[best.id] + result.team.rotationMinutes[second.id]).toBe(48)
   })
 })
 

@@ -1,6 +1,7 @@
 import type { Player, PlayerId, Position, Team } from '../data/types'
 import { REGULATION_MINUTES } from '../engine/constants'
 import { POSITION_ORDER } from '../engine/matchup'
+import { houseRuleMinMinutesFor, houseRuleMinutesCap, type HouseRuleId } from './variation/houseRules'
 
 /**
  * Rotation minutes as a fixed, per-position allocation rather than a free-form number per player.
@@ -74,15 +75,38 @@ export function positionMinutesSummary(team: Team, roster: Player[]): PositionMi
  * negative ceiling -- editing any player in such a group pulls the whole group back inside the
  * budget in one write.
  */
-export function maxMinutesFor(team: Team, roster: Player[], playerId: PlayerId): number {
+export function maxMinutesFor(team: Team, roster: Player[], playerId: PlayerId, houseRule?: HouseRuleId): number {
   const player = roster.find((p) => p.id === playerId)
   if (!player) return 0
-  return Math.max(Math.floor(POSITION_MINUTES_BUDGET - assignedAt(team, roster, player.positions[0], playerId)), 0)
+  const fromPosition = Math.max(Math.floor(POSITION_MINUTES_BUDGET - assignedAt(team, roster, player.positions[0], playerId)), 0)
+  // A house rule can only ever tighten this, never loosen it -- the position budget is a fact about
+  // the game clock, while a rule is an extra promise the GM made on top of it.
+  const cap = houseRule ? houseRuleMinutesCap(houseRule) : null
+  return cap === null ? fromPosition : Math.min(fromPosition, cap)
 }
 
-/** Rounds and clamps a requested minutes value into what's actually available at that position. */
-export function clampToPositionBudget(team: Team, roster: Player[], playerId: PlayerId, minutes: number): number {
+/**
+ * The least this player may be given -- 0 unless a house rule pins him into the rotation.
+ *
+ * Deliberately not bounded by maxMinutesFor: the two are chosen so they cannot cross (see
+ * HOMEGROWN_MIN_MINUTES), and silently lowering a floor to satisfy a ceiling would turn a rule the
+ * GM agreed to into one that quietly stops applying.
+ */
+export function minMinutesFor(roster: Player[], playerId: PlayerId, houseRule?: HouseRuleId): number {
+  return houseRule ? houseRuleMinMinutesFor(houseRule, roster, playerId) : 0
+}
+
+/** Rounds and clamps a requested minutes value into what's actually available at that position, and
+ *  into whatever narrower window the run's house rule allows. */
+export function clampToPositionBudget(
+  team: Team,
+  roster: Player[],
+  playerId: PlayerId,
+  minutes: number,
+  houseRule?: HouseRuleId,
+): number {
+  const floor = minMinutesFor(roster, playerId, houseRule)
   const requested = Math.round(minutes)
-  if (!Number.isFinite(requested) || requested <= 0) return 0
-  return Math.min(requested, maxMinutesFor(team, roster, playerId))
+  if (!Number.isFinite(requested) || requested <= 0) return floor
+  return Math.max(Math.min(requested, maxMinutesFor(team, roster, playerId, houseRule)), floor)
 }

@@ -4,7 +4,7 @@ import { REGULATION_MINUTES } from '../engine/constants'
 import { generateTeam } from '../engine/generator/randomTeam'
 import { createSeededRng } from '../engine/rng'
 import { makeTestPlayer, makeTestTeam } from '../engine/testFixtures'
-import { clampToPositionBudget, maxMinutesFor, positionMinutesSummary, POSITION_MINUTES_BUDGET } from './minutesBudget'
+import { clampToPositionBudget, maxMinutesFor, minMinutesFor, positionMinutesSummary, POSITION_MINUTES_BUDGET } from './minutesBudget'
 
 /** A roster of the given positions, with each player's minutes supplied in the same order. */
 function buildTeam(entries: { position: Position; minutes: number }[]): { team: Team; roster: Player[] } {
@@ -149,5 +149,56 @@ describe('the generator already respects the budget', () => {
       expect(row.assigned).toBeCloseTo(POSITION_MINUTES_BUDGET, 6)
       expect(row.isOverBudget).toBe(false)
     }
+  })
+})
+
+describe('house rules narrowing the budget', () => {
+  it('minutes-cap lowers a ceiling the position budget would otherwise allow', () => {
+    const { team, roster } = buildTeam([{ position: 'PG', minutes: 20 }])
+    expect(maxMinutesFor(team, roster, roster[0].id)).toBe(POSITION_MINUTES_BUDGET)
+    expect(maxMinutesFor(team, roster, roster[0].id, 'minutes-cap')).toBe(30)
+  })
+
+  it('minutes-cap never raises a ceiling the position budget has already lowered', () => {
+    const { team, roster } = buildTeam([
+      { position: 'PG', minutes: 30 },
+      { position: 'PG', minutes: 30 },
+    ])
+    // The group is over budget, so this player's positional ceiling is 18 -- well under the cap,
+    // which must not loosen it back up to 30.
+    expect(maxMinutesFor(team, roster, roster[0].id, 'minutes-cap')).toBe(18)
+  })
+
+  it('clamps a request down to the cap', () => {
+    const { team, roster } = buildTeam([{ position: 'PG', minutes: 20 }])
+    expect(clampToPositionBudget(team, roster, roster[0].id, 48, 'minutes-cap')).toBe(30)
+    expect(clampToPositionBudget(team, roster, roster[0].id, 48)).toBe(POSITION_MINUTES_BUDGET)
+  })
+
+  it('homegrown-mandate refuses to bench a protected player, including at zero', () => {
+    const { team, roster } = buildTeam([
+      { position: 'PG', minutes: 32 },
+      { position: 'SG', minutes: 16 },
+    ])
+    // Both players sit in a two-man roster's top two, so both are protected.
+    expect(clampToPositionBudget(team, roster, roster[0].id, 5, 'homegrown-mandate')).toBe(20)
+    expect(clampToPositionBudget(team, roster, roster[0].id, 0, 'homegrown-mandate')).toBe(20)
+    // ...and the floor only exists while the rule does.
+    expect(clampToPositionBudget(team, roster, roster[0].id, 0)).toBe(0)
+  })
+
+  it('leaves an unprotected player free to be benched entirely', () => {
+    const { team, roster: flat } = buildTeam([
+      { position: 'PG', minutes: 32 },
+      { position: 'PG', minutes: 10 },
+      { position: 'SG', minutes: 30 },
+    ])
+    // Ranked explicitly: makeTestPlayer pins every overallRating at 50, which would leave who counts
+    // as "best" resting on the id tie-break rather than on anything this test means to assert.
+    const roster = flat.map((p, i) => ({ ...p, overallRating: 90 - i * 10 }))
+    const worst = roster[2]
+
+    expect(minMinutesFor(roster, worst.id, 'homegrown-mandate')).toBe(0)
+    expect(clampToPositionBudget(team, roster, worst.id, 0, 'homegrown-mandate')).toBe(0)
   })
 })

@@ -1,4 +1,5 @@
 import type { AttributeKey, Player, Team } from '../../data/types'
+import type { HouseRuleId } from '../../run/variation/houseRules'
 import { splitRoster } from '../rosterGroups'
 import { PlayerName } from './PlayerName'
 import { MinutesInput, PositionMinutesSummary, TrainingFocusSelect } from './RotationControls'
@@ -8,6 +9,7 @@ function RosterAdjustmentGroup({
   players,
   team,
   roster,
+  houseRule,
   onSetMinutes,
   onSetFocus,
 }: {
@@ -15,6 +17,7 @@ function RosterAdjustmentGroup({
   players: Player[]
   team: Team
   roster: Player[]
+  houseRule: HouseRuleId
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
@@ -38,7 +41,7 @@ function RosterAdjustmentGroup({
                 <PlayerName playerId={player.id} name={player.name} />
               </td>
               <td className="numeric">
-                <MinutesInput team={team} roster={roster} playerId={player.id} onSetMinutes={onSetMinutes} />
+                <MinutesInput team={team} roster={roster} playerId={player.id} houseRule={houseRule} onSetMinutes={onSetMinutes} />
               </td>
               <td>
                 <TrainingFocusSelect team={team} playerId={player.id} onSetFocus={onSetFocus} />
@@ -54,11 +57,13 @@ function RosterAdjustmentGroup({
 export function RosterAdjustmentPanel({
   team,
   roster,
+  houseRule,
   onSetMinutes,
   onSetFocus,
 }: {
   team: Team
   roster: Player[]
+  houseRule: HouseRuleId
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
@@ -74,6 +79,7 @@ export function RosterAdjustmentPanel({
         players={starters}
         team={team}
         roster={roster}
+        houseRule={houseRule}
         onSetMinutes={onSetMinutes}
         onSetFocus={onSetFocus}
       />
@@ -82,6 +88,7 @@ export function RosterAdjustmentPanel({
         players={bench}
         team={team}
         roster={roster}
+        houseRule={houseRule}
         onSetMinutes={onSetMinutes}
         onSetFocus={onSetFocus}
       />

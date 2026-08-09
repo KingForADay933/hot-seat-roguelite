@@ -184,8 +184,17 @@ Not part of the original phase plan -- came out of fixing the localStorage-quota
 
 Things that happen *to* the player, no choice involved -- the hot-seat pressure:
 
-- **Roster quirks** (one per run): Stacked at Guard, One Aging Superstar, Balanced/Low Ceiling.
-- **House rules** (one per run): Youth Movement (2+ starters ≤22), Short Bench (roster trimmed to 8).
+- **Roster quirks** (one per run), 9 total, spread deliberately across four axes so the two cards a GM is offered rarely say the same thing twice:
+  - *Positional shape*: Stacked at Guard, Frontcourt Overload. Mirror images -- +12 to one end of the position order, -12 to the other, with SF as the hinge. Net-neutral, so a tilt is a different team to coach rather than a harder one.
+  - *Skill shape*: Live by the Three (shooting for finishing and rim protection), Defense Wins Championships (both defenses for both shots), Undersized and Fast (speed and quickness for the glass, plus 3 inches off every player). All net-zero across the ten attributes, for the same reason.
+  - *Age/development shape*: One Aging Superstar, All Prime No Upside (everyone 26-29 and at peak, potential already reached -- frozen in both directions, where Balanced/Low Ceiling leaves the age curve alone and lets veterans decline).
+  - *Variance shape*: Balanced/Low Ceiling (safe and capped), High-Variance Roster (the best two get real potential to grow into, the worst two get worse permanently, the middle is untouched).
+- **House rules** (one per run), 5 total. Two reshape the roster once at draft time; three are ongoing constraints the run keeps enforcing:
+  - Youth Movement (2+ starters ≤22) and Short Bench (roster trimmed to 8) -- one-shot transforms.
+  - Minutes Cap (no player above 30 a game) -- bites on *concentration* rather than on the generated defaults, since the depth weights already hand a lone starter about 32. Safe at every position because generated rosters carry two players per position.
+  - Deep Bench, Thin Talent -- the roster stays full but the worst four drop to replacement level. The inverse pressure to Short Bench: bodies are available, but leaning on them costs real quality, so resting a starter stops being free.
+  - Homegrown Mandate -- the two best players must keep 20 minutes a game. The protected pair is derived from the roster on every read rather than stored, so the rule needed no new field on `RunState`.
+  - The last two are enforced in `run/minutesBudget.ts` alongside the per-position budget, so a house rule can only ever *narrow* the window a GM may write, never widen it. `MinutesInput` reads the same window, so the spinner stops exactly where the write would.
 - **Wildcard events** (~30% chance per season): Breakout (young player attribute boost) or Sophomore Slump (attribute dip). Rolled before the season sims, so it actually affects that season's games, and flows through into real player development.
 - **Market size** (one per run): Big (1.5x budget, 2 seasons/stretch patience), Mid (1.0x, 3), Small (0.6x, 4). Two independent axes -- cash vs. patience -- so no tier is strictly better.
 
