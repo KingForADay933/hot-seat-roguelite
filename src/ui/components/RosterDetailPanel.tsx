@@ -2,6 +2,7 @@ import type { AttributeKey, Player, Team } from '../../data/types'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 import { formatHeight } from '../playerDisplay'
 import { splitRoster } from '../rosterGroups'
+import { PlayerName } from './PlayerName'
 import { MinutesInput, PositionMinutesSummary, TrainingFocusSelect } from './RotationControls'
 
 /** How much room a player has left to grow in one attribute before hitting their fixed potential
@@ -55,7 +56,9 @@ function RosterDetailGroup({
           <tbody>
             {players.map((player) => (
               <tr key={player.id}>
-                <td>{player.name}</td>
+                <td>
+                  <PlayerName playerId={player.id} name={player.name} />
+                </td>
                 <td>{player.positions.join('/')}</td>
                 <td className="numeric">{player.age}</td>
                 <td className="numeric">{formatHeight(player.heightInches)}</td>

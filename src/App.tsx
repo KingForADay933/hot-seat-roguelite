@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { RunProvider } from './ui/state/RunProvider'
 import { useRun } from './ui/state/useRun'
 import { AbandonRunScreen } from './ui/screens/AbandonRunScreen'
@@ -12,6 +12,9 @@ import { ShopScreen } from './ui/screens/ShopScreen'
 import { FiredScreen } from './ui/screens/FiredScreen'
 import { StretchScreen } from './ui/screens/StretchScreen'
 import { SimcastScreen } from './ui/screens/SimcastScreen'
+import { PlayerScreen } from './ui/screens/PlayerScreen'
+import { PlayerInspectorContext } from './ui/state/playerInspector.core'
+import type { PlayerId } from './data/types'
 
 function AppContent() {
   // Whether the My Team reference sheet is covering the current screen. Local, not persisted:
@@ -21,6 +24,13 @@ function AppContent() {
   // Whether the abandon confirmation is up. Same local-view-toggle rationale as viewingMyTeam --
   // and deliberately not persisted, so a refresh mid-decision keeps the run rather than the prompt.
   const [confirmingAbandon, setConfirmingAbandon] = useState(false)
+  // Which player's detail page is open, if any. Same local-view-toggle rationale as the two above.
+  // Closing returns to whichever screen the name was clicked on -- My Team, a checkpoint, a
+  // stretch -- rather than to the run's default screen. Like My Team it replaces that screen
+  // rather than overlaying it, so the screen underneath remounts on the way back and its own view
+  // state resets (an expanded box score returns collapsed).
+  const [viewingPlayerId, setViewingPlayerId] = useState<PlayerId | null>(null)
+  const inspector = useMemo(() => ({ openPlayer: setViewingPlayerId }), [])
   const {
     bundle,
     draft,
@@ -113,6 +123,17 @@ function AppContent() {
     return <SeasonResultsScreen bundle={bundle} onContinue={bundle.run.status === 'fired' ? acknowledgeFired : openShop} />
   }
 
+  // Above every run screen but below the simcast: a player page is a reference sheet, and a game
+  // already in motion outranks looking someone up. Rendered before the My Team check so opening a
+  // name from there returns to My Team rather than dropping back to the run.
+  if (viewingPlayerId) {
+    return (
+      <PlayerInspectorContext.Provider value={inspector}>
+        <PlayerScreen bundle={bundle} playerId={viewingPlayerId} onBack={() => setViewingPlayerId(null)} />
+      </PlayerInspectorContext.Provider>
+    )
+  }
+
   if (confirmingAbandon) {
     return (
       <AbandonRunScreen
@@ -127,13 +148,15 @@ function AppContent() {
   }
   if (viewingMyTeam) {
     return (
-      <MyTeamScreen
-        bundle={bundle}
-        onSetMinutes={setRotationMinutes}
-        onSetFocus={setTrainingFocus}
-        onSetRotationPlan={setRotationPlan}
-        onBack={() => setViewingMyTeam(false)}
-      />
+      <PlayerInspectorContext.Provider value={inspector}>
+        <MyTeamScreen
+          bundle={bundle}
+          onSetMinutes={setRotationMinutes}
+          onSetFocus={setTrainingFocus}
+          onSetRotationPlan={setRotationPlan}
+          onBack={() => setViewingMyTeam(false)}
+        />
+      </PlayerInspectorContext.Provider>
     )
   }
 
@@ -142,7 +165,7 @@ function AppContent() {
   // particular screen either. Both sit behind the simcast check above, so neither interrupts a
   // game already in motion.
   return (
-    <>
+    <PlayerInspectorContext.Provider value={inspector}>
       <nav>
         <button onClick={() => setViewingMyTeam(true)}>My Team</button>
         <button className="link-button nav-quit" onClick={() => setConfirmingAbandon(true)}>
@@ -150,7 +173,7 @@ function AppContent() {
         </button>
       </nav>
       {runScreen()}
-    </>
+    </PlayerInspectorContext.Provider>
   )
 }
 
