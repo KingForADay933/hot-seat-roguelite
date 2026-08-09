@@ -2,7 +2,7 @@
 **Repo:** [KingForADay933/hot-seat-roguelite](https://github.com/KingForADay933/hot-seat-roguelite) (private)
 **Companion doc:** [[Roguelite-Basketball-GM-Design-Document]] -- vision, rationale, open questions. This doc is the flat feature/status catalog; that one is the "why."
 **Parent-project doc:** `Basketball Manager Game - Design Document.md` -- Hoop Sim's own design doc, which owns everything in `engine/`. Tier 0 is a port of what it describes.
-**Deep dives:** `rotation-charts.md` (Tier 7.6) is the one feature with its own design doc, covering the clock rewrite and lineup control in detail.
+**Deep dives:** `rotation-charts.md` (Tier 7.6) covers the clock rewrite and lineup control in detail. `detailed-simcast.md` (Tier 7.7) is the planning doc for the labeled-court-view simcast, not yet built.
 
 ### Reading the "Section N" citations in code
 
@@ -114,6 +114,10 @@ These aren't preferences; the work breaks if they're ignored.
   coaching state between games is incoherent if games can be played out of order. Hence M1, not later.
 - **Conferences precede the playoff bracket.** They're the natural seeding basis, so decide the league
   shape once.
+- **Detailed Simcast must never generate a possession's choreography ahead of the render cursor.**
+  `simulateGameSteps` stays a lazy, one-possession-at-a-time generator specifically so Tier 13 can feed
+  it a directive between possessions; a lookahead buffer built for smoother court-view animation would
+  quietly break that. See `detailed-simcast.md` §1.
 
 ---
 
@@ -255,6 +259,7 @@ Not part of the original phase plan. Watching a game happen, rather than only re
 - **Overtime prompt** -- playback pauses at the start of each overtime period with score and clock frozen at the buzzer, so the GM gets a beat to notice it happened. Acknowledge to resume. The Q4 closing five carries over by default, which needed no engine change (rotation state already persisted across periods).
 - **Planned -- slower default pacing** (M1): `BASE_POSSESSION_MS` is 450, down from an original 900 -- the clock rewrite (Tier 7.6) roughly doubled the possessions in a game and the halving kept the same wall-clock feel. Current pacing runs a full game in about three minutes at 1x and reads as too fast. Fix is to raise the constant; the speed multipliers scale off it automatically. Pick the number by watching a game rather than by arithmetic, and consider whether the *default multiplier* should change instead, which would leave 1x meaning what it means today.
 - **Idea, unscoped** -- live lineup editing during the overtime pause. Deliberately not built: injecting a GM's mid-game edit means threading a live mutable channel into what is otherwise a pure, seed-deterministic simulation -- the same `simulateGameSteps` that also runs every AI-vs-AI game with no UI attached. Folded into Tier 13, which has to solve that problem anyway.
+- **Deepens into Tier 7.7** -- the labeled-court-view simcast (`detailed-simcast.md`) renders the same possession log this tier already produces; it's an alternate presentation, not a replacement.
 
 ---
 
@@ -274,6 +279,42 @@ Not part of the original phase plan. A 2K-style rotation chart, and the engine r
 - **Planned -- tune the position-fit constants** (M3): the slide and height penalties are first-pass estimates written before any chart existed to exercise them. A GM can now build a real out-of-position lineup, so the thing blocking tuning is gone -- but nothing has been tuned against one. Same for the Positionless/Specialist thresholds, with a known skew: PG and C height bands are narrow and mostly consumed by their single neighbour's overlap, so almost any pure PG or C reads as Specialist by height alone. Watch the synergy knock-on as well as the per-possession effect.
 - **Planned -- paint mode** (M7): pick a player, then click-drag across the grid to lay them straight into the time you drag over, instead of splitting and assigning as separate steps. The underlying plan mutations already exist, so this is a new *input* over the same operations -- mostly pointer handling. Decide whether painting respects the minimum-segment floor (probably yes), and make sure a stroke persists once on release, the way the boundary drag already batches to avoid a write per pixel.
 - **Explicitly out of scope here:** foul trouble and injuries as chart deviation rules. Neither system existed to build a rule on top of -- both are now Tier 14, which inherits this as part of its own work.
+
+---
+
+## Tier 7.7 — Detailed Simcast (Court View)
+**Planned -- not yet scheduled -- has its own deep-dive doc: `detailed-simcast.md`**
+
+Not part of the original phase plan, but not really new either -- Hoop Sim's own design doc (Section 7,
+"Simcast (Visual Playback)") specified almost exactly this before Tier 7.5 shipped the text broadcast
+under the same name: a top-down court with dots/icons for players, rendered from the possession log
+as a "puppet show" rather than a second simulation. Tier 7.5 built the text half of that plan; this
+tier is the visual half -- labeled circles for players and the ball, moving on a court, roughly in
+real time.
+
+- **A pure rendering layer over the existing possession log** -- adds nothing to
+  `PossessionLogEntry`, needs no save migration, and requires no `engine/` changes. Everything a
+  choreography generator needs (on-court fives with slot, the primary/secondary actors the commentary
+  text already names, play call, outcome, shot type) is already logged today.
+- **The one hard constraint: possessions stay individually generated.** `simulateGameSteps` yields one
+  possession at a time specifically so a future in-game decision (Tier 13) can land between any two of
+  them via `.next(directive)`. This tier's choreography must be generated only once a possession has
+  actually been pulled from the generator -- never pre-computed or buffered ahead of the render
+  cursor -- or it quietly breaks the thing Tier 13 depends on. See `detailed-simcast.md` §1, and the
+  "Hard constraints" list above.
+- **New work is a coordinate model and a choreography generator**, not new simulation math: a
+  normalized half-court, zone anchors per slot (reusing `SLOT_INTERIOR_LEAN` for the interior/perimeter
+  axis rather than inventing a parallel scale), and a deterministic possession-entry-to-waypoints
+  function keyed off the 6 existing play-call types.
+- **Needs its own pacing**, decoupled from the text feed's tick rate -- a possession's game-clock
+  duration and the wall-clock time needed to read player movement have nothing to do with each other.
+  Proposed as an alternate rendering mode over the same generator and playback state, not a parallel
+  playback path.
+- **Sequencing relative to Tier 13:** buildable independently and doesn't block it, provided the
+  individual-generation rule holds. The two features share the same yield point in
+  `simulateGameSteps`, so a substitution directive (Tier 13 level 3) landing between possessions should
+  already flow through correctly -- choreography is generated fresh per possession from that
+  possession's own logged on-court five, never cached from an earlier one.
 
 ---
 
@@ -338,7 +379,7 @@ Timeouts, substitutions, play-calling, offensive/defensive focus points, matchup
 
 **Deliberately split.** Levels 1-2 below are the game's **second strategic axis** -- the first thing that makes *how you play a game* differ from run to run, rather than only how you assembled the roster. That's worth a lot in a roguelite and costs comparatively little, so it lands early at M3. Levels 3-4 are the hard, risky part and stay last at M6.
 
-`simulateGameSteps` yields after every possession and its doc comment names this exact use -- it "is the pause point future interactive coaching decisions (timeouts, subs, matchup/emphasis changes) will hook into." Tier 7.5's overtime prompt is the first real instance of it.
+`simulateGameSteps` yields after every possession and its doc comment names this exact use -- it "is the pause point future interactive coaching decisions (timeouts, subs, matchup/emphasis changes) will hook into." Tier 7.5's overtime prompt is the first real instance of it. Tier 7.7's court-view simcast leans on the same yield point and the same constraint (`detailed-simcast.md` §1) -- both features depend on nothing ever being generated ahead of wherever the GM currently is in the broadcast.
 
 Defensive schemes already half-exist: five ship as presets (Man-to-Man, Zone, Switch-Everything, Pack-the-Paint, Full-Court Press) and the sim reads the chosen one every possession. They're a **team-level, set-before-tipoff** choice today, so making them switchable mid-game is plumbing, not modelling. A genuine combo man/zone is a new preset entry rather than new machinery.
 
@@ -539,6 +580,7 @@ Recorded so they stay decided rather than getting relitigated:
 | 7 | Shop, camps, upgrades, consumables | Shipped | — |
 | 7.5 | Live playback (simcast) | Shipped / slower pacing planned | M1 |
 | 7.6 | Rotation charts & lineup control | Shipped / tuning + paint mode planned | M3, M7 |
+| 7.7 | Detailed simcast (labeled court view, player/ball movement) | Planned, unscheduled | after Tier 13 |
 | 8 | Run-end summary | Planned | **M1** |
 | 9 | Leaderboard / unlocks | Planned / Idea | post-launch |
 | 10 | itch.io → Electron → Steam | Planned | M7 |
