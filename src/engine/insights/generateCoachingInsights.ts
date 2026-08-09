@@ -49,6 +49,20 @@ export interface CoachingInsight {
   subjectId: PlayerId
   /** Denormalised so a consumer that outlives the roster lookup can still name them. */
   subjectName: string
+  /**
+   * The evidence behind the prose, kept as numbers so several games' worth of the same observation
+   * can be *added up* rather than listed one line at a time (run/chunkInsightSummary.ts).
+   *
+   * Only weak-link targeting carries any -- a fatigue substitution is an event, not a measurement,
+   * and counting how many times it happened is the whole of what there is to say about it.
+   *
+   * Optional because it arrived after saves existed: a run stored before this field simply has an
+   * insight with no numbers to sum, which the summary handles by omitting the numeric clause.
+   */
+  metrics?: {
+    possessionsTargeted: number
+    pointsAllowed: number
+  }
 }
 
 function resolvePlayer(id: PlayerId, playersById: Map<PlayerId, Player>): Player {
@@ -134,6 +148,7 @@ function detectWeakLinkTargeting(
     kind: 'weak-link-targeting',
     subjectId: topId,
     subjectName: defenderName,
+    metrics: { possessionsTargeted: top.count, pointsAllowed: top.pointsAllowed },
     text: `${scheme.name} defense got picked on: ${defenderName} was matched up on ${top.count} ${possessionWord} this game, allowing ${top.pointsAllowed} points.`,
   }
 }

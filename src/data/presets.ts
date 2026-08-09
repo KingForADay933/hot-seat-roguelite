@@ -10,9 +10,16 @@ export interface OffensivePlaybook {
   description: string
 }
 
+/** Keys of DEFENSIVE_SCHEMES -- the same standalone-literal treatment SystemId gets below, and for
+ *  the same reason: the run's defensive draft (run/variation/defenseDraft.ts) needs the narrow type
+ *  while every existing Record<string, ...> consumer stays untouched. */
+export type DefensiveSchemeId = 'manToMan' | 'zone' | 'switchEverything' | 'packThePaint' | 'fullCourtPress'
+
 export interface DefensiveScheme {
   id: string
   name: string
+  /** GM-facing summary of the trade the scheme makes, for the draft card. */
+  description: string
   /** Switch-Everything: resistance uses the worst defender among the five, not the matched one. */
   weakLinkSensitive: boolean
   /** 0-1: weights Interior Defense/Vertical vs. Perimeter Defense/Lateral Quickness. High = Pack-the-Paint. */
@@ -170,6 +177,7 @@ export const DEFENSIVE_SCHEMES: Record<string, DefensiveScheme> = {
   manToMan: {
     id: 'manToMan',
     name: 'Man-to-Man',
+    description: 'Everyone guards their own. No strengths, no holes -- each man is judged on the matchup he was given.',
     weakLinkSensitive: false,
     interiorFocus: 0.5,
     pressureCoefficient: 1.0,
@@ -178,12 +186,14 @@ export const DEFENSIVE_SCHEMES: Record<string, DefensiveScheme> = {
     id: 'zone',
     name: 'Zone',
     weakLinkSensitive: false,
+    description: 'Guard space instead of men. Tilts slightly inside and gives up a little ball pressure for the shape.',
     interiorFocus: 0.55,
     pressureCoefficient: 0.9,
   },
   switchEverything: {
     id: 'switchEverything',
     name: 'Switch-Everything',
+    description: 'Switch every screen, so the offense picks who defends. Your worst defender takes the possession -- five real defenders or it is a liability.',
     weakLinkSensitive: true,
     interiorFocus: 0.4,
     pressureCoefficient: 1.0,
@@ -191,6 +201,7 @@ export const DEFENSIVE_SCHEMES: Record<string, DefensiveScheme> = {
   packThePaint: {
     id: 'packThePaint',
     name: 'Pack-the-Paint',
+    description: 'Wall off the rim and live with the jumper. Much stronger inside, and forgiving of weak perimeter defenders.',
     weakLinkSensitive: false,
     interiorFocus: 0.8,
     pressureCoefficient: 0.9,
@@ -198,6 +209,7 @@ export const DEFENSIVE_SCHEMES: Record<string, DefensiveScheme> = {
   fullCourtPress: {
     id: 'fullCourtPress',
     name: 'Full-Court Press',
+    description: 'Hound the ball for 94 feet. Turns quick, athletic defenders into turnovers -- and hands the game away if they are not.',
     weakLinkSensitive: false,
     interiorFocus: 0.3,
     pressureCoefficient: 1.3,

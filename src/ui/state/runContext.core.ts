@@ -1,6 +1,6 @@
 import { createContext } from 'react'
 import type { AttributeKey, Game, GameId, League, Player, PlayerId, RotationPlan, Team, TeamId } from '../../data/types'
-import type { SystemId } from '../../data/presets'
+import type { DefensiveSchemeId, SystemId } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import type { ChunkSimContext } from '../../run/chunkSimContext'
 import type { CoachingUpgradeId } from '../../run/coachingUpgrades'
@@ -81,7 +81,7 @@ export interface RunContextValue {
   confirmDraft: (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => Promise<void>
   /** Resolves phase two: scores the chosen system against the now-visible roster, writes it and the
    *  resulting synergy onto the team, and persists the run for real. */
-  lockSystem: (system: SystemId) => Promise<void>
+  lockSystem: (system: SystemId, defense: DefensiveSchemeId) => Promise<void>
   /** Simulates the next chunk of the current season (or a fresh season's first chunk) in one go --
    *  Section 9. The "just sim it" path, skipping the stretch screen entirely; the resulting bundle
    *  tells the caller which screen comes next (chunk checkpoint vs. the season-end results screen)

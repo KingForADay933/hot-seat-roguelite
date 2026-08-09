@@ -1,6 +1,8 @@
+import { DEFENSIVE_SCHEMES } from '../../data/presets'
 import type { AttributeKey } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { computeStandings } from '../../engine/schedule/standings'
+import { summarizeChunkInsights } from '../../run/chunkInsightSummary'
 import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { RosterAdjustmentPanel } from '../components/RosterAdjustmentPanel'
 import { StandingsTable } from '../components/StandingsTable'
@@ -24,6 +26,10 @@ export function ChunkResultsScreen({
 
   const roster = players.filter((p) => p.teamId === team.id)
   const standings = computeStandings(teams, games)
+  // finalizeChunk already collapsed these on the way in. Applied again here (the operation is
+  // idempotent) so a run saved before it did still reads as one line per problem rather than one
+  // per game -- there are live saves on itch, and the checkpoint is the screen they sit on most.
+  const insights = summarizeChunkInsights(lastChunkInsights, DEFENSIVE_SCHEMES[team.defensiveStrategyId]?.name)
 
   return (
     <main>
@@ -43,9 +49,9 @@ export function ChunkResultsScreen({
       )}
 
       <h2>Coaching Insights</h2>
-      {lastChunkInsights.length > 0 ? (
+      {insights.length > 0 ? (
         <ul>
-          {lastChunkInsights.map((insight, i) => (
+          {insights.map((insight, i) => (
             <li key={i}>{insight.text}</li>
           ))}
         </ul>

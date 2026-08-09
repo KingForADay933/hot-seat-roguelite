@@ -207,6 +207,7 @@ Things the player *chooses*, from a small rolled hand -- the answer to Tier 3's 
 
 - Roster quirk: roll 2 candidates, pick 1.
 - House rule: roll 2 candidates, pick 1.
+- Defensive scheme (see Tier 6): **all 5 offered, no roll**. Deliberately not a drafted hand -- defence is the standing instruction the GM gives, not one of the run's imposed variation axes, and it was previously the one lever a player could never touch at all. Chosen on the reveal screen beside the offensive system so both are picked with the roster already on screen. Each card carries a roster-fit read rather than a synergy score (`run/variation/defenseDraft.ts`): a scheme reaches the sim as a *shape* -- which defender the offense gets to attack, which actions are resisted, how much ball pressure -- not as a scalar multiplier, so there is no honest single number to show. Every read is computed from the quantity the engine itself consumes, against the likely starting five rather than the whole roster (a liability on the bench cannot be switched onto).
 - System (see Tier 6): roll 4 candidates, pick 1. Widened from 3 once the system came to be chosen with the roster already on screen -- a wider hand is more freedom rather than more guesswork, and four cards fill the reveal grid evenly (SYSTEM_DRAFT_SIZE).
 - Shared `pickDistinct` draft-pool mechanic and a reusable `DraftOptionCard` UI, both built to be reused by future shop/draft screens (now also powering Tier 7's shop offer cards).
 

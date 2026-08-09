@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
+import { OFFENSIVE_PLAYBOOKS, type DefensiveSchemeId, type SystemId } from '../../data/presets'
 import type { Player, Team } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { SYNERGY_NEUTRAL } from '../../engine/constants'
@@ -15,14 +15,16 @@ import {
   computeProjectedUsageShares,
   computeSystemFitBreakdown,
 } from '../../run/variation/systemDraft'
+import { defensiveFits } from '../../run/variation/defenseDraft'
+import { DefenseChoiceCard } from '../components/DefenseChoiceCard'
 import { PlayerRevealCard, type SystemFitEntry } from '../components/PlayerRevealCard'
 import { SystemChoiceCard } from '../components/SystemChoiceCard'
 import { TeamSummary } from '../components/TeamSummary'
 import type { PendingReveal } from '../state/runContext.core'
 
 export type TeamRevealScreenProps =
-  /** Setup phase two: roster final, system still open. Nothing is persisted yet. */
-  | { mode: 'draft-system'; reveal: PendingReveal; onLockSystem: (system: SystemId) => void }
+  /** Setup phase two: roster final, both systems still open. Nothing is persisted yet. */
+  | { mode: 'draft-system'; reveal: PendingReveal; onLockSystem: (system: SystemId, defense: DefensiveSchemeId) => void }
   /** The same readout after the system is locked and the run is saved -- the pre-tipoff briefing.
    *  Both stretch entry points live here: watch the games one at a time, or sim the whole stretch. */
   | { mode: 'locked'; bundle: RunBundle; onBeginSeason: () => void; onSimSeason: () => void }
@@ -93,6 +95,10 @@ function positionalDepth(roster: Player[]): { position: string; count: number; b
 
 export function TeamRevealScreen(props: TeamRevealScreenProps) {
   const [pick, setPick] = useState<SystemId | null>(null)
+  // Defence starts on the scheme the team was generated with rather than null: unlike the offensive
+  // system it is a standing instruction that always has *some* value, so there is no "unset" state
+  // to represent, and requiring a click to re-choose the default would be busywork.
+  const [defensePick, setDefensePick] = useState<DefensiveSchemeId | null>(null)
   const view = toView(props)
   if (!view) return null
 
@@ -121,6 +127,12 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
   // this component instance across the lock, so the leftover pick happens to be right immediately
   // after locking in but is null on any later visit (a reload, or coming back pre-tipoff).
   const highlightedSystemId = props.mode === 'locked' ? team.offensiveStrategyId : pick
+
+  // Scored against the roster the same way the offensive cards are, so the two picks are made on
+  // the same footing -- with the players who'll be running them already on screen above.
+  const defenseOptions = defensiveFits(team, roster)
+  const selectedDefense: DefensiveSchemeId =
+    props.mode === 'locked' ? (team.defensiveStrategyId as DefensiveSchemeId) : (defensePick ?? (team.defensiveStrategyId as DefensiveSchemeId))
 
   // Touch projections only for the highlighted system -- computing them for every candidate would
   // be four passes over the roster to display three numbers nobody asked for.
@@ -261,7 +273,24 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
               />
             ))}
           </div>
-          <button className="primary" disabled={!pick} onClick={() => pick && props.onLockSystem(pick)}>
+          <h2>Pick Your Defense</h2>
+          <p className="section-note">
+            Your standing defensive instruction. Unlike the offensive system there&apos;s no synergy score here -- a scheme reaches the
+            simulation as a shape rather than a multiplier, so each card tells you the trade it makes against the five above instead of
+            pretending to a number. Every scheme is available; this one isn&apos;t a rolled hand.
+          </p>
+          <div className="draft-options system-options">
+            {defenseOptions.map((fit) => (
+              <DefenseChoiceCard
+                key={fit.scheme.id}
+                fit={fit}
+                selected={fit.scheme.id === selectedDefense}
+                onSelect={() => setDefensePick(fit.scheme.id as DefensiveSchemeId)}
+              />
+            ))}
+          </div>
+
+          <button className="primary" disabled={!pick} onClick={() => pick && props.onLockSystem(pick, selectedDefense)}>
             Lock In System
           </button>
         </>
@@ -272,6 +301,15 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
             {scoredSystems.map((s) => (
               <SystemChoiceCard key={s.id} playbook={s.playbook} synergy={s.synergy} breakdown={s.breakdown} selected />
             ))}
+          </div>
+
+          <h2>Your Defense</h2>
+          <div className="draft-options system-options">
+            {defenseOptions
+              .filter((fit) => fit.scheme.id === selectedDefense)
+              .map((fit) => (
+                <DefenseChoiceCard key={fit.scheme.id} fit={fit} selected />
+              ))}
           </div>
           <div className="stretch-actions">
             <button className="primary" onClick={props.onBeginSeason}>

@@ -78,7 +78,7 @@ export function MyTeamScreen({
           <strong>Offense: {offense.name}</strong> -- {offense.description} (Synergy: {team.synergyScore})
         </p>
         <p>
-          <strong>Defense: {defense.name}</strong>
+          <strong>Defense: {defense.name}</strong> -- {defense.description}
         </p>
         <p>
           <strong>Head Coach: {team.coaching.headCoachRating}</strong> -- {team.practiceSettings.individualDevelopmentShare}% of
