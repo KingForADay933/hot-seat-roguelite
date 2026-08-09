@@ -113,6 +113,9 @@ export interface RunContextValue {
   /** GM adjustment available at a chunk checkpoint: sets (or, given null, clears back to
    *  auto-computed) one player's training focus to a single attribute. */
   setTrainingFocus: (playerId: PlayerId, attribute: AttributeKey | null) => Promise<void>
+  /** The team's standing defensive scheme. Changeable at any point in a run -- from a checkpoint,
+   *  from My Team, or mid-broadcast -- and persists in every case. */
+  setDefensiveScheme: (schemeId: DefensiveSchemeId) => Promise<void>
   /** Replaces the user's team's whole rotation chart (rotation-charts.md Phase G) -- the editor
    *  computes the new plan (split/merge/move-boundary/reassign are all pure functions over the old
    *  one, see run/rotationChart.ts) and this just persists it. Does not recompute synergy: the

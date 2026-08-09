@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Game } from '../../data/types'
-import type { SimulationStep } from '../../engine/simulateGame'
+import type { CoachingDirective, SimulationStep } from '../../engine/simulateGame'
 import { advancePlayback, createPlaybackState, entersNewOvertimePeriod, type PlaybackContext, type PlaybackState } from './playbackState'
 
 /**
@@ -50,6 +50,17 @@ export interface SimcastPlayback {
    *  possession that triggered it (rotation-charts.md Decision 5/Phase H). A no-op in any other
    *  status. */
   acknowledgeOvertimePrompt: () => void
+  /**
+   * Hands an instruction to the running simulation, applied from the next possession on.
+   *
+   * Queued rather than delivered immediately: the generator only advances when the clock ticks (or
+   * on Skip to Final), and a directive has nowhere to go until it does. Queueing also means the
+   * control works while paused, which is when a GM is most likely to be using it.
+   *
+   * Only the latest is kept -- these are settings, not a command stream, so two changes before the
+   * next possession mean the second one is what was actually decided.
+   */
+  applyDirective: (directive: CoachingDirective) => void
 }
 
 /**
@@ -72,15 +83,28 @@ export interface SimcastPlayback {
  * the prompt's job is to give the GM a beat to notice overtime started, not to block on a decision
  * the sim can't make progress without.
  */
-export function useSimcastPlayback(context: PlaybackContext, createSteps: () => Generator<SimulationStep, Game>): SimcastPlayback {
-  const stepsRef = useRef<Generator<SimulationStep, Game> | null>(null)
+export function useSimcastPlayback(
+  context: PlaybackContext,
+  createSteps: () => Generator<SimulationStep, Game, CoachingDirective | undefined>,
+): SimcastPlayback {
+  const stepsRef = useRef<Generator<SimulationStep, Game, CoachingDirective | undefined> | null>(null)
   if (stepsRef.current === null) stepsRef.current = createSteps()
+  // Waiting to be handed to the generator on its next pull. See applyDirective's doc comment.
+  const pendingDirectiveRef = useRef<CoachingDirective | undefined>(undefined)
   // Mirrors state.period without being subject to its staleness -- the interval callback below
   // closes over one render's `state`, but a ref's `.current` is always the latest write.
   const periodRef = useRef(1)
   // A step already pulled from the generator (so it can't be pulled again) but not yet folded into
   // state, because it was the first possession of an overtime period and the prompt is up.
   const pendingStepRef = useRef<SimulationStep | null>(null)
+
+  /** Consumes the queued directive, if any -- every pull from the generator goes through here so a
+   *  directive can't be delivered twice or silently dropped. */
+  const takeDirective = useCallback((): CoachingDirective | undefined => {
+    const pending = pendingDirectiveRef.current
+    pendingDirectiveRef.current = undefined
+    return pending
+  }, [])
 
   const [state, setState] = useState<PlaybackState>(() => createPlaybackState(context))
   const [status, setStatus] = useState<PlaybackStatus>('playing')
@@ -94,7 +118,7 @@ export function useSimcastPlayback(context: PlaybackContext, createSteps: () => 
     if (!steps) return
 
     const id = setInterval(() => {
-      const next = steps.next()
+      const next = steps.next(takeDirective())
       if (next.done) {
         setFinalGame(next.value)
         setStatus('final')
@@ -110,7 +134,7 @@ export function useSimcastPlayback(context: PlaybackContext, createSteps: () => 
     }, BASE_POSSESSION_MS / speed)
 
     return () => clearInterval(id)
-  }, [status, speed, context])
+  }, [status, speed, context, takeDirective])
 
   const togglePause = useCallback(() => {
     setStatus((prev) => (prev === 'playing' ? 'paused' : prev === 'paused' ? 'playing' : prev))
@@ -137,7 +161,9 @@ export function useSimcastPlayback(context: PlaybackContext, createSteps: () => 
       remaining.push(pendingStepRef.current)
       pendingStepRef.current = null
     }
-    let next = steps.next()
+    // The queued directive still applies to the rest of the game, even though the rest of it is
+    // about to resolve in one go -- skipping ahead shouldn't discard an instruction already given.
+    let next = steps.next(takeDirective())
     while (!next.done) {
       remaining.push(next.value)
       next = steps.next()
@@ -147,7 +173,11 @@ export function useSimcastPlayback(context: PlaybackContext, createSteps: () => 
     if (remaining.length > 0) periodRef.current = remaining[remaining.length - 1].entry.period
     setFinalGame(next.value)
     setStatus('final')
-  }, [context])
+  }, [context, takeDirective])
 
-  return { state, status, finalGame, speed, setSpeed, togglePause, skipToEnd, acknowledgeOvertimePrompt }
+  const applyDirective = useCallback((directive: CoachingDirective) => {
+    pendingDirectiveRef.current = directive
+  }, [])
+
+  return { state, status, finalGame, speed, setSpeed, togglePause, skipToEnd, acknowledgeOvertimePrompt, applyDirective }
 }

@@ -470,6 +470,30 @@ export function RunProvider({ children }: { children: ReactNode }) {
     [bundle],
   )
 
+  /**
+   * The GM's standing defensive instruction, changeable at any point in a run.
+   *
+   * One value, not a per-game override: a scheme is what the team defaults to defending in, so
+   * changing it from a checkpoint, from My Team, or mid-broadcast all mean the same thing and all
+   * persist. Synergy is deliberately not recomputed -- it scores the roster's fit to the *offensive*
+   * playbook, and defence is no part of that number.
+   *
+   * A game already in progress is a separate matter: its generator captured the team as it was when
+   * the tip went up, so SimcastScreen hands the same change to the running simulation as a
+   * CoachingDirective as well as calling this.
+   */
+  const setDefensiveScheme = useCallback(
+    async (schemeId: DefensiveSchemeId) => {
+      if (!bundle) return
+      if (!(schemeId in DEFENSIVE_SCHEMES)) return
+      const teams = bundle.teams.map((t) => (t.id === bundle.run.teamId ? { ...t, defensiveStrategyId: schemeId } : t))
+      const updatedBundle: RunBundle = { ...bundle, teams }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
+
   const setRotationPlan = useCallback(
     async (plan: RotationPlan) => {
       if (!bundle) return
@@ -667,6 +691,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setRotationMinutes,
     setTrainingFocus,
     setRotationPlan,
+    setDefensiveScheme,
     openShop,
     buyPlayerCamp,
     buyTeamCamp,

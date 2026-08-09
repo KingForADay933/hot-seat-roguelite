@@ -67,6 +67,22 @@ export interface SimulationStep {
 }
 
 /**
+ * An instruction handed back into the running game, by passing it to the generator's `next()`.
+ *
+ * This is the interactive-coaching hook the generator was shaped for, taking its first real user:
+ * a GM watching a simcast can change the defence they are running without waiting for the final
+ * buzzer. It applies from the *next* possession onward -- the one already yielded has been resolved
+ * and logged, and rewriting it would make the broadcast disagree with the box score.
+ *
+ * Named by team rather than assumed to be the user's, because the engine has no concept of which
+ * team a human is coaching and should not acquire one.
+ */
+export interface CoachingDirective {
+  teamId: TeamId
+  defensiveSchemeId: string
+}
+
+/**
  * Simulates one game possession-by-possession (Section 5.5's independent resolution model),
  * yielding a SimulationStep after each possession is resolved, and returning the completed Game
  * with its possession log and derived box score once every period (including any overtime) has
@@ -102,7 +118,7 @@ export function* simulateGameSteps(
   playersById: Map<string, Player>,
   possessionsPerGame: number,
   rng: Rng,
-): Generator<SimulationStep, Game> {
+): Generator<SimulationStep, Game, CoachingDirective | undefined> {
   const homeRoster = resolveRoster(homeTeam, playersById)
   const awayRoster = resolveRoster(awayTeam, playersById)
   const homeRotation = createRotationState(homeTeam, playersById)
@@ -110,8 +126,19 @@ export function* simulateGameSteps(
 
   const homePlaybook = OFFENSIVE_PLAYBOOKS[homeTeam.offensiveStrategyId]
   const awayPlaybook = OFFENSIVE_PLAYBOOKS[awayTeam.offensiveStrategyId]
-  const homeScheme = DEFENSIVE_SCHEMES[homeTeam.defensiveStrategyId]
-  const awayScheme = DEFENSIVE_SCHEMES[awayTeam.defensiveStrategyId]
+  // Re-readable rather than fixed for the game: a CoachingDirective can swap either side's scheme
+  // between possessions. Everything else resolved up here genuinely can't change mid-game.
+  let homeScheme = DEFENSIVE_SCHEMES[homeTeam.defensiveStrategyId]
+  let awayScheme = DEFENSIVE_SCHEMES[awayTeam.defensiveStrategyId]
+
+  /** Ignores a directive naming a team that isn't playing, or a scheme that doesn't exist -- the
+   *  engine is the last boundary before a bad id would reach possession resolution. */
+  function applyDirective(directive: CoachingDirective): void {
+    const scheme = DEFENSIVE_SCHEMES[directive.defensiveSchemeId]
+    if (!scheme) return
+    if (directive.teamId === homeTeam.id) homeScheme = scheme
+    else if (directive.teamId === awayTeam.id) awayScheme = scheme
+  }
   // Computed once -- synergyScore doesn't change mid-game.
   const homeSynergy = synergyMultiplier(homeTeam.synergyScore)
   const awaySynergy = synergyMultiplier(awayTeam.synergyScore)
@@ -201,6 +228,9 @@ export function* simulateGameSteps(
       const entry: PossessionLogEntry = {
         possessionNumber,
         period,
+        // The scheme this possession was actually defended with, which a mid-game directive can
+        // change from one entry to the next.
+        defenseSchemeId: scheme.id,
         clockSecondsRemaining: clock,
         durationSeconds,
         offenseTeamId: offenseTeam.id,
@@ -231,7 +261,10 @@ export function* simulateGameSteps(
       if (!offensiveRebound) homeIsOffense = !homeIsOffense
       isSecondChance = offensiveRebound
 
-      yield { entry, homeScore, awayScore }
+      // Whatever the caller hands back takes effect from the next possession -- this one is already
+      // resolved and logged.
+      const directive = yield { entry, homeScore, awayScore }
+      if (directive) applyDirective(directive)
     }
   }
 

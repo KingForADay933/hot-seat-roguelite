@@ -113,13 +113,26 @@ function detectWeakLinkTargeting(
   possessionLog: PossessionLogEntry[],
   playersById: Map<PlayerId, Player>,
 ): CoachingInsight | null {
-  const scheme = DEFENSIVE_SCHEMES[defendingTeam.defensiveStrategyId]
-  if (!scheme.weakLinkSensitive) return null
+  // Read per possession rather than once off the team, because a GM can switch schemes mid-game
+  // from the simcast: the team's stored value is only where they ended up, so judging the whole
+  // game by it would credit (or blame) possessions that were defended some other way. Falling back
+  // to the team's scheme covers games logged before the field existed, where it is exactly right.
+  const schemeFor = (entry: PossessionLogEntry) =>
+    DEFENSIVE_SCHEMES[entry.defenseSchemeId ?? defendingTeam.defensiveStrategyId] ?? DEFENSIVE_SCHEMES[defendingTeam.defensiveStrategyId]
 
   const tally = new Map<PlayerId, { count: number; pointsAllowed: number }>()
+  // Which scheme the hunted possessions were actually run under, for the prose. A game switched
+  // part-way names the one that was up when it was last exploited, which is the one still worth
+  // telling the GM about.
+  let exploitedSchemeName = DEFENSIVE_SCHEMES[defendingTeam.defensiveStrategyId]?.name ?? 'Your defense'
 
   for (const entry of possessionLog) {
     if (entry.offenseTeamId !== opponentTeamId) continue
+    // Only possessions actually defended with a weak-link-sensitive scheme can have been hunted
+    // this way -- the rest were played with the assigned matchup and belong to no one.
+    const scheme = schemeFor(entry)
+    if (!scheme.weakLinkSensitive) continue
+    exploitedSchemeName = scheme.name
     const defenseFive = defendingTeamIsHome ? entry.homeOnCourt : entry.awayOnCourt
     const defense = defenseFive.map(({ playerId }) => resolvePlayer(playerId, playersById))
     const defender = weakLinkDefenderFor(entry.playCallUsed, entry.primaryPlayerId, defense, playersById)
@@ -149,7 +162,7 @@ function detectWeakLinkTargeting(
     subjectId: topId,
     subjectName: defenderName,
     metrics: { possessionsTargeted: top.count, pointsAllowed: top.pointsAllowed },
-    text: `${scheme.name} defense got picked on: ${defenderName} was matched up on ${top.count} ${possessionWord} this game, allowing ${top.pointsAllowed} points.`,
+    text: `${exploitedSchemeName} defense got picked on: ${defenderName} was matched up on ${top.count} ${possessionWord} this game, allowing ${top.pointsAllowed} points.`,
   }
 }
 
