@@ -53,6 +53,7 @@ function AppContent() {
     setRotationMinutes,
     setTrainingFocus,
     setRotationPlan,
+    setDefensiveScheme,
     openShop,
     buyPlayerCamp,
     buyTeamCamp,
@@ -72,10 +73,19 @@ function AppContent() {
   if (!bundle) return <RunStartScreen onStart={beginDraft} />
   // A game being watched outranks everything below -- it's a mode the GM entered from the stretch
   // screen and leaves by finishing or abandoning, not a place the run state machine routes to.
-  // Deliberately ahead of the My Team nav too: a simcast is the one screen the reference sheet
-  // shouldn't cover, since the game is already in motion and nothing on it can still be changed.
+  // Deliberately ahead of the My Team nav too: the reference sheet shouldn't cover a broadcast in
+  // progress. The decisions that *are* live during a game (the defensive scheme) have their own
+  // control on the simcast itself, so leaving to My Team would only lose your place in the game.
   if (liveGame) {
-    return <SimcastScreen bundle={bundle} liveGame={liveGame} onCommit={commitLiveGame} onAbandon={abandonLiveGame} />
+    return (
+      <SimcastScreen
+        bundle={bundle}
+        liveGame={liveGame}
+        onCommit={commitLiveGame}
+        onAbandon={abandonLiveGame}
+        onSetDefensiveScheme={setDefensiveScheme}
+      />
+    )
   }
 
   const runScreen = () => {
@@ -117,6 +127,7 @@ function AppContent() {
           onSimStretch={simSeasonChunk}
           onSetMinutes={setRotationMinutes}
           onSetFocus={setTrainingFocus}
+          onSetDefensiveScheme={setDefensiveScheme}
         />
       )
     }
@@ -154,6 +165,7 @@ function AppContent() {
           onSetMinutes={setRotationMinutes}
           onSetFocus={setTrainingFocus}
           onSetRotationPlan={setRotationPlan}
+          onSetDefensiveScheme={setDefensiveScheme}
           onBack={() => setViewingMyTeam(false)}
         />
       </PlayerInspectorContext.Provider>

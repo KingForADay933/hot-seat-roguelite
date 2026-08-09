@@ -1,5 +1,6 @@
 import type { AttributeKey, RotationPlan } from '../../data/types'
-import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../../data/presets'
+import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS, type DefensiveSchemeId } from '../../data/presets'
+import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { computeStandings } from '../../engine/schedule/standings'
 import { COACHING_UPGRADES } from '../../run/coachingUpgrades'
@@ -32,12 +33,14 @@ export function MyTeamScreen({
   onSetMinutes,
   onSetFocus,
   onSetRotationPlan,
+  onSetDefensiveScheme,
   onBack,
 }: {
   bundle: RunBundle
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
   onSetRotationPlan: (plan: RotationPlan) => void
+  onSetDefensiveScheme: (schemeId: DefensiveSchemeId) => void
   onBack: () => void
 }) {
   const { run, teams, players, games } = bundle
@@ -78,7 +81,8 @@ export function MyTeamScreen({
           <strong>Offense: {offense.name}</strong> -- {offense.description} (Synergy: {team.synergyScore})
         </p>
         <p>
-          <strong>Defense: {defense.name}</strong>
+          <strong>Defense:</strong> <DefensiveSchemeSelect value={team.defensiveStrategyId} onChange={onSetDefensiveScheme} /> --{' '}
+          {defense.description}
         </p>
         <p>
           <strong>Head Coach: {team.coaching.headCoachRating}</strong> -- {team.practiceSettings.individualDevelopmentShare}% of

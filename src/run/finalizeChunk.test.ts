@@ -62,17 +62,49 @@ describe('finalizeChunk', () => {
     expect(outcome.league.seasonNumber).toBe(league.seasonNumber)
   })
 
-  it('collapses insights that repeat verbatim across the chunk', () => {
+  it('collapses a problem that recurred across the chunk into one line, counting the games', () => {
     const rng = createSeededRng(2)
     const { league, teams, players } = generateLeague({ teamCount: 8, leagueName: 'Test League', rng })
     const run = createRun(teams[0].id, 'stacked-guards', 'youth-movement', 'mid')
 
-    const repeated: CoachingInsight = { teamId: run.teamId, kind: 'fatigue-substitution', subjectId: 'p1', subjectName: 'P One', text: 'Same line, three games running.' }
+    // Same subject, different per-game prose -- which is what the real generator produces, and what
+    // the previous exact-text dedupe could never collapse.
+    const repeated = (game: number): CoachingInsight => ({
+      teamId: run.teamId,
+      kind: 'fatigue-substitution',
+      subjectId: 'p1',
+      subjectName: 'P One',
+      text: `P One was pulled with heavy fatigue in the Q${game}, someone checked in.`,
+    })
     const distinct: CoachingInsight = { teamId: run.teamId, kind: 'weak-link-targeting', subjectId: 'p2', subjectName: 'P Two', text: 'Something else entirely.' }
 
-    const outcome = finalizeChunk(run, league, teams, players, [], [repeated, repeated, distinct, repeated])
+    const outcome = finalizeChunk(run, league, teams, players, [], [repeated(1), repeated(2), distinct, repeated(4)])
 
-    expect(outcome.chunkInsights).toEqual([repeated, distinct])
+    expect(outcome.chunkInsights).toHaveLength(2)
+    expect(outcome.chunkInsights[0].text).toBe("P One was pulled with heavy fatigue in 3 of this stretch's games.")
+    // A single sighting is left exactly as the generator wrote it.
+    expect(outcome.chunkInsights[1]).toEqual(distinct)
+  })
+
+  it('names the team\'s own defensive scheme in a collapsed weak-link line', () => {
+    const rng = createSeededRng(4)
+    const { league, teams, players } = generateLeague({ teamCount: 8, leagueName: 'Test League', rng })
+    const run = createRun(teams[0].id, 'stacked-guards', 'youth-movement', 'mid')
+    const withScheme = teams.map((t) => (t.id === run.teamId ? { ...t, defensiveStrategyId: 'switchEverything' } : t))
+
+    const hunted = (points: number): CoachingInsight => ({
+      teamId: run.teamId,
+      kind: 'weak-link-targeting',
+      subjectId: 'p2',
+      subjectName: 'P Two',
+      metrics: { possessionsTargeted: 30, pointsAllowed: points },
+      text: `whatever the per-game line said, allowing ${points} points.`,
+    })
+
+    const outcome = finalizeChunk(run, league, withScheme, players, [], [hunted(30), hunted(40)])
+
+    expect(outcome.chunkInsights[0].text).toContain('Switch-Everything')
+    expect(outcome.chunkInsights[0].text).toContain('60 possessions, 70 points allowed')
   })
 
   it('runs the season-end pipeline once the last chunk closes', () => {

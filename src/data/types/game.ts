@@ -36,6 +36,19 @@ export interface PossessionLogEntry {
    *  possession count. */
   durationSeconds: number
   offenseTeamId: TeamId
+  /**
+   * The defensive scheme actually being run against this possession.
+   *
+   * Recorded rather than looked up from the defending team afterwards, because a GM watching a
+   * simcast can now change schemes mid-game (engine/simulateGame.ts's CoachingDirective). The
+   * team's stored `defensiveStrategyId` is only its *current* value, so anything reconstructing the
+   * game from the log -- weak-link insights especially, which only apply under a weak-link-sensitive
+   * scheme -- would otherwise judge the first half by a decision made in the third quarter.
+   *
+   * Optional because it arrived after saves existed; readers fall back to the defending team's
+   * current scheme, which is exactly right for any game played before switching was possible.
+   */
+  defenseSchemeId?: string
   playCallUsed: PlayCallType
   primaryPlayerId: PlayerId
   secondaryPlayerIds: PlayerId[]

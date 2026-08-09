@@ -1,10 +1,12 @@
 ﻿import { useCallback, useMemo } from 'react'
+import type { DefensiveSchemeId } from '../../data/presets'
 import type { Game, Player, Team } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { defaultRng } from '../../engine/rng'
 import { playGameLive } from '../../run/resolveGame'
 import type { LiveGame } from '../state/runContext.core'
 import { BoxScoreTable } from '../components/BoxScoreTable'
+import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
 import { formatOvertimeLabel } from '../formatOvertime'
 import { CommentaryFeed } from '../simcast/CommentaryFeed'
 import { LiveBoxScore } from '../simcast/LiveBoxScore'
@@ -22,11 +24,13 @@ export function SimcastScreen({
   liveGame,
   onCommit,
   onAbandon,
+  onSetDefensiveScheme,
 }: {
   bundle: RunBundle
   liveGame: LiveGame
   onCommit: (played: Game) => void
   onAbandon: () => void
+  onSetDefensiveScheme: (schemeId: DefensiveSchemeId) => void
 }) {
   const { game, context } = liveGame
   const homeTeam = context.teamsById.get(game.homeTeamId)
@@ -53,6 +57,7 @@ export function SimcastScreen({
       createSteps={() => playGameLive(context, game, defaultRng)}
       onCommit={onCommit}
       onAbandon={onAbandon}
+      onSetDefensiveScheme={onSetDefensiveScheme}
     />
   )
 }
@@ -68,6 +73,7 @@ function SimcastBroadcast({
   createSteps,
   onCommit,
   onAbandon,
+  onSetDefensiveScheme,
 }: {
   bundle: RunBundle
   game: Game
@@ -77,16 +83,33 @@ function SimcastBroadcast({
   createSteps: () => ReturnType<typeof playGameLive>
   onCommit: (played: Game) => void
   onAbandon: () => void
+  onSetDefensiveScheme: (schemeId: DefensiveSchemeId) => void
 }) {
   const { run } = bundle
-  const { state, status, finalGame, speed, setSpeed, togglePause, skipToEnd, acknowledgeOvertimePrompt } = useSimcastPlayback(
-    playbackContext,
-    createSteps,
-  )
+  const { state, status, finalGame, speed, setSpeed, togglePause, skipToEnd, acknowledgeOvertimePrompt, applyDirective } =
+    useSimcastPlayback(playbackContext, createSteps)
 
   const userIsHome = game.homeTeamId === run.teamId
   const userTeam = userIsHome ? homeTeam : awayTeam
   const userRoster = userIsHome ? playbackContext.homeRoster : playbackContext.awayRoster
+
+  /**
+   * A scheme change made mid-broadcast has to land in two places, because they are genuinely two
+   * things: the run's saved standing instruction, and the game already in flight -- whose generator
+   * captured the team as it was at the opening tip and cannot see a later save.
+   *
+   * Read back off the bundle rather than held in local state, so the control shows the value that
+   * was actually persisted rather than an optimistic one.
+   */
+  const handleDefensiveScheme = useCallback(
+    (schemeId: DefensiveSchemeId) => {
+      applyDirective({ teamId: run.teamId, defensiveSchemeId: schemeId })
+      onSetDefensiveScheme(schemeId)
+    },
+    [applyDirective, onSetDefensiveScheme, run.teamId],
+  )
+
+  const liveScheme = bundle.teams.find((t) => t.id === run.teamId)?.defensiveStrategyId ?? userTeam.defensiveStrategyId
 
   const handleContinue = useCallback(() => {
     if (finalGame) onCommit(finalGame)
@@ -156,6 +179,16 @@ function SimcastBroadcast({
           </>
         )}
       </div>
+
+      {/* Live coaching, not a settings panel: available right up to the final buzzer and hidden
+          after it, since nothing can still be changed about a game that's over. It applies from the
+          next possession -- the one on screen has already been played and logged. */}
+      {!isFinal && (
+        <p className="section-note">
+          <strong>Defense:</strong> <DefensiveSchemeSelect value={liveScheme} onChange={handleDefensiveScheme} /> -- takes effect from the
+          next possession, and sticks for the rest of the run.
+        </p>
+      )}
 
       <div className="simcast-body">
         <section className="simcast-feed">

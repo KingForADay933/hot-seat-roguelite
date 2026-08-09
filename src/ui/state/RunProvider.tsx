@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { AttributeKey, Game, GameId, PlayerId, RotationPlan } from '../../data/types'
-import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
+import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS, type DefensiveSchemeId, type SystemId } from '../../data/presets'
 import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from '../../data/persistence/runRepository'
 import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
@@ -141,16 +141,22 @@ export function RunProvider({ children }: { children: ReactNode }) {
    * that gets written here.
    */
   const lockSystem = useCallback(
-    async (system: SystemId) => {
+    async (system: SystemId, defense: DefensiveSchemeId) => {
       if (!reveal) return
       const { league, teams, players, teamId, rosterQuirk, houseRule, marketSize } = reveal
       if (!reveal.systemOptions.includes(system)) return
+      // Defence isn't drafted from a rolled hand, so the guard is membership of the whole catalogue
+      // rather than of an offered subset -- but it is still checked, since this is the boundary
+      // where an arbitrary id would otherwise reach a saved bundle.
+      if (!(defense in DEFENSIVE_SCHEMES)) return
 
       const userTeam = teams.find((t) => t.id === teamId)
       if (!userTeam) return
       const finalRoster = players.filter((p) => p.teamId === teamId)
       const synergyScore = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[system], finalRoster, userTeam)
-      const teamsWithSystem = teams.map((t) => (t.id === teamId ? { ...t, offensiveStrategyId: system, synergyScore } : t))
+      const teamsWithSystem = teams.map((t) =>
+        t.id === teamId ? { ...t, offensiveStrategyId: system, defensiveStrategyId: defense, synergyScore } : t,
+      )
 
       const newBundle: RunBundle = {
         run: createRun(teamId, rosterQuirk, houseRule, marketSize),
@@ -464,6 +470,30 @@ export function RunProvider({ children }: { children: ReactNode }) {
     [bundle],
   )
 
+  /**
+   * The GM's standing defensive instruction, changeable at any point in a run.
+   *
+   * One value, not a per-game override: a scheme is what the team defaults to defending in, so
+   * changing it from a checkpoint, from My Team, or mid-broadcast all mean the same thing and all
+   * persist. Synergy is deliberately not recomputed -- it scores the roster's fit to the *offensive*
+   * playbook, and defence is no part of that number.
+   *
+   * A game already in progress is a separate matter: its generator captured the team as it was when
+   * the tip went up, so SimcastScreen hands the same change to the running simulation as a
+   * CoachingDirective as well as calling this.
+   */
+  const setDefensiveScheme = useCallback(
+    async (schemeId: DefensiveSchemeId) => {
+      if (!bundle) return
+      if (!(schemeId in DEFENSIVE_SCHEMES)) return
+      const teams = bundle.teams.map((t) => (t.id === bundle.run.teamId ? { ...t, defensiveStrategyId: schemeId } : t))
+      const updatedBundle: RunBundle = { ...bundle, teams }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
+
   const setRotationPlan = useCallback(
     async (plan: RotationPlan) => {
       if (!bundle) return
@@ -661,6 +691,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setRotationMinutes,
     setTrainingFocus,
     setRotationPlan,
+    setDefensiveScheme,
     openShop,
     buyPlayerCamp,
     buyTeamCamp,

@@ -1,8 +1,10 @@
+import { DEFENSIVE_SCHEMES } from '../data/presets'
 import type { Game, League, Player, StandingsRow, Team } from '../data/types'
 import type { CoachingInsight } from '../engine/insights/generateCoachingInsights'
 import { computeStandings } from '../engine/schedule/standings'
 import { developSeason } from '../engine/season/developSeason'
 import { computeSeasonBudgetEarnings } from './budget'
+import { summarizeChunkInsights } from './chunkInsightSummary'
 import { SEASON_CHUNK_COUNT } from './constants'
 import { evaluateSeasonEnd } from './runState'
 import { hasHitTarget } from './target'
@@ -28,18 +30,6 @@ export interface ChunkOutcome {
   budgetEarned: number
 }
 
-/** A chunk spans several games, and the same routine substitution/matchup pattern often recurs
- *  game after game -- collapsing exact-text repeats keeps the checkpoint screen readable (the
- *  point is surfacing something worth reacting to, not restating the same line 8 times). */
-function dedupeInsights(insights: CoachingInsight[]): CoachingInsight[] {
-  const seen = new Set<string>()
-  return insights.filter((insight) => {
-    if (seen.has(insight.text)) return false
-    seen.add(insight.text)
-    return true
-  })
-}
-
 /**
  * Closes out a chunk once every one of its games has been resolved: advances the chunk counter, or,
  * on the season's last chunk, runs the once-per-season pipeline (standings, target evaluation,
@@ -48,7 +38,7 @@ function dedupeInsights(insights: CoachingInsight[]): CoachingInsight[] {
  * Split out of simulateSeasonChunk so the checkpoint can be reached two ways -- simming a whole
  * chunk in one call, or the GM resolving its games one at a time off the stretch screen -- without
  * either path re-implementing the season-end bookkeeping. `insights` is whatever the chunk's games
- * produced, in resolution order; deduping happens here rather than per game because a repeat only
+ * produced, in resolution order; collapsing happens here rather than per game because a repeat only
  * becomes visible once the whole chunk's worth is in hand.
  */
 export function finalizeChunk(
@@ -59,7 +49,10 @@ export function finalizeChunk(
   games: Game[],
   insights: CoachingInsight[],
 ): ChunkOutcome {
-  const chunkInsights = dedupeInsights(insights)
+  // Named so the collapsed weak-link line can say which scheme is being exploited -- it is the
+  // thing the GM would change in response, and the single-game text it replaces said so inline.
+  const userTeam = teams.find((t) => t.id === run.teamId)
+  const chunkInsights = summarizeChunkInsights(insights, userTeam && DEFENSIVE_SCHEMES[userTeam.defensiveStrategyId]?.name)
   const isLastChunk = run.chunkInSeason + 1 === SEASON_CHUNK_COUNT
 
   if (!isLastChunk) {

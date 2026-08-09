@@ -348,6 +348,76 @@ describe('simulateGameSteps', () => {
     while (!next.done) next = steps.next()
     expect(() => steps.next()).not.toThrow()
   })
+
+  describe('coaching directives', () => {
+    /** Every logged possession the given team defended, in order. */
+    function defenseSchemesFor(log: { offenseTeamId: string; defenseSchemeId?: string }[], defendingTeamId: string, offenseTeamId: string) {
+      return log.filter((e) => e.offenseTeamId === offenseTeamId && e.defenseSchemeId !== undefined).map((e) => e.defenseSchemeId)
+    }
+
+    it('records the scheme each possession was actually defended with', () => {
+      const { home, away, playersById } = buildMatchup(64)
+      const steps = simulateGameSteps(emptyGame(home.id, away.id), home, away, playersById, 20, createSeededRng(30))
+      let next = steps.next()
+      while (!next.done) next = steps.next()
+
+      const schemes = new Set(defenseSchemesFor(next.value.possessionLog, home.id, away.id))
+      expect(schemes).toEqual(new Set([home.defensiveStrategyId]))
+    })
+
+    it('switches a team mid-game, from the possession after the directive', () => {
+      const { home, away, playersById } = buildMatchup(65)
+      const steps = simulateGameSteps(emptyGame(home.id, away.id), home, away, playersById, 20, createSeededRng(31))
+
+      let next = steps.next()
+      let handedOver = 0
+      while (!next.done) {
+        handedOver += 1
+        // Hand the directive back on the 10th pull; everything after it should be the new scheme.
+        next = handedOver === 10 ? steps.next({ teamId: home.id, defensiveSchemeId: 'packThePaint' }) : steps.next()
+      }
+
+      const schemes = defenseSchemesFor(next.value.possessionLog, home.id, away.id)
+      expect(schemes[0]).toBe(home.defensiveStrategyId)
+      expect(schemes[schemes.length - 1]).toBe('packThePaint')
+      expect(new Set(schemes)).toEqual(new Set([home.defensiveStrategyId, 'packThePaint']))
+    })
+
+    it('leaves the other team alone', () => {
+      const { home, away, playersById } = buildMatchup(66)
+      const steps = simulateGameSteps(emptyGame(home.id, away.id), home, away, playersById, 20, createSeededRng(32))
+
+      let next = steps.next()
+      let pulls = 0
+      while (!next.done) {
+        pulls += 1
+        next = pulls === 5 ? steps.next({ teamId: home.id, defensiveSchemeId: 'packThePaint' }) : steps.next()
+      }
+
+      expect(new Set(defenseSchemesFor(next.value.possessionLog, away.id, home.id))).toEqual(new Set([away.defensiveStrategyId]))
+    })
+
+    it('ignores a directive naming a team that is not playing, or a scheme that does not exist', () => {
+      const { home, away, playersById } = buildMatchup(67)
+      const baseline = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 20, createSeededRng(33))
+
+      const steps = simulateGameSteps(emptyGame(home.id, away.id), home, away, playersById, 20, createSeededRng(33))
+      let next = steps.next()
+      let pulls = 0
+      while (!next.done) {
+        pulls += 1
+        if (pulls === 3) next = steps.next({ teamId: 'some-other-team', defensiveSchemeId: 'packThePaint' })
+        else if (pulls === 6) next = steps.next({ teamId: home.id, defensiveSchemeId: 'not-a-real-scheme' })
+        else next = steps.next()
+      }
+
+      // A rejected directive must not change the game at all -- same seed, same possessions, same
+      // score. Compared field by field rather than whole-object: Game carries a wall-clock `date`,
+      // which differs by a millisecond between two runs and has nothing to do with the simulation.
+      expect(next.value.possessionLog).toEqual(baseline.possessionLog)
+      expect(next.value.result).toEqual(baseline.result)
+    })
+  })
 })
 
 describe('getPeriodLabel', () => {

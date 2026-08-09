@@ -69,6 +69,52 @@ describe('generateCoachingInsights', () => {
     expect(matchupInsight?.teamId).toBe(homeTeam.id)
   })
 
+  it('counts only the possessions actually defended in a weak-link scheme when the GM switched mid-game', () => {
+    const weakDefender = makeTestPlayer({ name: 'Weak Defender', attributes: { lateralQuickness: 10, perimeterDefense: 10 } })
+    const defenseFive = [weakDefender, makeTestPlayer({}), makeTestPlayer({}), makeTestPlayer({}), makeTestPlayer({})]
+    const attacker = makeTestPlayer({ name: 'Attacker' })
+    // The team *ends* the game in Man-to-Man, having started in Switch-Everything. Judging by the
+    // stored value alone would report nothing at all; judging every possession by it would report
+    // twice what actually happened.
+    const homeTeam = makeTestTeam({ defensiveStrategyId: 'manToMan', rosterPlayerIds: defenseFive.map((p) => p.id) })
+    const awayTeam = makeTestTeam({ defensiveStrategyId: 'manToMan', rosterPlayerIds: [attacker.id] })
+    const playersById = playersMap([...defenseFive, attacker])
+
+    const possessionLog: PossessionLogEntry[] = Array.from({ length: 8 }, (_, i) => ({
+      possessionNumber: i + 1,
+      period: 1,
+      clockSecondsRemaining: 700 - i * 20,
+      durationSeconds: 20,
+      offenseTeamId: awayTeam.id,
+      // First four switched, last four not.
+      defenseSchemeId: i < 4 ? 'switchEverything' : 'manToMan',
+      playCallUsed: 'pick-and-roll',
+      primaryPlayerId: attacker.id,
+      secondaryPlayerIds: [],
+      outcome: 'make',
+      pointsScored: 2,
+      isThreePointAttempt: false,
+      freeThrowsMade: 0,
+      freeThrowsAttempted: 0,
+      offensiveRebound: false,
+      rebounderId: null,
+      stolenById: null,
+      blockedById: null,
+      isSecondChance: false,
+      playersInvolved: [],
+      homeOnCourt: makeOnCourt(defenseFive.map((p) => p.id)),
+      awayOnCourt: makeOnCourt([attacker.id]),
+    }))
+
+    const insight = generateCoachingInsights(possessionLog, homeTeam, awayTeam, playersById).find((i) => i.text.includes('Weak Defender'))
+
+    expect(insight).toBeDefined()
+    // Four switched possessions at 2 points each -- not eight, and not zero.
+    expect(insight?.metrics).toEqual({ possessionsTargeted: 4, pointsAllowed: 8 })
+    // Named for the scheme that was actually exploited, not the one the team ended up in.
+    expect(insight?.text).toContain('Switch-Everything')
+  })
+
   it('does not flag a matchup insight for a non-weak-link-sensitive scheme, even with the same targeting pattern', () => {
     const weakDefender = makeTestPlayer({
       name: 'Weak Defender',
