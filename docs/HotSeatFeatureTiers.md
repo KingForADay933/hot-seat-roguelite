@@ -1,7 +1,28 @@
 **Project:** Hot Seat (roguelite spinoff of Hoop Sim)
 **Repo:** [KingForADay933/hot-seat-roguelite](https://github.com/KingForADay933/hot-seat-roguelite) (private)
 **Companion doc:** [[Roguelite-Basketball-GM-Design-Document]] -- vision, rationale, open questions. This doc is the flat feature/status catalog; that one is the "why."
+**Parent-project doc:** `Basketball Manager Game - Design Document.md` -- Hoop Sim's own design doc, which owns everything in `engine/`. Tier 0 is a port of what it describes.
 **Deep dives:** `rotation-charts.md` (Tier 7.6) is the one feature with its own design doc, covering the clock rewrite and lineup control in detail.
+
+### Reading the "Section N" citations in code
+
+Roughly forty files cite bare section numbers, and **two different documents are being cited with
+overlapping numbering**. Which one a citation means is decided by the layer the file sits in:
+
+| Citation appears in | Document | Examples |
+| --- | --- | --- |
+| `engine/`, `data/types/` | Hoop Sim's design doc | Section 4 = Strategy Synergy & Morale · 5.5 = Possession resolution · 5.5.2 = Overtime · 6 = Possession Log Storage (the rolling window) · 14.2 = the roadmap listing Broadcast Commentary and Live Playback |
+| `run/`, `ui/` | The roguelite design doc | Section 2 = Core Loop ("the hard hand on purpose") · 3 = Run Variation · 8.1-8.7 = market size, shop, camps, upgrades, consumables |
+
+Section 3 and Section 4 genuinely mean different things depending on the file — Hoop Sim's Section 3
+is the Development System, the roguelite's is Run Variation. Worth knowing before chasing a
+reference into the wrong document.
+
+**One citation still doesn't resolve:** several `run/` files cite "Section 9" for season chunking
+(`run/constants.ts`, `run/types.ts`, `runState.ts`, `App.tsx`). The roguelite doc in this repo stops
+at Section 8, and Hoop Sim's Section 9 is its parking lot. The roguelite doc here is therefore an
+earlier revision -- it also still describes persistence as localStorage, which Tier 0 superseded. A
+newer revision with a Section 9 exists somewhere; dropping it in would close the last gap.
 
 Status markers: **Shipped** (built, tested, verified in-browser) / **Planned** (scoped, not yet built) / **Idea** (raised, not yet scoped).
 
@@ -71,11 +92,14 @@ list totals roughly 65–100 days: at two solid days a week that's 8–11 months
   do. Tier 12 therefore spans M4 and M5, and Tiers 14 and 15 overlap inside it — milestones and tiers
   are orthogonal. If it has to be split for scheduling, the seam is between losing players and buying
   them, but expect to retune once the second half lands.
-- **M6 is the item most likely to slip.** The determinism problem in tiers 3–4 (threading a live
-  mutable channel into a pure, seed-deterministic simulation that also runs headless AI-vs-AI games) is
-  genuinely hard, and its estimate is the loosest here. It's deliberately last so that everything
-  underneath it has stopped moving — and it's a stronger post-launch update than a launch bullet
-  nobody knew to expect, if it comes to that.
+- **M6 is still the item most likely to slip, but less than it looked.** The determinism problem —
+  how a live GM decision reaches a pure, seed-deterministic simulation that also runs headless
+  AI-vs-AI games — turns out to have a designed answer in Hoop Sim's own doc: pass directives in
+  through the generator's `.next()`, so they're inputs rather than mutations. See Tier 13. What's
+  left is defining what a substitution directive does to `RotationState` mid-period, plus real
+  mid-broadcast UI, so the estimate stands even though the architectural risk doesn't. Still
+  deliberately last, so everything underneath it has stopped moving — and still a stronger
+  post-launch update than a launch bullet nobody knew to expect, if it comes to that.
 
 ### Hard constraints inside the order
 
@@ -324,7 +348,13 @@ Defensive schemes already half-exist: five ship as presets (Man-to-Man, Zone, Sw
 3. *Substitutions and matchups* (**M6**) -- these mutate `RotationState`, which the generator owns in its closure. This is the hard one, and what Tier 7.6 explicitly declined to build.
 4. *Timeouts* (**M6**) -- needs game state that doesn't exist yet (timeout counts, stoppages). Related known gap: there are no dead balls at all; subs are evaluated every possession.
 
-**Decide first, at M3, because it constrains M6:** how a decision channel preserves determinism. A seeded replay of the same game must still produce the same result, and AI-vs-AI games must keep running with nobody watching. Levels 1-2 need a modest version of that channel; designing it with levels 3-4 in mind costs little at M3 and saves a rewrite later.
+**The determinism problem has a designed answer already — use it.** Hoop Sim's design doc (Section 14.2, item 6) specifies the mechanism for exactly this feature: *"teaching `simulateGameSteps`'s yield point to accept a directive via `.next(directive)`."*
+
+That is the right answer and it dissolves the concern this tier was written around. A generator's `.next(value)` delivers the value as the result of the `yield` expression, so a directive arrives as an **input to the loop** rather than as a mutation of state the loop owns — `Generator<SimulationStep, Game, Directive | undefined>`. Determinism is preserved for free, because a directive is just another input alongside the seed; a seeded replay handed the same directives produces the same game. Headless AI-vs-AI games call `.next()` with no argument and behave exactly as they do today. No mutable channel into the closure, no shared state.
+
+This meaningfully de-risks M6 -- the part that looked hardest is a solved design. It doesn't shrink the estimate much, since levels 3-4 still have to define what a substitution directive *does* to `RotationState` mid-period and still need real mid-broadcast UI, but it removes the architectural unknown.
+
+**Still decide at M3, because it constrains M6:** the directive type itself. Levels 1-2 need only a narrow version, but designing the shape with levels 3-4 in mind costs little now and saves a rewrite later.
 
 ---
 
