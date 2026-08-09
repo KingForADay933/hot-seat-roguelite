@@ -25,6 +25,9 @@ function playLeagues(leagues: number, gamesPerLeague: number) {
   let fta = 0
   let offensiveRebounds = 0
   let rebounds = 0
+  let steals = 0
+  let blocks = 0
+  let turnovers = 0
 
   for (let seed = 0; seed < leagues; seed++) {
     const rng = createSeededRng(seed + 1)
@@ -63,6 +66,9 @@ function playLeagues(leagues: number, gamesPerLeague: number) {
         ftm += line.freeThrowsMade
         fta += line.freeThrowsAttempted
         rebounds += line.rebounds
+        steals += line.steals
+        blocks += line.blocks
+        turnovers += line.turnovers
       }
     }
   }
@@ -74,6 +80,13 @@ function playLeagues(leagues: number, gamesPerLeague: number) {
     fieldGoalAttemptsPerTeam: fga / (games * 2),
     offensiveReboundsPerTeam: offensiveRebounds / (games * 2),
     reboundsPerTeam: rebounds / (games * 2),
+    stealsPerTeam: steals / (games * 2),
+    blocksPerTeam: blocks / (games * 2),
+    turnoversPerTeam: turnovers / (games * 2),
+    /** Share of turnovers a defender is credited for -- the rest are unforced. */
+    stealShareOfTurnovers: steals / turnovers,
+    /** Blocks per field-goal attempt, the rate real box scores are usually quoted against. */
+    blocksPerAttempt: blocks / fga,
     fgPct: fgm / fga,
     threePct: tpm / tpa,
     /** Everything that wasn't a three, so the two-vs-three difficulty gap is directly checkable. */
@@ -140,5 +153,28 @@ describe('scoring calibration', () => {
     // Real league free-throw percentage is ~78%.
     expect(league.freeThrowPct).toBeGreaterThan(0.68)
     expect(league.freeThrowPct).toBeLessThan(0.86)
+  })
+})
+
+describe('defensive stat calibration', () => {
+  const league = playLeagues(4, 40)
+
+  it('credits steals at a believable rate, and never more than there were turnovers', () => {
+    // Real NBA sits around 7-8 steals a team a game.
+    expect(league.stealsPerTeam).toBeGreaterThan(4)
+    expect(league.stealsPerTeam).toBeLessThan(12)
+    // Steals are a subset of turnovers by construction -- the rest are unforced, with nobody to
+    // credit. A team's steals matching the opponent's turnovers exactly would mean every giveaway
+    // was forced, which is the bug this guards against.
+    expect(league.stealShareOfTurnovers).toBeGreaterThan(0.3)
+    expect(league.stealShareOfTurnovers).toBeLessThan(0.85)
+  })
+
+  it('credits blocks at a believable rate against attempts', () => {
+    // Real NBA is ~5 blocks a team a game, against ~89 attempts -- a bit under one in twenty.
+    expect(league.blocksPerTeam).toBeGreaterThan(2)
+    expect(league.blocksPerTeam).toBeLessThan(9)
+    expect(league.blocksPerAttempt).toBeGreaterThan(0.02)
+    expect(league.blocksPerAttempt).toBeLessThan(0.12)
   })
 })

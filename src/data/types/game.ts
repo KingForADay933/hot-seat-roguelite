@@ -55,6 +55,22 @@ export interface PossessionLogEntry {
    *  recorded here rather than re-rolled downstream, so the box score credits the board to the side
    *  that actually kept possession. */
   offensiveRebound: boolean
+  /** Who came down with the miss. Null on every outcome except 'miss' -- a make is inbounded, a
+   *  turnover hands it over, and a shooting foul stops play for free throws, so none of those
+   *  produce a board. Missed free throws don't either: there's no free-throw rebound model.
+   *
+   *  Decided in the simulation rather than reconstructed afterwards. It used to be rolled inside
+   *  deriveBoxScore, which meant the rebounder didn't exist until the game was already over --
+   *  invisible to commentary, unavailable to the live box score, and consuming rng outside the sim
+   *  loop. Recording it here makes the log a complete account of the possession. */
+  rebounderId: PlayerId | null
+  /** The defender credited with a steal, when this turnover was forced rather than unforced. Null on
+   *  every other outcome. A steal is still a turnover -- the offense's turnover count is unchanged --
+   *  so this records who caused it, not a different thing happening. */
+  stolenById: PlayerId | null
+  /** The defender credited with a block, when this miss was blocked. Null otherwise. A blocked shot
+   *  is still a miss: same field-goal attempt against the shooter, same rebound afterwards. */
+  blockedById: PlayerId | null
   /** True when this attempt came off an offensive rebound -- a putback continuing the previous
    *  trip, not a fresh possession. Distinguishes plays from possessions when reading the log. */
   isSecondChance: boolean
@@ -79,6 +95,12 @@ export interface PlayerBoxScoreLine {
   freeThrowsAttempted: number
   assists: number
   rebounds: number
+  /** Credited to the defender who forced a turnover. Only a share of turnovers are steals -- the
+   *  rest are unforced, with nobody to credit -- so a team's steals never equal the opponent's
+   *  turnovers, matching how a real box score reads. */
+  steals: number
+  /** Credited to the defender who blocked a miss. The shooter still takes the field-goal attempt. */
+  blocks: number
   turnovers: number
   /** Shooting fouls *drawn* by this player, not personal fouls committed -- there's no defensive
    *  foul attribution model, so the whistle is credited to the offensive player who earned the trip

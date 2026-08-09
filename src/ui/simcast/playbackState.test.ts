@@ -98,18 +98,20 @@ describe('advancePlayback', () => {
     }
   })
 
-  it('matches the official box score on every stat the possession log determines', () => {
-    const { steps, context, homeTeam, playerById, rng } = playOneGame(14)
+  it('matches the official box score on every stat, rebounds included', () => {
+    const { steps, context, homeTeam } = playOneGame(14)
     const state = foldAll(context, steps)
 
-    const official = deriveBoxScore(steps.map((s) => s.entry), homeTeam.id, playerById, rng)
+    const official = deriveBoxScore(steps.map((s) => s.entry), homeTeam.id)
 
     expect(official.boxScore.home.length).toBeGreaterThan(0)
+    // Rebounds used to be excluded here: deriveBoxScore rolled for them, so the live tally couldn't
+    // replay them. Now the simulation settles the rebounder on the miss itself, and both sides are
+    // the same arithmetic over the same log -- so every column has to agree, not most of them.
+    let totalRebounds = 0
     for (const line of official.boxScore.home) {
       const live = state.lines.get(line.playerId)
       expect(live, `no live line for ${line.playerId}`).toBeDefined()
-      // Rebounds are deliberately absent from the live line -- deriveBoxScore rolls for them, so
-      // they can't be replayed and aren't shown until the buzzer.
       expect(live).toMatchObject({
         points: line.points,
         fieldGoalsMade: line.fieldGoalsMade,
@@ -117,11 +119,15 @@ describe('advancePlayback', () => {
         threePointersMade: line.threePointersMade,
         threePointersAttempted: line.threePointersAttempted,
         assists: line.assists,
+        rebounds: line.rebounds,
         turnovers: line.turnovers,
         fouls: line.fouls,
       })
       expect(live?.minutesPlayed).toBeCloseTo(line.minutesPlayed, 8)
+      totalRebounds += line.rebounds
     }
+    // Guards the assertion above against passing trivially on an all-zero rebound column.
+    expect(totalRebounds).toBeGreaterThan(0)
   })
 
   it('captions each possession and keeps the newest line first', () => {

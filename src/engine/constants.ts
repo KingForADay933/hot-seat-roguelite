@@ -59,6 +59,55 @@ export const TURNOVER_MIN = 0.04
 export const TURNOVER_MAX = 0.22
 export const TURNOVER_SENSITIVITY = 500
 
+// --- Defensive attribution: which turnovers are steals, which misses are blocked ---
+// Neither changes what happens in a possession -- a stolen turnover is still a turnover and a
+// blocked shot is still a miss, with the same points and the same rebound. They decide only whether
+// a *defender* gets credit, which is the difference between a defensive build being something you
+// can see working and something you have to take on faith.
+
+/**
+ * Share of turnovers that are live-ball steals rather than unforced errors, at neutral pressure.
+ * Real leagues run a bit over half; the rest are travels, offensive fouls and passes into the crowd,
+ * which have no defender to credit.
+ *
+ * Measured over 160 games: 56% of turnovers credited, 5.8 steals a team a game. Real is nearer 7.5,
+ * and the gap is inherited rather than introduced here -- the engine's turnover rate itself sits at
+ * ~10.4 a team against a real ~13.5, so the share is right and the base it applies to is light. Fix
+ * that in TURNOVER_BASE_PROB if it's worth fixing; raising this instead would only paper over it by
+ * crediting an unrealistic fraction of giveaways as strips.
+ */
+export const STEAL_SHARE_BASE = 0.55
+
+/**
+ * How far the steal share swings with the defender's pressure advantage over the ball-handler, on
+ * the same (defence - handling) scale TURNOVER_SENSITIVITY uses. A stifling defender doesn't just
+ * force more turnovers -- more of the ones they force are strips rather than fumbles.
+ */
+export const STEAL_SHARE_SENSITIVITY = 200
+export const STEAL_SHARE_MIN = 0.3
+export const STEAL_SHARE_MAX = 0.8
+
+/**
+ * Share of missed *interior* attempts that are blocked, at neutral rim protection. Blocks are
+ * overwhelmingly a paint event, so outside misses use the far lower rate below.
+ *
+ * Sized against the real rate of roughly one block per twenty field-goal attempts: only misses are
+ * eligible here (a blocked shot never counts as made), and interior attempts are a subset of those,
+ * so the per-eligible-miss rate has to sit well above the per-attempt rate to land there.
+ *
+ * Measured over 160 games: 4.3 blocks a team a game at 4.9% of attempts, against a real ~5 and ~5%.
+ */
+export const BLOCK_SHARE_INTERIOR = 0.14
+export const BLOCK_SHARE_OUTSIDE = 0.02
+
+/**
+ * How far the block share swings with the defender's rim protection relative to a neutral defender,
+ * measured on the interior-defence/vertical average positionFit already treats as the interior pair.
+ */
+export const BLOCK_SHARE_SENSITIVITY = 300
+export const BLOCK_SHARE_MIN = 0.01
+export const BLOCK_SHARE_MAX = 0.35
+
 /**
  * Make probability for an evenly-matched two-point attempt, before the shot-quality margin moves it.
  * Realized two-point percentage lands ~54%, against a real league's ~53%.
