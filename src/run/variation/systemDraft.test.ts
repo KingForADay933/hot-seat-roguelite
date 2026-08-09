@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { SYNERGY_NEUTRAL } from '../../engine/constants'
+import { PERIOD_SECONDS, SYNERGY_NEUTRAL } from '../../engine/constants'
 import { OFFENSIVE_PLAYBOOKS } from '../../data/presets'
 import { createSeededRng } from '../../engine/rng'
 import { makeTestPlayer } from '../../engine/testFixtures'
 import type { SystemId } from '../../data/presets'
+import type { PlayerId, Position, RotationPlan, RotationSegment } from '../../data/types'
+import { CHARTABLE_PERIODS } from '../rotationChart'
 import {
   computeInitialSynergyScore,
   computePlayerSystemAffinity,
@@ -156,7 +158,9 @@ describe('computeProjectedUsageShares', () => {
     const starter = postCenter()
     const benchTwin = postCenter()
     const roster = [starter, benchTwin]
-    const shares = computeProjectedUsageShares(OFFENSIVE_PLAYBOOKS.twinTowers, roster, { [starter.id]: 34, [benchTwin.id]: 8 })
+    const shares = computeProjectedUsageShares(OFFENSIVE_PLAYBOOKS.twinTowers, roster, {
+      rotationMinutes: { [starter.id]: 34, [benchTwin.id]: 8 },
+    })
     expect(shares.get(starter.id)!).toBeGreaterThan(shares.get(benchTwin.id)! * 3)
   })
 })
@@ -176,8 +180,9 @@ describe('touch logic in the team score', () => {
 })
 
 describe('minutes weighting', () => {
-  const bigMinutes = (starters: ReturnType<typeof postCenter>[], bench: ReturnType<typeof postCenter>[]) =>
-    Object.fromEntries([...starters.map((p) => [p.id, 34]), ...bench.map((p) => [p.id, 6])])
+  const bigMinutes = (starters: ReturnType<typeof postCenter>[], bench: ReturnType<typeof postCenter>[]) => ({
+    rotationMinutes: Object.fromEntries([...starters.map((p) => [p.id, 34]), ...bench.map((p) => [p.id, 6])]),
+  })
 
   it('lets the rotation move the score: the same players weighted toward the post unit rate Twin Towers higher', () => {
     const centers = [postCenter(), postCenter()]
@@ -191,10 +196,109 @@ describe('minutes weighting', () => {
 
   it('counts everyone equally when minutes are absent or all zero rather than dividing by zero', () => {
     const roster = [postCenter(), spacingGuard()]
-    const allZero = Object.fromEntries(roster.map((p) => [p.id, 0]))
+    const allZero = { rotationMinutes: Object.fromEntries(roster.map((p) => [p.id, 0])) }
     expect(computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS.balanced, roster, allZero)).toBe(
       computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS.balanced, roster),
     )
+  })
+})
+
+/**
+ * The chart, not rotationMinutes, is what actually decides who plays once a GM has authored one
+ * (rotation-charts.md Phase F/G), so it has to reach the same projection minutes always fed.
+ */
+describe('rotation chart weighting', () => {
+  const wholePeriod = (playerId: PlayerId) => [
+    { startSeconds: 0, endSeconds: PERIOD_SECONDS, fill: { kind: 'player' as const, playerId } },
+  ]
+  const halfPeriod = (playerId: PlayerId) => [
+    { startSeconds: 0, endSeconds: PERIOD_SECONDS / 2, fill: { kind: 'player' as const, playerId } },
+    { startSeconds: PERIOD_SECONDS / 2, endSeconds: PERIOD_SECONDS, fill: { kind: 'auto' as const } },
+  ]
+  /** The same segments in all four regulation periods -- a chart covering the whole game. */
+  const everyPeriod = (bySlot: Partial<Record<Position, RotationSegment[]>>): RotationPlan =>
+    Object.fromEntries(CHARTABLE_PERIODS.map((period) => [period, bySlot]))
+
+  it('is a no-op when the chart is all Auto -- identical to having no plan at all', () => {
+    const roster = [postCenter(), spacingGuard()]
+    const rotationMinutes = { [roster[0].id]: 30, [roster[1].id]: 30 }
+    const allAuto = everyPeriod({ C: [{ startSeconds: 0, endSeconds: PERIOD_SECONDS, fill: { kind: 'auto' } }] })
+
+    expect(computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS.balanced, roster, { rotationMinutes, rotationPlan: allAuto })).toBe(
+      computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS.balanced, roster, { rotationMinutes }),
+    )
+  })
+
+  it('hands a slot charted end to end to the charted player, leaving his backup nothing', () => {
+    const starter = postCenter()
+    const backup = postCenter()
+    const roster = [starter, backup]
+    // Minutes say the backup should get a third of the C slot; the chart says otherwise, all game.
+    const rotationMinutes = { [starter.id]: 32, [backup.id]: 16 }
+    const rotationPlan = everyPeriod({ C: wholePeriod(starter.id) })
+
+    const shares = computeProjectedUsageShares(OFFENSIVE_PLAYBOOKS.twinTowers, roster, { rotationMinutes, rotationPlan })
+
+    expect(shares.get(starter.id)!).toBeCloseTo(1, 5)
+    expect(shares.get(backup.id)!).toBeCloseTo(0, 5)
+  })
+
+  it('prorates target minutes across whatever Auto time the chart leaves', () => {
+    const starter = postCenter()
+    const backup = postCenter()
+    const roster = [starter, backup]
+    const rotationMinutes = { [starter.id]: 24, [backup.id]: 24 }
+
+    // Half the C slot charted to the starter: he takes his 24 charted minutes plus half his target,
+    // the backup only half of his. So the starter's edge exists but isn't total.
+    const half = computeProjectedUsageShares(OFFENSIVE_PLAYBOOKS.twinTowers, roster, {
+      rotationMinutes,
+      rotationPlan: everyPeriod({ C: halfPeriod(starter.id) }),
+    })
+    expect(half.get(starter.id)!).toBeGreaterThan(half.get(backup.id)!)
+    expect(half.get(backup.id)!).toBeGreaterThan(0.1) // still meaningfully in the rotation
+
+    // Charting the whole slot instead should push the starter strictly further ahead.
+    const full = computeProjectedUsageShares(OFFENSIVE_PLAYBOOKS.twinTowers, roster, {
+      rotationMinutes,
+      rotationPlan: everyPeriod({ C: wholePeriod(starter.id) }),
+    })
+    expect(full.get(starter.id)!).toBeGreaterThan(half.get(starter.id)!)
+  })
+
+  it('counts charted time at a slot that is not the player s own -- he is on the floor either way', () => {
+    const center = postCenter()
+    const guard = spacingGuard()
+    const roster = [center, guard]
+    // Nobody has target minutes at all, so the only thing feeding availability is the chart -- and
+    // it charts the center into the SG slot, which is not his position.
+    const rotationPlan = everyPeriod({ SG: wholePeriod(center.id) })
+
+    const shares = computeProjectedUsageShares(OFFENSIVE_PLAYBOOKS.twinTowers, roster, {
+      rotationMinutes: { [center.id]: 0, [guard.id]: 0 },
+      rotationPlan,
+    })
+
+    expect(shares.get(center.id)!).toBeCloseTo(1, 5)
+  })
+
+  it('moves the score: charting the post unit into real minutes rates Twin Towers higher than charting the guards', () => {
+    const centers = [postCenter(), postCenter()]
+    const guards = [spacingGuard(), spacingGuard()]
+    const roster = [...centers, ...guards]
+    // Identical players and identical target minutes in both cases -- the chart is the only variable.
+    const rotationMinutes = Object.fromEntries(roster.map((p) => [p.id, 24]))
+
+    const bigsCharted = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS.twinTowers, roster, {
+      rotationMinutes,
+      rotationPlan: everyPeriod({ C: wholePeriod(centers[0].id), SG: wholePeriod(centers[1].id) }),
+    })
+    const guardsCharted = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS.twinTowers, roster, {
+      rotationMinutes,
+      rotationPlan: everyPeriod({ C: wholePeriod(guards[0].id), SG: wholePeriod(guards[1].id) }),
+    })
+
+    expect(bigsCharted).toBeGreaterThan(guardsCharted)
   })
 })
 

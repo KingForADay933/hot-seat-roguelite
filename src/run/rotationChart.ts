@@ -1,6 +1,7 @@
-import type { Position, RotationPlan, RotationSegment } from '../data/types'
-import { PERIOD_SECONDS, REGULATION_PERIODS } from '../engine/constants'
+import type { PlayerId, Position, RotationPlan, RotationSegment } from '../data/types'
+import { PERIOD_SECONDS, REGULATION_PERIODS, SECONDS_PER_MINUTE } from '../engine/constants'
 import { clamp } from '../engine/math'
+import { POSITION_ORDER } from '../engine/matchup'
 import { MIN_ROTATION_SEGMENT_SECONDS } from './constants'
 
 /**
@@ -121,4 +122,38 @@ export function hasAnyChartedSegment(plan: RotationPlan | undefined): boolean {
   return Object.values(plan).some((bySlot) =>
     Object.values(bySlot ?? {}).some((segments) => segments?.some((s) => s.fill.kind === 'player')),
   )
+}
+
+export interface ChartedMinutes {
+  /** Charted minutes per player, summed across every slot and regulation period. Counts time at
+   *  *any* slot, not just the player's own -- a PG charted at SF is still on the floor. */
+  byPlayer: Map<PlayerId, number>
+  /** Charted minutes per slot, summed across every player -- how much of that slot's 48 the chart
+   *  has already spent, and therefore how much is left for the coach heuristic to fill. */
+  bySlot: Map<Position, number>
+}
+
+/**
+ * How much of the game the chart actually accounts for, split both ways. Auto spans and gaps
+ * contribute to neither total: nobody is assigned to them, so what the heuristic will do with that
+ * time isn't knowable from the plan alone -- it's the caller's job to decide what to assume about
+ * it (run/variation/systemDraft.ts's `availability` prorates rotationMinutes across it;
+ * run/rotationChartValidation.ts's projected fatigue scores it as bench rest).
+ */
+export function chartedMinutes(plan: RotationPlan | undefined): ChartedMinutes {
+  const byPlayer = new Map<PlayerId, number>()
+  const bySlot = new Map<Position, number>()
+  if (!plan) return { byPlayer, bySlot }
+
+  for (const period of CHARTABLE_PERIODS) {
+    for (const slot of POSITION_ORDER) {
+      for (const segment of getSegments(plan, period, slot)) {
+        if (segment.fill.kind !== 'player') continue
+        const minutes = (segment.endSeconds - segment.startSeconds) / SECONDS_PER_MINUTE
+        byPlayer.set(segment.fill.playerId, (byPlayer.get(segment.fill.playerId) ?? 0) + minutes)
+        bySlot.set(slot, (bySlot.get(slot) ?? 0) + minutes)
+      }
+    }
+  }
+  return { byPlayer, bySlot }
 }

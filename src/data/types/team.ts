@@ -56,9 +56,14 @@ export interface Team {
   /** Exactly 5 ids — who's on the floor at the opening tip. In-game substitutions move players
    *  in and out from there; see engine/rotation. */
   startingFive: PlayerId[]
-  /** Target minutes (0-48) per rostered player, auto-generated at team-creation time by
-   *  depth-chart rank within each position group. Drives in-game substitution timing —
-   *  not GM-editable yet. */
+  /** Target minutes per rostered player, auto-generated at team-creation time by depth-chart rank
+   *  within each position group. Drives in-game substitution timing, and is the Auto fallback a
+   *  rotationPlan defers to (see below).
+   *
+   *  Allocated per position, not per player: each position group has exactly REGULATION_MINUTES to
+   *  share out, since one slot is occupied for the whole game. The generator already normalizes to
+   *  that (engine/generator/randomTeam.ts), and run/minutesBudget.ts is what holds GM edits to it —
+   *  raising one player means lowering a teammate at his position. */
   rotationMinutes: Record<PlayerId, number>
 
   /** Key into presets.ts OFFENSIVE_PLAYBOOKS. */
@@ -73,17 +78,18 @@ export interface Team {
    *  here, or present with an empty/all-zero object, falls back to an auto-computed weighting
    *  proportional to that attribute's gap-to-potential. See engine/development/trainingFocus.ts. */
   trainingFocus: Record<PlayerId, Partial<Record<AttributeKey, number>>>
-  /** Absent means fully Auto -- every AI team, and a user team until a chart is authored (no editor
-   *  exists yet -- rotation-charts.md Phase G). engine/rotation/substitution.ts's checkSubstitutions
-   *  consults this before falling through to the fatigue/pace heuristic. */
+  /** Absent means fully Auto -- every AI team, and a user team until a chart is authored in the My
+   *  Team editor (ui/components/RotationChartEditor.tsx). engine/rotation/substitution.ts's
+   *  checkSubstitutions consults this before falling through to the fatigue/pace heuristic. */
   rotationPlan?: RotationPlan
 
   /** Attribute-scale (40-99ish), neutral at engine/constants.ts's SYNERGY_NEUTRAL (65) -- feeds a
    *  small offense-strength multiplier via engine/possession/possessionStrength.ts's
    *  synergyMultiplier. Every AI-generated team stays neutral; only a roguelite run's
-   *  user-controlled team deviates, set once at system-draft time from roster fit
-   *  (run/variation/systemDraft.ts's computeInitialSynergyScore) and expected to grow from there
-   *  via later camps/coaching-upgrades/consumables systems. Morale itself is still unbuilt. */
+   *  user-controlled team deviates, set at system-draft time from roster fit
+   *  (run/variation/systemDraft.ts's computeInitialSynergyScore) and recomputed from there whenever
+   *  its inputs move -- camps, coaching upgrades, rotation-minutes edits and rotation-chart edits all
+   *  route through RunProvider's teamsWithRecomputedSynergy. Morale itself is still unbuilt. */
   synergyScore: number
 
   /** Derived by engine/schedule/standings.ts; cached here for convenience. */

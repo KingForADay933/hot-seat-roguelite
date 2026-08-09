@@ -2,7 +2,7 @@ import type { AttributeKey, Player, Team } from '../../data/types'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 import { formatHeight } from '../playerDisplay'
 import { splitRoster } from '../rosterGroups'
-import { MinutesInput, TrainingFocusSelect } from './RotationControls'
+import { MinutesInput, PositionMinutesSummary, TrainingFocusSelect } from './RotationControls'
 
 /** How much room a player has left to grow in one attribute before hitting their fixed potential
  *  (engine/development/growPlayerOneSeason.ts's ceiling). Shop camps ignore potential, but every
@@ -18,12 +18,14 @@ function RosterDetailGroup({
   label,
   players,
   team,
+  roster,
   onSetMinutes,
   onSetFocus,
 }: {
   label: string
   players: Player[]
   team: Team
+  roster: Player[]
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
@@ -59,7 +61,7 @@ function RosterDetailGroup({
                 <td className="numeric">{formatHeight(player.heightInches)}</td>
                 <td className="numeric">{player.overallRating}</td>
                 <td className="numeric">
-                  <MinutesInput team={team} playerId={player.id} onSetMinutes={onSetMinutes} />
+                  <MinutesInput team={team} roster={roster} playerId={player.id} onSetMinutes={onSetMinutes} />
                 </td>
                 <td>
                   <TrainingFocusSelect team={team} playerId={player.id} onSetFocus={onSetFocus} />
@@ -103,8 +105,16 @@ export function RosterDetailPanel({
 
   return (
     <>
-      <RosterDetailGroup label="Starting Five" players={starters} team={team} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
-      <RosterDetailGroup label="Bench" players={bench} team={team} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+      <PositionMinutesSummary team={team} roster={roster} />
+      <RosterDetailGroup
+        label="Starting Five"
+        players={starters}
+        team={team}
+        roster={roster}
+        onSetMinutes={onSetMinutes}
+        onSetFocus={onSetFocus}
+      />
+      <RosterDetailGroup label="Bench" players={bench} team={team} roster={roster} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
     </>
   )
 }

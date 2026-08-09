@@ -1,17 +1,19 @@
 import type { AttributeKey, Player, Team } from '../../data/types'
 import { splitRoster } from '../rosterGroups'
-import { MinutesInput, TrainingFocusSelect } from './RotationControls'
+import { MinutesInput, PositionMinutesSummary, TrainingFocusSelect } from './RotationControls'
 
 function RosterAdjustmentGroup({
   label,
   players,
   team,
+  roster,
   onSetMinutes,
   onSetFocus,
 }: {
   label: string
   players: Player[]
   team: Team
+  roster: Player[]
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
 }) {
@@ -33,7 +35,7 @@ function RosterAdjustmentGroup({
             <tr key={player.id}>
               <td>{player.name}</td>
               <td className="numeric">
-                <MinutesInput team={team} playerId={player.id} onSetMinutes={onSetMinutes} />
+                <MinutesInput team={team} roster={roster} playerId={player.id} onSetMinutes={onSetMinutes} />
               </td>
               <td>
                 <TrainingFocusSelect team={team} playerId={player.id} onSetFocus={onSetFocus} />
@@ -63,8 +65,23 @@ export function RosterAdjustmentPanel({
 
   return (
     <>
-      <RosterAdjustmentGroup label="Starting Five" players={starters} team={team} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
-      <RosterAdjustmentGroup label="Bench" players={bench} team={team} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+      <PositionMinutesSummary team={team} roster={roster} />
+      <RosterAdjustmentGroup
+        label="Starting Five"
+        players={starters}
+        team={team}
+        roster={roster}
+        onSetMinutes={onSetMinutes}
+        onSetFocus={onSetFocus}
+      />
+      <RosterAdjustmentGroup
+        label="Bench"
+        players={bench}
+        team={team}
+        roster={roster}
+        onSetMinutes={onSetMinutes}
+        onSetFocus={onSetFocus}
+      />
     </>
   )
 }
