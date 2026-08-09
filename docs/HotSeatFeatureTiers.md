@@ -53,7 +53,7 @@ list totals roughly 65–100 days: at two solid days a week that's 8–11 months
 | Milestone | Contents | Tiers | Days |
 | --- | --- | --- | --- |
 | **M0 — itch page** | Store copy, screenshots, a simcast GIF. Created as a **draft, not published**. Copy drafted in `itch-page-draft.md`. | — | 1 |
-| **M1 — Complete run** | ~~Simcast pacing~~ ✅ · chronological game order · rebounds in-sim + defensive stats · run-end summary | 7.5, 1.5, 11, 8 | 10–14 |
+| **M1 — Complete run** | ~~Simcast pacing~~ ✅ · ~~chronological game order~~ ✅ · rebounds in-sim + defensive stats · run-end summary | 7.5, 1.5, 11, 8 | 10–14 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
 | **M3 — Tactical axis** | In-game decisions tiers 1–2 (scheme/focus switching) · position-fit tuning | 13, 7.6 | 8–12 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations | 12 | 12–18 |
@@ -161,7 +161,7 @@ Not part of the original phase plan -- came out of fixing the localStorage-quota
 - The season's final chunk still runs the same once-per-season pipeline as before chunking existed (standings, target evaluation, budget, development, league bookkeeping) and lands on the unchanged Season Results screen.
 - Possession logs are discarded immediately after a chunk's insights are pulled from them -- nothing downstream (standings, development) needs possession-level detail, only the box score. This is what actually shrinks a season's saved payload (down to well under 1MB), independent of and in addition to the IndexedDB switch.
 - **Idea, unscoped** -- one-time-use per-chunk power-ups (i.e. Tier 7's Consumables, but used at chunk cadence instead of pre-season) were considered as the checkpoint decision and explicitly parked for later. Flagged as especially useful for late-season clutch situations.
-- **Planned -- chronological game order** (M1): `StretchScreen` lists every game in the current chunk with its own Sim and Watch button, so nothing stops a GM playing game 5 before game 2, or cherry-picking. The chunk-level "Sim Stretch" path plays them in order; the per-game path enforces nothing. Fix is to gate each game on the previous one being played -- either disable the controls on every game but the next unplayed one, or collapse the list to a single "next game" call to action with the rest shown as schedule. The data already supports it (games carry dates, the chunk range is ordered). Worth doing early: it's a prerequisite for anything that makes in-game state meaningful across a stretch, since carrying fatigue, injuries or in-game decisions between games is incoherent if games can be played out of order.
+- **Shipped -- chronological game order** (M1): a season is played in order. `StretchScreen` used to offer Sim and Watch on every game in the chunk at once, so a GM could resolve game 5 before game 2 or cherry-pick around a hard opponent. Only the earliest unplayed game of the run team's own is resolvable now; the rest render their controls disabled, so the schedule stays readable and the affordance stays visible rather than the rows looking inert. Kept as one derived function (`run/seasonChunks.ts`'s `nextPlayableGameId`) rather than a stored cursor -- nothing to keep in sync, and a save from before the rule, where a later game may already be played, resolves to whatever is earliest and unplayed rather than getting stuck. Enforced in `RunProvider` as well as in the UI so the invariant belongs to the state layer, not to a `disabled` attribute; deliberately *not* applied to `commitLiveGame`, since refusing to record a game the GM has already watched would lose real play rather than prevent anything. Worth having done early: fatigue, injuries and in-game coaching decisions all carry between games, and none of it means anything if the order is arbitrary.
 
 ---
 
@@ -571,7 +571,7 @@ Recorded so they stay decided rather than getting relitigated:
 |---|---|---|---|
 | 0 | Core simulation | Shipped | — |
 | 1 | Run structure (target/fired/escalate) | Shipped / difficulty pass planned | M2 |
-| 1.5 | Season chunking (checkpoints + mid-season rotation/focus decisions) | Shipped / chronological order planned | M1 |
+| 1.5 | Season chunking (checkpoints + mid-season rotation/focus decisions) | Shipped | — |
 | 2 | Playable UI loop | Shipped | — |
 | 3 | Imposed variation (quirks/rules/wildcards/market) | Shipped | — |
 | 4 | Drafted variation | Shipped | — |
