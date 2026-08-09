@@ -1,5 +1,5 @@
 ﻿import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
-import type { Game, OnCourtRecord, Player, PossessionLogEntry, Team } from '../data/types'
+import type { Game, OnCourtRecord, Player, PossessionLogEntry, Team, TeamId } from '../data/types'
 import { deriveBoxScore } from './boxScore'
 import { OVERTIME_SECONDS, PERIOD_SECONDS, REGULATION_PERIODS } from './constants'
 import { playersOf, type OnCourtPlayer } from './matchup'

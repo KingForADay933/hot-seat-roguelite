@@ -350,8 +350,9 @@ describe('simulateGameSteps', () => {
   })
 
   describe('coaching directives', () => {
-    /** Every logged possession the given team defended, in order. */
-    function defenseSchemesFor(log: { offenseTeamId: string; defenseSchemeId?: string }[], defendingTeamId: string, offenseTeamId: string) {
+    /** The scheme run on each possession the *other* team was on offense for, in order -- which is
+     *  exactly the set of possessions the defending team defended. */
+    function schemesDefendedAgainst(log: { offenseTeamId: string; defenseSchemeId?: string }[], offenseTeamId: string) {
       return log.filter((e) => e.offenseTeamId === offenseTeamId && e.defenseSchemeId !== undefined).map((e) => e.defenseSchemeId)
     }
 
@@ -361,7 +362,7 @@ describe('simulateGameSteps', () => {
       let next = steps.next()
       while (!next.done) next = steps.next()
 
-      const schemes = new Set(defenseSchemesFor(next.value.possessionLog, home.id, away.id))
+      const schemes = new Set(schemesDefendedAgainst(next.value.possessionLog, away.id))
       expect(schemes).toEqual(new Set([home.defensiveStrategyId]))
     })
 
@@ -377,7 +378,7 @@ describe('simulateGameSteps', () => {
         next = handedOver === 10 ? steps.next({ teamId: home.id, defensiveSchemeId: 'packThePaint' }) : steps.next()
       }
 
-      const schemes = defenseSchemesFor(next.value.possessionLog, home.id, away.id)
+      const schemes = schemesDefendedAgainst(next.value.possessionLog, away.id)
       expect(schemes[0]).toBe(home.defensiveStrategyId)
       expect(schemes[schemes.length - 1]).toBe('packThePaint')
       expect(new Set(schemes)).toEqual(new Set([home.defensiveStrategyId, 'packThePaint']))
@@ -394,7 +395,7 @@ describe('simulateGameSteps', () => {
         next = pulls === 5 ? steps.next({ teamId: home.id, defensiveSchemeId: 'packThePaint' }) : steps.next()
       }
 
-      expect(new Set(defenseSchemesFor(next.value.possessionLog, away.id, home.id))).toEqual(new Set([away.defensiveStrategyId]))
+      expect(new Set(schemesDefendedAgainst(next.value.possessionLog, home.id))).toEqual(new Set([away.defensiveStrategyId]))
     })
 
     it('ignores a directive naming a team that is not playing, or a scheme that does not exist', () => {
