@@ -3,14 +3,34 @@ import type { Game } from '../../data/types'
 import type { SimulationStep } from '../../engine/simulateGame'
 import { advancePlayback, createPlaybackState, entersNewOvertimePeriod, type PlaybackContext, type PlaybackState } from './playbackState'
 
-/** Multipliers on BASE_POSSESSION_MS. 1x runs a full game in about three minutes -- slow enough to
- *  read the play-by-play; 16x is closer to a highlight reel than a broadcast. */
-export const PLAYBACK_SPEEDS = [1, 2, 4, 16] as const
+/**
+ * Multipliers on BASE_POSSESSION_MS -- ascending, so the control row reads slowest-to-fastest.
+ *
+ * Against a measured ~219 possessions a game: 0.5x runs about 11 minutes, 0.75x about 7m20s, 1x
+ * about 5m30s, 2x about 2m45s, 4x about 1m20s, and 16x about 20 seconds -- closer to a highlight
+ * reel than a broadcast.
+ *
+ * The slow end is deliberately generous. 1x is meant to be the speed you *read* the play-by-play at,
+ * and that turned out to be much slower than the pacing this screen originally shipped with, so the
+ * ladder now extends well past it rather than bottoming out at the default.
+ */
+export const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 2, 4, 16] as const
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
 
-/** Halved when the clock doubled the possession count, so a broadcast still runs about as long in
- *  wall-clock terms as it did at ~100 possessions. */
-const BASE_POSSESSION_MS = 450
+/**
+ * Wall-clock milliseconds per possession at 1x.
+ *
+ * History worth knowing, because this constant has now been wrong in both directions. It was 900,
+ * halved to 450 when the clock rewrite doubled the possession count -- reasoned from wall-clock
+ * parity, so a broadcast would stay the same length as it had been at ~100 possessions. That was a
+ * sound argument for the wrong target: parity with the old build doesn't matter, being readable
+ * does. Restoring 900 fixed the arithmetic but still played faster than anyone actually reads, so
+ * this is now set by feel rather than derived from anything.
+ *
+ * If it needs to move again, move it here rather than adding multipliers -- every speed scales off
+ * it, and the ladder above already spans roughly 20 seconds to 11 minutes a game.
+ */
+const BASE_POSSESSION_MS = 1500
 
 export type PlaybackStatus = 'playing' | 'paused' | 'awaiting-substitutions' | 'final'
 
