@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:itch": "tsc -b && vite build --mode itch --outDir dist-itch",
+    "package:itch": "npm run build:itch && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-itch.ps1",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
