@@ -30,6 +30,7 @@ export function GameListItem({
   homeTeam,
   awayTeam,
   userTeamId,
+  canPlay = true,
   onSim,
   onWatchLive,
   onViewBoxScore,
@@ -38,6 +39,9 @@ export function GameListItem({
   homeTeam?: Team
   awayTeam?: Team
   userTeamId?: TeamId | null
+  /** Whether this game is the one due next. Unplayed games further down the schedule still show
+   *  their controls, disabled, so the affordance stays visible rather than the row looking inert. */
+  canPlay?: boolean
   onSim: () => void
   onWatchLive: () => void
   onViewBoxScore: () => void
@@ -67,7 +71,12 @@ export function GameListItem({
           </>
         ) : (
           <>
-            <button onClick={onSim}>Sim</button> <button onClick={onWatchLive}>Watch Live</button>
+            <button onClick={onSim} disabled={!canPlay} title={canPlay ? undefined : 'Games play in order'}>
+              Sim
+            </button>{' '}
+            <button onClick={onWatchLive} disabled={!canPlay} title={canPlay ? undefined : 'Games play in order'}>
+              Watch Live
+            </button>
           </>
         )}
       </td>

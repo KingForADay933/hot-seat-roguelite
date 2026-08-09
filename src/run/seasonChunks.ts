@@ -1,4 +1,4 @@
-import type { Game, TeamId } from '../data/types'
+import type { Game, GameId, TeamId } from '../data/types'
 import { SEASON_CHUNK_COUNT } from './constants'
 
 /** [start, end) index range into a season's games array for one chunk. */
@@ -51,4 +51,23 @@ export function chunkGames(games: Game[], chunkInSeason: number): Game[] {
  */
 export function runTeamChunkGames(games: Game[], chunkInSeason: number, teamId: TeamId): Game[] {
   return chunkGames(games, chunkInSeason).filter((game) => game.homeTeamId === teamId || game.awayTeamId === teamId)
+}
+
+/**
+ * The one game in this chunk the GM is allowed to resolve next: the earliest of their own that
+ * hasn't been played. Null once the chunk is finished.
+ *
+ * A season is played in order. Nothing in the engine forced that before -- the stretch screen
+ * offered Sim and Watch on every game at once, so a GM could resolve game 5 before game 2 or
+ * cherry-pick around a hard opponent. Harmless while a game's only lasting effects were its own
+ * result, but fatigue, injuries and in-game coaching decisions all carry *between* games, and none
+ * of those mean anything if the order is arbitrary. Cheaper to establish the invariant now than to
+ * retrofit it under systems that assume it.
+ *
+ * Deliberately derived rather than stored: no cursor to keep in sync with the games array, and a
+ * save from before this rule -- where later games may already be played -- still resolves to
+ * whatever is earliest and unplayed rather than getting stuck.
+ */
+export function nextPlayableGameId(games: Game[], chunkInSeason: number, teamId: TeamId): GameId | null {
+  return runTeamChunkGames(games, chunkInSeason, teamId).find((game) => !game.isPlayed)?.id ?? null
 }

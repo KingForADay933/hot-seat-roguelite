@@ -1,8 +1,13 @@
-import type { PlayCallType, Player, PossessionOutcome } from '../../data/types'
+import type { PlayCallType, Player, PlayerId, PossessionOutcome } from '../../data/types'
 import { clamp } from '../math'
 import {
   ATTRIBUTE_CEILING,
   ATTRIBUTE_FLOOR,
+  BLOCK_SHARE_INTERIOR,
+  BLOCK_SHARE_MAX,
+  BLOCK_SHARE_MIN,
+  BLOCK_SHARE_OUTSIDE,
+  BLOCK_SHARE_SENSITIVITY,
   CLUTCH_BONUS_MAX,
   FOUL_PROB_BASE,
   FOUL_PROB_INTERIOR_BONUS,
@@ -14,6 +19,10 @@ import {
   MAKE_PROB_MARGIN_SCALE,
   MAKE_PROB_MAX,
   MAKE_PROB_MIN,
+  STEAL_SHARE_BASE,
+  STEAL_SHARE_MAX,
+  STEAL_SHARE_MIN,
+  STEAL_SHARE_SENSITIVITY,
   THREE_POINT_MAKE_PENALTY,
   TURNOVER_BASE_PROB,
   TURNOVER_MAX,
@@ -29,6 +38,48 @@ export interface ResolvedPossession {
   pointsScored: number
   freeThrowsMade: number
   freeThrowsAttempted: number
+  /** The defender who stripped it, on a turnover that was a live-ball steal rather than an unforced
+   *  error. Null on every other outcome, and on turnovers nobody forced. */
+  stolenById: PlayerId | null
+  /** The defender who blocked it, on a miss that was blocked. Null otherwise. A blocked shot is
+   *  still a miss -- same field-goal attempt, same rebound -- so this is credit, not a new branch. */
+  blockedById: PlayerId | null
+}
+
+/** Rim protection, on the same interior pair positionFit treats as one. */
+const rimProtection = (p: Player) => (p.attributes.interiorDefense + p.attributes.vertical) / 2
+
+/** Ball pressure, matching the term the turnover probability itself is built from. */
+const ballPressure = (p: Player) => (p.attributes.lateralQuickness + p.attributes.perimeterDefense) / 2
+
+/**
+ * Whether a turnover that already happened was forced by the defender, and so credited as a steal.
+ *
+ * Split out from the turnover roll rather than folded into it because the two answer different
+ * questions: how often the offense coughs it up (already tuned, and unchanged here) versus who gets
+ * the credit when they do. Keeping them separate means adding steals can't move turnover rates.
+ */
+export function stealShare(handler: Player, defender: Player): number {
+  const pressureEdge = ballPressure(defender) - handler.attributes.ballHandling
+  return clamp(STEAL_SHARE_BASE + pressureEdge / STEAL_SHARE_SENSITIVITY, STEAL_SHARE_MIN, STEAL_SHARE_MAX)
+}
+
+/**
+ * Whether a miss that already happened was blocked. Conditioned on the shot being interior, since
+ * blocks are overwhelmingly a paint event, and on the defender's rim protection against whatever
+ * the shooter was actually trying to do.
+ *
+ * Measured against the shooter rather than an absolute baseline, mirroring stealShare: a shot-blocker
+ * gets more of them against a poor finisher than against someone who can go up through contact.
+ *
+ * Same separation as stealShare too -- the make/miss roll is untouched, so shot quality and block
+ * credit can be tuned independently.
+ */
+export function blockShare(shooter: Player, defender: Player, isOutsideShotAction: boolean): number {
+  const base = isOutsideShotAction ? BLOCK_SHARE_OUTSIDE : BLOCK_SHARE_INTERIOR
+  const shotSkill = isOutsideShotAction ? shooter.attributes.outsideShot : shooter.attributes.insideShot
+  const protectionEdge = rimProtection(defender) - shotSkill
+  return clamp(base + protectionEdge / BLOCK_SHARE_SENSITIVITY, BLOCK_SHARE_MIN, BLOCK_SHARE_MAX)
 }
 
 /**
@@ -78,7 +129,17 @@ export function resolvePossession(
     TURNOVER_MAX,
   )
   if (rng() < turnoverProb) {
-    return { outcome: 'turnover', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0 }
+    // Forced or unforced. The roll above already decided the possession is lost; this only decides
+    // whether a defender gets credit for it, so turnover rates are untouched by steals existing.
+    const stolen = rng() < stealShare(primary, selection.primaryDefender)
+    return {
+      outcome: 'turnover',
+      pointsScored: 0,
+      freeThrowsMade: 0,
+      freeThrowsAttempted: 0,
+      stolenById: stolen ? selection.primaryDefender.id : null,
+      blockedById: null,
+    }
   }
 
   const isClutch = isClutchTime(clockSecondsRemaining, isFinalPeriod, scoreMargin)
@@ -96,6 +157,8 @@ export function resolvePossession(
       pointsScored: selection.isOutsideShotAction ? 3 : 2,
       freeThrowsMade: 0,
       freeThrowsAttempted: 0,
+      stolenById: null,
+      blockedById: null,
     }
   }
 
@@ -108,8 +171,18 @@ export function resolvePossession(
     // foul-prone, so post-heavy systems were quietly penalised for playing to their strength.
     const attempts = selection.isOutsideShotAction ? FREE_THROWS_ON_THREE : FREE_THROWS_ON_TWO
     const made = shootFreeThrows(primary, attempts, isClutch, rng)
-    return { outcome: 'foul', pointsScored: made, freeThrowsMade: made, freeThrowsAttempted: attempts }
+    return { outcome: 'foul', pointsScored: made, freeThrowsMade: made, freeThrowsAttempted: attempts, stolenById: null, blockedById: null }
   }
 
-  return { outcome: 'miss', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0 }
+  // Blocked or not. Same as the steal branch: the shot has already missed, so this decides credit
+  // rather than the outcome -- the field-goal attempt and the rebound that follows are unchanged.
+  const blocked = rng() < blockShare(primary, selection.primaryDefender, selection.isOutsideShotAction)
+  return {
+    outcome: 'miss',
+    pointsScored: 0,
+    freeThrowsMade: 0,
+    freeThrowsAttempted: 0,
+    stolenById: null,
+    blockedById: blocked ? selection.primaryDefender.id : null,
+  }
 }

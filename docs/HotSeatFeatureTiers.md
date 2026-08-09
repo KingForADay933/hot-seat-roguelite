@@ -53,7 +53,7 @@ list totals roughly 65–100 days: at two solid days a week that's 8–11 months
 | Milestone | Contents | Tiers | Days |
 | --- | --- | --- | --- |
 | **M0 — itch page** | Store copy, screenshots, a simcast GIF. Created as a **draft, not published**. Copy drafted in `itch-page-draft.md`. | — | 1 |
-| **M1 — Complete run** | Simcast pacing · chronological game order · rebounds in-sim + defensive stats · run-end summary | 7.5, 1.5, 11, 8 | 10–14 |
+| **M1 — Complete run** ✅ | ~~Simcast pacing~~ · ~~chronological game order~~ · ~~rebounds in-sim + defensive stats~~ · ~~run-end summary~~ — **complete** | 7.5, 1.5, 11, 8 | 10–14 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
 | **M3 — Tactical axis** | In-game decisions tiers 1–2 (scheme/focus switching) · position-fit tuning | 13, 7.6 | 8–12 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations | 12 | 12–18 |
@@ -71,11 +71,13 @@ list totals roughly 65–100 days: at two solid days a week that's 8–11 months
   (`itch-page-draft.md`) surfaced that the pitch has no summit — there's no way to write "make the
   playoffs" or "win a title" today, and "finish top half" is a materially weaker hook. That's a
   sharper argument for Tier 12 than the one it was originally scheduled on.
-- **M1 is "a run that feels finished."** The run-end summary is the highest value-per-hour item on the
-  whole list and was previously buried at Tier 8 — the design doc's own pillars call Coaching Insights
-  "the emotional payoff of every run's ending," and right now the run just stops. It's cheap because
-  the Insights engine already reconstructs narratives from possession logs; this is re-aiming existing
-  machinery.
+- **M1 was "a run that feels finished," and it's done.** The run-end summary was the highest
+  value-per-hour item on the list and had been buried at Tier 8 — the design doc's own pillars call
+  the ending "the emotional payoff," and the run just stopped. Worth recording how the estimate
+  moved: it was scheduled on the assumption that Coaching Insights could be re-aimed at a run, but
+  possession logs don't survive the chunk that produced them, so the summary is built by replaying
+  the run's own state machine over retained standings instead. Different mechanism, same milestone,
+  and a better fit — see Tier 8.
 - **M2 comes before the big features on purpose.** The "too forgiving" difficulty problem is the one
   thing that genuinely can't be solved alone — you know where the seams are and playtesters don't.
   Doing it after M1 means the balance data arrives before three more milestones get tuned on top of
@@ -161,7 +163,7 @@ Not part of the original phase plan -- came out of fixing the localStorage-quota
 - The season's final chunk still runs the same once-per-season pipeline as before chunking existed (standings, target evaluation, budget, development, league bookkeeping) and lands on the unchanged Season Results screen.
 - Possession logs are discarded immediately after a chunk's insights are pulled from them -- nothing downstream (standings, development) needs possession-level detail, only the box score. This is what actually shrinks a season's saved payload (down to well under 1MB), independent of and in addition to the IndexedDB switch.
 - **Idea, unscoped** -- one-time-use per-chunk power-ups (i.e. Tier 7's Consumables, but used at chunk cadence instead of pre-season) were considered as the checkpoint decision and explicitly parked for later. Flagged as especially useful for late-season clutch situations.
-- **Planned -- chronological game order** (M1): `StretchScreen` lists every game in the current chunk with its own Sim and Watch button, so nothing stops a GM playing game 5 before game 2, or cherry-picking. The chunk-level "Sim Stretch" path plays them in order; the per-game path enforces nothing. Fix is to gate each game on the previous one being played -- either disable the controls on every game but the next unplayed one, or collapse the list to a single "next game" call to action with the rest shown as schedule. The data already supports it (games carry dates, the chunk range is ordered). Worth doing early: it's a prerequisite for anything that makes in-game state meaningful across a stretch, since carrying fatigue, injuries or in-game decisions between games is incoherent if games can be played out of order.
+- **Shipped -- chronological game order** (M1): a season is played in order. `StretchScreen` used to offer Sim and Watch on every game in the chunk at once, so a GM could resolve game 5 before game 2 or cherry-pick around a hard opponent. Only the earliest unplayed game of the run team's own is resolvable now; the rest render their controls disabled, so the schedule stays readable and the affordance stays visible rather than the rows looking inert. Kept as one derived function (`run/seasonChunks.ts`'s `nextPlayableGameId`) rather than a stored cursor -- nothing to keep in sync, and a save from before the rule, where a later game may already be played, resolves to whatever is earliest and unplayed rather than getting stuck. Enforced in `RunProvider` as well as in the UI so the invariant belongs to the state layer, not to a `disabled` attribute; deliberately *not* applied to `commitLiveGame`, since refusing to record a game the GM has already watched would lose real play rather than prevent anything. Worth having done early: fatigue, injuries and in-game coaching decisions all carry between games, and none of it means anything if the order is arbitrary.
 
 ---
 
@@ -257,7 +259,8 @@ Not part of the original phase plan. Watching a game happen, rather than only re
 - Simcast screen: live scoreboard and clock, running box score, on-court panel showing each player's slot, and the broadcast commentary feed narrating as it goes. Play/pause, speed multipliers, Skip to Final.
 - Games can be simmed instantly or watched call by call, per game, from the stretch screen.
 - **Overtime prompt** -- playback pauses at the start of each overtime period with score and clock frozen at the buzzer, so the GM gets a beat to notice it happened. Acknowledge to resume. The Q4 closing five carries over by default, which needed no engine change (rotation state already persisted across periods).
-- **Planned -- slower default pacing** (M1): `BASE_POSSESSION_MS` is 450, down from an original 900 -- the clock rewrite (Tier 7.6) roughly doubled the possessions in a game and the halving kept the same wall-clock feel. Current pacing runs a full game in about three minutes at 1x and reads as too fast. Fix is to raise the constant; the speed multipliers scale off it automatically. Pick the number by watching a game rather than by arithmetic, and consider whether the *default multiplier* should change instead, which would leave 1x meaning what it means today.
+- **Shipped -- slower default pacing** (M1): `BASE_POSSESSION_MS` is now 1500, up from the 450 the clock rewrite (Tier 7.6) had halved it to. Took two passes: restoring the original 900 fixed the arithmetic (the comment above it had claimed "about three minutes" while describing the pre-halving value) but still played faster than anyone actually reads. 1500 was set by feel rather than derived. At a measured ~219 possessions a game, 1x runs about 5m30s.
+- **Shipped -- slower speed options**: `PLAYBACK_SPEEDS` is now `[0.5, 0.75, 1, 2, 4, 16]`, ascending so the control row reads slowest-to-fastest. The slow end is deliberately generous -- 1x is meant to be reading speed, and that turned out slower than this screen originally shipped with, so the ladder extends past the default rather than bottoming out at it. Spans ~20 seconds (16x) to ~11 minutes (0.5x) a game. Verified by sampling the live feed in-browser at each step; measured ticks land within 1-2ms of intended.
 - **Idea, unscoped** -- live lineup editing during the overtime pause. Deliberately not built: injecting a GM's mid-game edit means threading a live mutable channel into what is otherwise a pure, seed-deterministic simulation -- the same `simulateGameSteps` that also runs every AI-vs-AI game with no UI attached. Folded into Tier 13, which has to solve that problem anyway.
 - **Deepens into Tier 7.7** -- the labeled-court-view simcast (`detailed-simcast.md`) renders the same possession log this tier already produces; it's an alternate presentation, not a replacement.
 
@@ -319,13 +322,17 @@ real time.
 ---
 
 ## Tier 8 — Run Conclusion
-**Planned -- Phase 10 -- scheduled M1**
+**Shipped -- Phase 10 (M1)**
 
-- Post-run summary screen powered by Hoop Sim's Coaching Insights engine, re-aimed from "what happened in this game" to "what actually got you fired" across the whole run.
-- **Decide the shape at M1, not later:** whether this screen is *screenshot-shaped* (a compact recap card a player would post -- stretches cleared, seasons survived, what got you fired) is nearly free while building it and a rewrite afterwards. See Parked, "Shareable run recap card." The sharing affordance itself can wait; the layout decision can't.
-- **Promoted to M1, the first milestone.** Section 1's fourth pillar calls commentary and insights "the emotional payoff of every run's ending," and Section 4 names the post-run summary specifically as that payoff. Right now the run just stops -- a roguelite whose ending is flat wastes everything that led to it, and it's the single biggest gap between what the design doc promises and what the build delivers.
-- Cheap for what it gives: `generateCoachingInsights` already reconstructs narratives from possession logs (fatigue substitutions, chart overrides) and already filters to the user's team and deduplicates across games. The work is aggregating across a whole run rather than a chunk, choosing which threads make a verdict, and a screen -- not new analysis machinery.
-- **Watch for:** possession logs are discarded after each chunk's insights are pulled (Tier 1.5), so a run-level summary can only be built from what was retained at the time. Decide early what to keep per chunk; retrofitting a longer retention window after the fact means the data simply isn't there for runs already in progress.
+Post-run epilogue: "what actually got you fired" across the whole run, replacing three lines of "you survived N seasons."
+
+- **This was the biggest gap between what the design doc promised and what the build delivered.** Section 1's fourth pillar calls commentary and insights "the emotional payoff of every run's ending," and the run just stopped.
+- **Built from retained standings, not Coaching Insights** -- and that turned out to be the right source rather than a compromise. Insights derive from possession logs, which are discarded as each chunk resolves (Tier 1.5), so nothing play-level survives to the end of a run. What does survive is `League.seasonHistory`: one row of final standings per completed season, kept deliberately for this. Insights explain a *game*; a run's ending is a question about *seasons*.
+- **Insights now survive the run too, in a small structured residue** (`run/runInsights.ts`). A few notable observations are kept per season as each chunk resolves, so the epilogue can say *how* the team kept losing rather than only that it did. Storage is bounded per season, not overall, so every season stays represented and growth is RUN_INSIGHTS_PER_SEASON x seasons played -- a rounding error beside the logs they came from.
+- **The arc is reconstructed by replaying the state machine.** Standings don't record which stretch a season belonged to, or what the bar was at the time, since the target tightens as stretches clear. Both are recoverable: the transitions are deterministic, so `run/runSummary.ts` replays `evaluateSeasonEnd` forward over the retained rows. Its tests drive the *real* state machine over the same fixtures rather than hand-setting run state, so the replay can't quietly drift from `runState.ts`.
+- Surfaces a per-season table (needed vs. finished, record, differential, cleared or missed by how many wins), a verdict line that reads differently depending on whether the run was ever close, run totals, and the build that produced it.
+- The **Needed** column shows the resolved rank, not the fraction it came from: "top 10%" of an eight-team league means 1st, and making the reader convert buries the point. Side by side with Finish, the escalation reads as a ladder -- 4th, 4th, 3rd, 2nd, 1st.
+- **Still open -- make it screenshot-shaped.** See Parked, "Shareable run recap card." The layout is now set, so this is no longer free; it's a compact-recap variant of a screen that exists rather than a decision to make while building it. Cheaper than a rewrite, dearer than it would have been.
 
 ---
 
@@ -355,8 +362,8 @@ Tiers 11-13 below were added after this one and are gameplay work, so despite th
 
 Deepening what the possession model actually tracks. **Both items below change `PossessionLogEntry`'s shape, which invalidates existing saves with no migration path** -- `isValidBundleShape` rejects rather than migrates, deliberately, on the grounds that nothing has shipped. That's still true, so this is the cheap moment, and it stops being cheap the day there are real players with real runs. Treat them as one unit of work.
 
-- **Rebounds during the sim** (M1) -- **Planned**: the simulation currently decides *which side* got the board and records a single boolean, because that's all it needed (the boolean is what decides whether possession flips). **Which player** grabbed it is settled much later, in `deriveBoxScore`, by a weighted pick over the five on the floor -- deliberately, per that file's own comment: "nothing upstream needed to know." Consequence is that the rebounder is invisible to everything happening during the game: it can't be narrated as it happens, can't feed defensive stats below, and can't influence anything later in the possession. It also consumes rng *outside* the sim loop, a subtle determinism seam. Fix is to move the pick into `simulateGameSteps` and record the rebounder's id on the log entry -- mostly a relocation, since the weighting already exists. Afterwards, check whether `deriveBoxScore` still needs its `rng` parameter; dropping it would make box-score derivation a pure function of the log.
-- **Defensive stats** (M1) -- **Planned**: there is currently *no* defensive attribution at all. Every stat on `PlayerBoxScoreLine` is an offensive player's credit -- even `fouls`, which counts fouls **drawn** by the offensive player, not personal fouls committed by a defender. The gap is upstream of the box score, in the outcome model: `PossessionOutcome` is `make | miss | turnover | foul`, so a turnover has no stealer and a miss has no blocker, and the defense's whole contribution is one aggregate resistance number never attributed to a person. Work is to split those outcomes by cause (live-ball steal vs. unforced error; block vs. ordinary miss), pick which defender gets it (the matchup pairing already knows who was guarding whom, so there's a real answer rather than a roster-wide roll), then widen the box-score line and tables. **Decide first:** whether this includes personal fouls *committed*. It's the natural companion, but it drags in foul trouble and foul-outs -- reasonable to stop at steals and blocks and let Tier 14 pick fouls up, as long as that's a decision rather than an oversight.
+- **Shipped -- rebounds during the sim** (M1): `PossessionLogEntry.rebounderId` is set when the miss resolves, using `pickRebounder` -- which already existed in `possession/rebound.ts`, exported and entirely unused. Two things fell out of it: `deriveBoxScore` is now a pure function of the log (it took an `Rng` only for this roll, and no longer needs `playersById` either), and the simcast shows **real rebounds live** -- `LiveBoxScoreLine` was `Omit<PlayerBoxScoreLine, 'rebounds'>` and the REB column rendered a dash for the whole game.
+- **Shipped -- defensive stats** (M1): steals and blocks, as attribution fields (`stolenById` / `blockedById`) rather than new outcomes -- a steal is still a turnover and a blocked shot is still a miss, with the same attempt and the same rebound, so no existing branch changed. Both are decided *after* the outcome roll, which means turnover and make/miss rates are untouched by their existence and can be tuned independently. Credit goes to the matchup defender the possession already identified. Measured over 160 games: 5.8 steals and 4.3 blocks a team a game, blocks at 4.9% of attempts against a real ~5%. Steals run light because the engine's turnover rate itself is light (~10.4 against a real ~13.5) -- inherited, not introduced, and the fix belongs in `TURNOVER_BASE_PROB`. **Deliberately stopped short of personal fouls committed**, which would drag in foul trouble and foul-outs: that stays Tier 14.
 
 ---
 
@@ -570,7 +577,7 @@ Recorded so they stay decided rather than getting relitigated:
 |---|---|---|---|
 | 0 | Core simulation | Shipped | — |
 | 1 | Run structure (target/fired/escalate) | Shipped / difficulty pass planned | M2 |
-| 1.5 | Season chunking (checkpoints + mid-season rotation/focus decisions) | Shipped / chronological order planned | M1 |
+| 1.5 | Season chunking (checkpoints + mid-season rotation/focus decisions) | Shipped | — |
 | 2 | Playable UI loop | Shipped | — |
 | 3 | Imposed variation (quirks/rules/wildcards/market) | Shipped | — |
 | 4 | Drafted variation | Shipped | — |
@@ -578,13 +585,13 @@ Recorded so they stay decided rather than getting relitigated:
 | 6 | Systems & synergy | Shipped | — |
 | 6.5 | Player roles & team specializations | Idea, unscoped | — |
 | 7 | Shop, camps, upgrades, consumables | Shipped | — |
-| 7.5 | Live playback (simcast) | Shipped / slower pacing planned | M1 |
+| 7.5 | Live playback (simcast) | Shipped (incl. M1 pacing + 0.75x) | — |
 | 7.6 | Rotation charts & lineup control | Shipped / tuning + paint mode planned | M3, M7 |
 | 7.7 | Detailed simcast (labeled court view, player/ball movement) | Planned, unscheduled | after Tier 13 |
-| 8 | Run-end summary | Planned | **M1** |
+| 8 | Run-end summary | Shipped | — |
 | 9 | Leaderboard / unlocks | Planned / Idea | post-launch |
 | 10 | itch.io → Electron → Steam | Planned | M7 |
-| 11 | Simulation fidelity (defensive stats, in-sim rebounds) | Planned | **M1** |
+| 11 | Simulation fidelity (defensive stats, in-sim rebounds) | Shipped | — |
 | 12 | Season structure (league config, playoffs, expectations) | Planned | M4, M5 |
 | 13 | In-game decisions (timeouts, subs, schemes, matchups) | Planned | M3, M6 |
 | 14 | Risk & attrition (injuries, foul trouble) | Planned, needs design | M5 |

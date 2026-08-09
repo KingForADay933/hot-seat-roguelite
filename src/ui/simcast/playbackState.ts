@@ -6,14 +6,16 @@ import { fatigueGainPerSecond, fatigueRecoveryPerSecond } from '../../engine/rot
 import { formatGameClock, getPeriodLabel, type SimulationStep } from '../../engine/simulateGame'
 
 /**
- * A running box-score line. Every counting stat the possession log determines on its own -- which is
- * all of them except rebounds, the one stat deriveBoxScore rolls for (there's no live rebound model,
- * so it approximates them post-hoc from the shot's on-court fives). Showing a rebound count here
- * would mean either re-rolling it every possession, which flickers, or inventing one that disagrees
- * with the official box score at the buzzer. The simcast shows neither and swaps to the real
- * BoxScoreTable once the game ends.
+ * A running box-score line. Now every counting stat the official box score has, because the
+ * possession log determines all of them.
+ *
+ * Rebounds used to be the exception: the rebounder was rolled inside deriveBoxScore after the game,
+ * so showing one live meant either re-rolling every possession (which flickers) or inventing a
+ * number that disagreed with the official table at the buzzer. The simulation settles the rebounder
+ * when the miss happens now, so the live tally and the final table are the same arithmetic over the
+ * same log and agree by construction.
  */
-export type LiveBoxScoreLine = Omit<PlayerBoxScoreLine, 'rebounds'>
+export type LiveBoxScoreLine = PlayerBoxScoreLine
 
 export interface FeedEntry {
   possessionNumber: number
@@ -74,6 +76,9 @@ function emptyLine(playerId: PlayerId): LiveBoxScoreLine {
     freeThrowsMade: 0,
     freeThrowsAttempted: 0,
     assists: 0,
+    rebounds: 0,
+    steals: 0,
+    blocks: 0,
     turnovers: 0,
     fouls: 0,
     minutesPlayed: 0,
@@ -178,8 +183,11 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
       line.fieldGoalsAttempted += 1
       if (entry.isThreePointAttempt) line.threePointersAttempted += 1
     })
+    if (entry.rebounderId) bump(entry.rebounderId, (line) => (line.rebounds += 1))
+    if (entry.blockedById) bump(entry.blockedById, (line) => (line.blocks += 1))
   } else if (entry.outcome === 'turnover') {
     bump(entry.primaryPlayerId, (line) => (line.turnovers += 1))
+    if (entry.stolenById) bump(entry.stolenById, (line) => (line.steals += 1))
   } else if (entry.outcome === 'foul') {
     // Same attribution deriveBoxScore uses: the whistle lands on the offensive player who drew it,
     // since there's no defensive foul model. The free throws it produced do score.

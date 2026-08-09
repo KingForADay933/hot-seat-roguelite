@@ -2,10 +2,9 @@ import type { Player, PlayerId } from '../../data/types'
 import type { LiveBoxScoreLine } from './playbackState'
 
 /**
- * The running box score for one team. Mirrors BoxScoreTable's columns except REB, which the
- * possession log can't determine mid-game (see LiveBoxScoreLine) -- the column stays in place,
- * dashed, so the swap to the real box score at the buzzer doesn't shift the table underneath the
- * GM's eyes.
+ * The running box score for one team. Mirrors BoxScoreTable's columns exactly, REB included --
+ * every stat here is one the possession log determines, so the swap to the official box score at
+ * the buzzer changes nothing but the heading above it.
  */
 export function LiveBoxScore({
   roster,
@@ -32,6 +31,8 @@ export function LiveBoxScore({
             <th className="numeric">FT</th>
             <th className="numeric">AST</th>
             <th className="numeric">REB</th>
+            <th className="numeric">STL</th>
+            <th className="numeric">BLK</th>
             <th className="numeric">TO</th>
             <th className="numeric">PF</th>
           </tr>
@@ -52,9 +53,9 @@ export function LiveBoxScore({
                 {line.freeThrowsMade}-{line.freeThrowsAttempted}
               </td>
               <td className="numeric">{line.assists}</td>
-              <td className="numeric" title="Rebounds are attributed once the game ends">
-                —
-              </td>
+              <td className="numeric">{line.rebounds}</td>
+              <td className="numeric">{line.steals}</td>
+              <td className="numeric">{line.blocks}</td>
               <td className="numeric">{line.turnovers}</td>
               <td className="numeric">{line.fouls}</td>
             </tr>

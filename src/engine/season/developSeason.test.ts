@@ -16,6 +16,9 @@ function makeLine(playerId: string, minutesPlayed: number): PlayerBoxScoreLine {
     freeThrowsAttempted: 0,
     assists: 0,
     rebounds: 0,
+    steals: 0,
+
+    blocks: 0,
     turnovers: 0,
     fouls: 0,
     minutesPlayed,

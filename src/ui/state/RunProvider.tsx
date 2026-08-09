@@ -9,7 +9,7 @@ import { beginSeason } from '../../run/beginSeason'
 import { createChunkSimContext } from '../../run/chunkSimContext'
 import { finalizeChunk } from '../../run/finalizeChunk'
 import { resolveGame } from '../../run/resolveGame'
-import { chunkRange } from '../../run/seasonChunks'
+import { chunkRange, nextPlayableGameId } from '../../run/seasonChunks'
 import { applyCoachingUpgrade, computeSynergyUpgradeBonus, pickCoachingUpgradeOffers, type CoachingUpgradeId } from '../../run/coachingUpgrades'
 import {
   COACHING_UPGRADE_COST,
@@ -27,6 +27,7 @@ import {
 import { pickConsumableOffers, type ConsumableId } from '../../run/consumables'
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { clampToPositionBudget } from '../../run/minutesBudget'
+import { recordChunkInsights } from '../../run/runInsights'
 import { createRun } from '../../run/runState'
 import { applyPlayerCamp, applyTeamCamp, openShopVisit, type ShopTier } from '../../run/shop'
 import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
@@ -162,6 +163,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
         lastBudgetEarned: 0,
         shop: null,
         lastChunkInsights: [],
+        runInsights: [],
         stretchInProgress: false,
         pendingChunkInsights: [],
       }
@@ -190,6 +192,9 @@ export function RunProvider({ children }: { children: ReactNode }) {
       lastWildcardEvent: result.wildcardEvent,
       shop: null,
       lastChunkInsights: result.chunkInsights,
+      // Stamped with the season these games belonged to -- bundle.league.seasonNumber, before the
+      // chunk was finalized, since a season's last chunk rolls that number forward.
+      runInsights: recordChunkInsights(bundle.runInsights, result.chunkInsights, bundle.league.seasonNumber, bundle.run.teamId),
       // The batch path skips the stretch screen entirely, so it never opens a stretch to close.
       stretchInProgress: false,
       pendingChunkInsights: [],
@@ -274,14 +279,30 @@ export function RunProvider({ children }: { children: ReactNode }) {
     return index !== -1 && !forBundle.games[index].isPlayed ? index : -1
   }, [])
 
+  /**
+   * Same, but also requires the game to be the one due next in the chunk -- the ordering rule the
+   * stretch screen enforces visually (run/seasonChunks.ts's nextPlayableGameId).
+   *
+   * Enforced here as well so the invariant belongs to the state layer rather than to a disabled
+   * attribute. Deliberately *not* applied to commitLiveGame: by then the GM has already watched the
+   * game, and refusing to record it would lose real play rather than prevent anything.
+   */
+  const startableGameIndex = useCallback(
+    (forBundle: RunBundle, gameId: GameId): number => {
+      if (nextPlayableGameId(forBundle.games, forBundle.run.chunkInSeason, forBundle.run.teamId) !== gameId) return -1
+      return unplayedGameIndex(forBundle, gameId)
+    },
+    [unplayedGameIndex],
+  )
+
   const simGame = useCallback(
     async (gameId: GameId) => {
       if (!bundle?.stretchInProgress) return
-      const index = unplayedGameIndex(bundle, gameId)
+      const index = startableGameIndex(bundle, gameId)
       if (index === -1) return
       await applyResolvedGame(bundle, index)
     },
-    [bundle, applyResolvedGame, unplayedGameIndex],
+    [bundle, applyResolvedGame, startableGameIndex],
   )
 
   /**
@@ -294,14 +315,14 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const watchGame = useCallback(
     (gameId: GameId) => {
       if (!bundle?.stretchInProgress) return
-      const index = unplayedGameIndex(bundle, gameId)
+      const index = startableGameIndex(bundle, gameId)
       if (index === -1) return
       setLiveGame({
         game: bundle.games[index],
         context: createChunkSimContext(bundle.run, bundle.league, bundle.teams, bundle.players),
       })
     },
-    [bundle, unplayedGameIndex],
+    [bundle, startableGameIndex],
   )
 
   const commitLiveGame = useCallback(
@@ -351,6 +372,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
       lastWildcardEvent: bundle.lastWildcardEvent,
       shop: null,
       lastChunkInsights: outcome.chunkInsights,
+      // Same stamping as the batch path: `league` here is the pre-finalize bundle value.
+      runInsights: recordChunkInsights(bundle.runInsights, outcome.chunkInsights, league.seasonNumber, run.teamId),
       stretchInProgress: false,
       pendingChunkInsights: [],
     }

@@ -139,8 +139,23 @@ describe('simulateGame', () => {
     // and a foul stops play for free throws.
     expect(offensiveRebounds.every((e) => e.outcome === 'miss')).toBe(true)
 
-    const secondChances = game.possessionLog.filter((e) => e.isSecondChance)
-    expect(secondChances.length).toBe(offensiveRebounds.length)
+    const log = game.possessionLog
+    const secondChances = log.filter((e) => e.isSecondChance)
+
+    // Every second chance is the possession right after an offensive rebound in the same period.
+    log.forEach((entry, i) => {
+      if (!entry.isSecondChance) return
+      const previous = log[i - 1]
+      expect(previous, `possession ${entry.possessionNumber} has no predecessor`).toBeDefined()
+      expect(previous.offensiveRebound).toBe(true)
+      expect(previous.period).toBe(entry.period)
+    })
+
+    // And every offensive rebound produces one -- except a board on a period's final possession,
+    // where the buzzer goes before the putback can happen. isSecondChance resets each period, so
+    // those boards are real but simply have no follow-up trip.
+    const boardsWithTimeLeft = log.filter((entry, i) => entry.offensiveRebound && log[i + 1]?.period === entry.period)
+    expect(secondChances.length).toBe(boardsWithTimeLeft.length)
     // A putback is a shot already under the rim, not a fresh trip, so it costs far less clock.
     const putbackMean = secondChances.reduce((sum, e) => sum + e.durationSeconds, 0) / secondChances.length
     const tripMean =
@@ -358,5 +373,50 @@ describe('rollJumpBall', () => {
     expect(rollJumpBall(() => 0.49)).toBe(true)
     expect(rollJumpBall(() => 0.5)).toBe(false)
     expect(rollJumpBall(() => 0.99)).toBe(false)
+  })
+})
+
+describe('rebound attribution', () => {
+  it('names a rebounder on every miss, from the five that actually kept the ball', () => {
+    const { home, away, playersById } = buildMatchup(31)
+    const played = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(31))
+
+    let misses = 0
+    let offensiveBoards = 0
+    for (const entry of played.possessionLog) {
+      if (entry.outcome !== 'miss') {
+        // A make is inbounded, a turnover hands it over, a shooting foul stops play -- no board.
+        expect(entry.rebounderId, `possession ${entry.possessionNumber} (${entry.outcome})`).toBeNull()
+        continue
+      }
+
+      misses += 1
+      expect(entry.rebounderId, `possession ${entry.possessionNumber}`).not.toBeNull()
+
+      // The rebounder must be on the floor for the side that kept the ball: the offense when they
+      // got their own board, the defense otherwise.
+      const offenseIsHome = entry.offenseTeamId === home.id
+      const keptByHome = entry.offensiveRebound ? offenseIsHome : !offenseIsHome
+      const expectedFive = keptByHome ? entry.homeOnCourt : entry.awayOnCourt
+      expect(expectedFive.map((r) => r.playerId)).toContain(entry.rebounderId)
+
+      if (entry.offensiveRebound) offensiveBoards += 1
+    }
+
+    // Guards the loop against passing vacuously on a log with no misses, and confirms both branches
+    // are exercised rather than only the defensive-rebound one.
+    expect(misses).toBeGreaterThan(20)
+    expect(offensiveBoards).toBeGreaterThan(0)
+    expect(offensiveBoards).toBeLessThan(misses)
+  })
+
+  it('agrees with the box score: total rebounds equal the number of misses', () => {
+    const { home, away, playersById } = buildMatchup(32)
+    const played = simulateGame(emptyGame(home.id, away.id), home, away, playersById, 200, createSeededRng(32))
+
+    const misses = played.possessionLog.filter((e) => e.outcome === 'miss').length
+    const credited = [...played.result!.boxScore.home, ...played.result!.boxScore.away].reduce((sum, l) => sum + l.rebounds, 0)
+
+    expect(credited).toBe(misses)
   })
 })

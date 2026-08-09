@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { GameId } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { SEASON_CHUNK_COUNT } from '../../run/constants'
-import { runTeamChunkGames } from '../../run/seasonChunks'
+import { nextPlayableGameId, runTeamChunkGames } from '../../run/seasonChunks'
 import { BoxScoreTable } from '../components/BoxScoreTable'
 import { GameListItem } from '../components/GameListItem'
 
@@ -35,6 +35,8 @@ export function StretchScreen({
   const stretchGames = runTeamChunkGames(games, run.chunkInSeason, run.teamId)
   const playedCount = stretchGames.filter((g) => g.isPlayed).length
   const allPlayed = playedCount === stretchGames.length
+  // Only the earliest unplayed game is resolvable; the rest of the chunk is schedule, not a menu.
+  const nextGameId = nextPlayableGameId(games, run.chunkInSeason, run.teamId)
 
   const openGame = stretchGames.find((g) => g.id === openBoxScoreId)
   const openResult = openGame?.result
@@ -48,7 +50,8 @@ export function StretchScreen({
         {team.city} {team.name} -- Season {run.seasonInStretch} of {run.seasonsPerStretch}, Stretch {run.stretchNumber} of the run.
       </p>
       <p>
-        {playedCount} of {stretchGames.length} games played. Sim one to get the result, or watch it play out call by call.
+        {playedCount} of {stretchGames.length} games played. They play in order -- sim the next one for the result, or watch it
+        call by call.
       </p>
 
       <div className="table-scroll">
@@ -68,6 +71,7 @@ export function StretchScreen({
                 homeTeam={teams.find((t) => t.id === game.homeTeamId)}
                 awayTeam={teams.find((t) => t.id === game.awayTeamId)}
                 userTeamId={run.teamId}
+                canPlay={game.id === nextGameId}
                 onSim={() => onSimGame(game.id)}
                 onWatchLive={() => onWatchGame(game.id)}
                 onViewBoxScore={() => setOpenBoxScoreId((current) => (current === game.id ? null : game.id))}

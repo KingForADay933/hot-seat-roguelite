@@ -235,3 +235,18 @@ export const ENERGY_DRINK_SPONSORSHIP_BUDGET_BONUS = 150
  *  splitting a span in two -- keeps a slot's timeline from collapsing into slivers too thin to
  *  read or to matter to the sim (a few seconds of "on court" isn't a real substitution decision). */
 export const MIN_ROTATION_SEGMENT_SECONDS = 60
+
+// --- Run-long Coaching Insights (Tier 8's epilogue) ---
+
+/** Notable insights kept per season for the fired epilogue (run/runInsights.ts). Three is enough to
+ *  characterise a season without the screen becoming a log -- and capping per season rather than
+ *  overall bounds total growth at this x seasons played while keeping every season represented.
+ *  A season's worth is a few short strings, negligible beside the possession logs they came from. */
+export const RUN_INSIGHTS_PER_SEASON = 3
+
+/** How many stretches a *routine* fatigue substitution has to span before the epilogue reports it.
+ *  One player pulled tired once is the rotation working; the same player pulled tired in half the
+ *  season's stretches is a thin bench or minutes set too high, which is worth saying out loud.
+ *  Structural insights (chart overrides, weak-link targeting) have no such bar -- one is already a
+ *  problem. */
+export const RUN_INSIGHT_MIN_ROUTINE_OCCURRENCES = 2

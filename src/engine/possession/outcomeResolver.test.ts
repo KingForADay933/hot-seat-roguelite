@@ -37,8 +37,10 @@ const NOT_CLUTCH = { clockSecondsRemaining: 700, isFinalPeriod: false, scoreMarg
 
 describe('resolvePossession', () => {
   it('resolves a turnover before ever rolling for a shot outcome', () => {
-    // default players -> turnoverProb = 0.1; 0.01 triggers it. A second rng() call would throw.
-    const rng = queueThenThrowIfCalledAgain(0.01)
+    // default players -> turnoverProb = 0.1; 0.01 triggers it. Exactly two rolls are allowed: the
+    // turnover itself, then whether a defender forced it. A *third* would mean the possession went
+    // on to roll a shot, which a turnover must never do.
+    const rng = queueThenThrowIfCalledAgain(0.01, 0.99)
     const result = resolvePossession(
       'isolation',
       selectionFor(),
@@ -49,7 +51,8 @@ describe('resolvePossession', () => {
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'turnover', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0 })
+    // 0.99 is above any stealShare, so this one is unforced -- nobody to credit.
+    expect(result).toEqual({ outcome: 'turnover', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0, stolenById: null, blockedById: null })
   })
 
   it('resolves a make with 3 points when isOutsideShotAction is true', () => {
@@ -65,7 +68,7 @@ describe('resolvePossession', () => {
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'make', pointsScored: 3, freeThrowsMade: 0, freeThrowsAttempted: 0 })
+    expect(result).toMatchObject({ outcome: 'make', pointsScored: 3, freeThrowsMade: 0, freeThrowsAttempted: 0 })
   })
 
   it('resolves a make with 2 points when isOutsideShotAction is false', () => {
@@ -80,7 +83,7 @@ describe('resolvePossession', () => {
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'make', pointsScored: 2, freeThrowsMade: 0, freeThrowsAttempted: 0 })
+    expect(result).toMatchObject({ outcome: 'make', pointsScored: 2, freeThrowsMade: 0, freeThrowsAttempted: 0 })
   })
 
   it('resolves a miss when both the make roll and foul roll fail', () => {
@@ -96,7 +99,7 @@ describe('resolvePossession', () => {
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'miss', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0 })
+    expect(result).toMatchObject({ outcome: 'miss', pointsScored: 0, freeThrowsMade: 0, freeThrowsAttempted: 0 })
   })
 
   it('resolves a foul when the make roll fails but the foul roll succeeds, then shoots the free throws', () => {
@@ -113,7 +116,7 @@ describe('resolvePossession', () => {
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'foul', pointsScored: 2, freeThrowsMade: 2, freeThrowsAttempted: 3 })
+    expect(result).toMatchObject({ outcome: 'foul', pointsScored: 2, freeThrowsMade: 2, freeThrowsAttempted: 3 })
   })
 
   it('awards two free throws when the foul came on a two-point attempt', () => {
@@ -128,7 +131,7 @@ describe('resolvePossession', () => {
       NOT_CLUTCH.scoreMargin,
       rng,
     )
-    expect(result).toEqual({ outcome: 'foul', pointsScored: 2, freeThrowsMade: 2, freeThrowsAttempted: 2 })
+    expect(result).toMatchObject({ outcome: 'foul', pointsScored: 2, freeThrowsMade: 2, freeThrowsAttempted: 2 })
   })
 
   it('shoots free throws off Outside Shot, so a poor shooter converts fewer', () => {

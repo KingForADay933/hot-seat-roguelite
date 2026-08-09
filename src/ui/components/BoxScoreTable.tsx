@@ -1,4 +1,5 @@
 import type { Player, PlayerBoxScoreLine } from '../../data/types'
+import { PlayerName } from './PlayerName'
 
 export function BoxScoreTable({ lines, players }: { lines: PlayerBoxScoreLine[]; players: Player[] }) {
   const playerById = new Map(players.map((p) => [p.id, p]))
@@ -16,6 +17,8 @@ export function BoxScoreTable({ lines, players }: { lines: PlayerBoxScoreLine[];
           <th className="numeric">FT</th>
           <th className="numeric">AST</th>
           <th className="numeric">REB</th>
+          <th className="numeric">STL</th>
+          <th className="numeric">BLK</th>
           <th className="numeric">TO</th>
           <th className="numeric">PF</th>
         </tr>
@@ -23,7 +26,9 @@ export function BoxScoreTable({ lines, players }: { lines: PlayerBoxScoreLine[];
       <tbody>
         {sortedLines.map((line) => (
           <tr key={line.playerId}>
-            <td>{playerById.get(line.playerId)?.name ?? line.playerId}</td>
+            <td>
+              <PlayerName playerId={line.playerId} name={playerById.get(line.playerId)?.name ?? line.playerId} />
+            </td>
             <td className="numeric">{Math.round(line.minutesPlayed)}</td>
             <td className="numeric">{line.points}</td>
             <td className="numeric">
@@ -37,6 +42,8 @@ export function BoxScoreTable({ lines, players }: { lines: PlayerBoxScoreLine[];
             </td>
             <td className="numeric">{line.assists}</td>
             <td className="numeric">{line.rebounds}</td>
+            <td className="numeric">{line.steals}</td>
+            <td className="numeric">{line.blocks}</td>
             <td className="numeric">{line.turnovers}</td>
             <td className="numeric">{line.fouls}</td>
           </tr>
