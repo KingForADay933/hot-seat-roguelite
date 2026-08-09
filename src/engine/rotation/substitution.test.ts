@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest'
-import type { Player, PlayerId, Team } from '../../data/types'
+import type { Player, PlayerId, Position, Team } from '../../data/types'
 import { makeTestPlayer, makeTestTeam } from '../testFixtures'
 import {
   FATIGUE_EMERGENCY_THRESHOLD,
@@ -281,6 +281,109 @@ describe('checkSubstitutions', () => {
       checkSubstitutions(state, team, [], playersById, MIN_SHIFT_SECONDS + 1, 1, MIN_SHIFT_SECONDS + 1)
 
       expect(state.onCourt[0].player).toBe(bench) // reached the same way, but via the heuristic, not the chart
+    })
+
+    /**
+     * The editor flags a double-booked chart in red but doesn't block saving one, so an
+     * unsatisfiable plan reaches the engine intact. Honoring it slot-by-slot used to seat one
+     * player twice: four bodies on the floor, and deriveBoxScore counting the duplicate's minutes
+     * once per slot -- which then flowed into season development.
+     */
+    describe('with an unsatisfiable chart', () => {
+      /** A full five, each at their own position, plus a rested bench player per given position. */
+      function buildFiveFixture(benchPositions: Position[] = [], benchFatigue = 0) {
+        const five = (['PG', 'SG', 'SF', 'PF', 'C'] as Position[]).map((position) =>
+          makeTestPlayer({ positions: [position], name: position }),
+        )
+        const substitutes = benchPositions.map((position) => makeTestPlayer({ positions: [position], name: `Bench${position}` }))
+        const roster = [...five, ...substitutes]
+
+        const team = makeTestTeam({
+          rosterPlayerIds: roster.map((p) => p.id),
+          startingFive: five.map((p) => p.id),
+          rotationMinutes: Object.fromEntries(roster.map((p) => [p.id, 24])),
+        })
+        const playersById = new Map<PlayerId, Player>(roster.map((p) => [p.id, p]))
+        const state: RotationState = {
+          onCourt: slotByPosition(five),
+          fatigue: new Map(roster.map((p) => [p.id, substitutes.includes(p) ? benchFatigue : 0])),
+          secondsPlayed: new Map(roster.map((p) => [p.id, 0])),
+          shiftEnteredAtSeconds: new Map(five.map((p) => [p.id, 0])),
+        }
+
+        const [pg, sg] = five
+        return { five, pg, sg, substitutes, roster, team, playersById, state }
+      }
+
+      const wholePeriod = (playerId: PlayerId) => [
+        { startSeconds: 0, endSeconds: 720, fill: { kind: 'player' as const, playerId } },
+      ]
+
+      it('seats a player charted into two slots at once only once, leaving the losing slot to the heuristic', () => {
+        const { pg, sg, team, playersById, state } = buildFiveFixture()
+        team.rotationPlan = { 1: { PG: wholePeriod(pg.id), SG: wholePeriod(pg.id) } }
+
+        checkSubstitutions(state, team, [], playersById, 100, 1, 100)
+
+        const onCourtIds = state.onCourt.map((entry) => entry.player.id)
+        expect(new Set(onCourtIds).size).toBe(5) // five real bodies, not four and a duplicate
+        // The first slot to ask for him in POSITION_ORDER wins; SG falls through to the heuristic,
+        // which has no reason to move its perfectly rested incumbent.
+        expect(state.onCourt[0].player).toBe(pg)
+        expect(state.onCourt[1].player).toBe(sg)
+      })
+
+      it('refills a slot whose occupant an earlier charted slot took', () => {
+        const { pg, sg, substitutes, team, playersById, state } = buildFiveFixture(['SG'])
+        // The native SG is charted into the PG slot, and nothing is charted at SG -- so the SG slot
+        // is vacated mid-loop and has to be refilled even though its (departed) occupant was rested.
+        team.rotationPlan = { 1: { PG: wholePeriod(sg.id) } }
+
+        checkSubstitutions(state, team, [], playersById, 100, 1, 100)
+
+        const onCourtIds = state.onCourt.map((entry) => entry.player.id)
+        expect(new Set(onCourtIds).size).toBe(5)
+        expect(state.onCourt[0].player).toBe(sg) // chart honored
+        expect(state.onCourt[1].player).toBe(substitutes[0]) // vacated slot backfilled from the bench
+        expect(onCourtIds).not.toContain(pg.id) // the charted slot's own incumbent is the one who sits
+      })
+
+      it('backfills a vacated slot from a tired bench player rather than leaving the five short', () => {
+        // The only same-position substitute is past FATIGUE_SUB_IN_MAX, so an ordinary sub would
+        // decline him and leave the outgoing player in -- not an option here, since that player is
+        // already standing in another slot.
+        const { sg, substitutes, team, playersById, state } = buildFiveFixture(['SG'], FATIGUE_SUB_IN_MAX + 1)
+        team.rotationPlan = { 1: { PG: wholePeriod(sg.id) } }
+
+        checkSubstitutions(state, team, [], playersById, 100, 1, 100)
+
+        expect(new Set(state.onCourt.map((entry) => entry.player.id)).size).toBe(5)
+        expect(state.onCourt[1].player).toBe(substitutes[0])
+      })
+
+      it('lets a second slot have a charted player the first slot declined on emergency fatigue', () => {
+        // Phase H's deviation and the double-book guard have to compose: an exhausted charted player
+        // isn't seated at PG, and that non-assignment must not count as claiming him against SG.
+        const { pg, team, playersById, state } = buildFiveFixture(['PG'])
+        state.fatigue.set(pg.id, FATIGUE_EMERGENCY_THRESHOLD)
+        team.rotationPlan = { 1: { PG: wholePeriod(pg.id), SG: wholePeriod(pg.id) } }
+
+        checkSubstitutions(state, team, [], playersById, 500, 1, 500)
+
+        // Neither slot seats him -- SG's claim is refused on the same exhaustion, not on the
+        // double-book -- and the five stays five.
+        expect(new Set(state.onCourt.map((entry) => entry.player.id)).size).toBe(5)
+        expect(state.onCourt.map((entry) => entry.player.id)).not.toContain(pg.id)
+      })
+
+      it('ignores a charted player who is not on this roster', () => {
+        const { five, team, playersById, state } = buildFiveFixture()
+        team.rotationPlan = { 1: { PG: wholePeriod('no-such-player') } }
+
+        checkSubstitutions(state, team, [], playersById, 100, 1, 100)
+
+        expect(state.onCourt.map((entry) => entry.player)).toEqual(five)
+      })
     })
 
     it('does not touch a slot whose charted occupant is already correct', () => {
