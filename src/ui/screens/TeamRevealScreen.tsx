@@ -113,8 +113,8 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
     playbook: OFFENSIVE_PLAYBOOKS[id],
     // In locked mode the team's stored synergyScore is authoritative -- camps and coaching
     // upgrades push it above the raw roster-fit number, so recomputing would understate it.
-    synergy: props.mode === 'locked' ? team.synergyScore : computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[id], roster, team.rotationMinutes),
-    breakdown: computeSystemFitBreakdown(OFFENSIVE_PLAYBOOKS[id], roster, team.rotationMinutes),
+    synergy: props.mode === 'locked' ? team.synergyScore : computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[id], roster, team),
+    breakdown: computeSystemFitBreakdown(OFFENSIVE_PLAYBOOKS[id], roster, team),
   }))
 
   // Locked mode has to name the team's system explicitly rather than lean on `pick`: React reuses
@@ -125,7 +125,7 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
   // Touch projections only for the highlighted system -- computing them for every candidate would
   // be four passes over the roster to display three numbers nobody asked for.
   const usageShares = highlightedSystemId
-    ? computeProjectedUsageShares(OFFENSIVE_PLAYBOOKS[highlightedSystemId], roster, team.rotationMinutes)
+    ? computeProjectedUsageShares(OFFENSIVE_PLAYBOOKS[highlightedSystemId], roster, team)
     : null
 
   const systemFitsFor = (player: Player): SystemFitEntry[] =>

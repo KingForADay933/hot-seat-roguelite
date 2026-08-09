@@ -16,10 +16,10 @@ import { POSITION_ORDER, type OnCourtPlayer } from './matchup'
 
 /**
  * Out-of-position penalty and its derived Positionless/Specialist quirks (rotation-charts.md
- * Section 4, Decision 2). Nothing here is reachable yet through real gameplay -- every on-court five
- * is still slot-assigned from each player's own positions[0] (matchup.ts's slotByPosition), so
- * `effectivePlayer` is a no-op today. It exists so the mechanism is in place, tested, and wired into
- * the simulation before Phase F/G give a GM any way to actually chart a mismatch.
+ * Section 4, Decision 2). Live whenever a GM's rotation chart puts someone in a slot that isn't
+ * their own position; `effectivePlayer` stays a no-op for everyone else, which is every player on
+ * an AI team and every player on an un-charted user team (matchup.ts's slotByPosition assigns each
+ * of them the slot their positions[0] already names).
  */
 
 /** Attributes an interior slot (C, and to a lesser extent PF) leans on. */

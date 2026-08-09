@@ -1,9 +1,11 @@
 import { OFFENSIVE_PLAYBOOKS, type OffensivePlaybook, type SystemId } from '../../data/presets'
-import type { Player, PlayerId, PlayCallType } from '../../data/types'
+import type { Player, PlayerId, PlayCallType, Team } from '../../data/types'
 import { SYNERGY_NEUTRAL, USAGE_WEIGHT_EXPONENT } from '../../engine/constants'
 import { clamp } from '../../engine/math'
 import type { Rng } from '../../engine/rng'
 import { SYNERGY_AFFINITY_AMPLIFICATION, SYNERGY_SCORE_CEILING, SYNERGY_SCORE_FLOOR } from '../constants'
+import { POSITION_MINUTES_BUDGET } from '../minutesBudget'
+import { chartedMinutes, hasAnyChartedSegment } from '../rotationChart'
 import { pickDistinct } from './draftPool'
 import { ALL_PLAY_CALLS, PLAY_CALL_MODELS, type PossessionRole } from './possessionRoles'
 
@@ -11,13 +13,50 @@ export function pickRandomSystems(count: number, rng: Rng): SystemId[] {
   return pickDistinct(Object.keys(OFFENSIVE_PLAYBOOKS) as SystemId[], count, rng)
 }
 
-/** Availability weight per player: share of the game he's on the floor for. The engine selects
- *  from the on-court five; approximating that as "minutes-weighted over the whole roster" is what
- *  lets a bench specialist still pick up some of the touches he's suited to, in proportion to how
- *  much he plays. Falls back to counting everyone equally when minutes are unknown or all zero. */
-function availability(roster: Player[], rotationMinutes?: Record<PlayerId, number>): number[] {
-  const minutes = roster.map((p) => (rotationMinutes ? Math.max(0, rotationMinutes[p.id] ?? 0) : 1))
-  return minutes.some((m) => m > 0) ? minutes : roster.map(() => 1)
+/** Everything about a team that bears on who is actually on the floor. `Team` satisfies it, so
+ *  callers pass the team itself rather than picking fields off it. */
+export type RotationSource = Partial<Pick<Team, 'rotationMinutes' | 'rotationPlan'>>
+
+/**
+ * Availability weight per player: share of the game he's on the floor for. The engine selects from
+ * the on-court five; weighting each player by how much of the game he plays is what lets a bench
+ * specialist still pick up some of the touches he's suited to, in proportion to his time.
+ *
+ * Two sources, because the team has two ways of deciding who plays:
+ *
+ * - **A rotation chart** names a specific player at a specific slot for a specific span. That time
+ *   is known exactly, so it counts at face value -- including time at a slot that isn't his own,
+ *   since he's on the floor either way.
+ * - **`rotationMinutes`** governs everything the chart leaves Auto, because that's precisely what
+ *   the coach heuristic reads (engine/rotation/substitution.ts). It's prorated by how much of that
+ *   slot's budget the chart hasn't already spent: chart the PG slot end to end and the backup point
+ *   guard's target minutes are worth nothing, because there is no Auto time left for him to take.
+ *
+ * Which makes the no-chart case exactly what it always was -- uncharted is the whole game, so the
+ * proration factor is 1 and every player is weighted by his raw target minutes. Charting is a
+ * continuous departure from that rather than a mode switch: one 60-second segment moves the weights
+ * by one segment's worth.
+ *
+ * Falls back to counting everyone equally when there's nothing to go on at all (no chart, and
+ * minutes unknown or all zero) -- computePlayerSystemAffinity scores a lone player that way.
+ */
+function availability(roster: Player[], rotation?: RotationSource): number[] {
+  const targets = roster.map((p) => Math.max(0, rotation?.rotationMinutes?.[p.id] ?? 0))
+  const equalWeights = () => roster.map(() => 1)
+
+  if (!hasAnyChartedSegment(rotation?.rotationPlan)) {
+    if (!rotation?.rotationMinutes) return equalWeights()
+    return targets.some((m) => m > 0) ? targets : equalWeights()
+  }
+
+  const charted = chartedMinutes(rotation?.rotationPlan)
+  const weights = roster.map((player, i) => {
+    const spentAtHisSlot = charted.bySlot.get(player.positions[0]) ?? 0
+    const autoShare = Math.max(POSITION_MINUTES_BUDGET - spentAtHisSlot, 0) / POSITION_MINUTES_BUDGET
+    return (charted.byPlayer.get(player.id) ?? 0) + targets[i] * autoShare
+  })
+
+  return weights.some((w) => w > 0) ? weights : equalWeights()
 }
 
 /**
@@ -65,8 +104,8 @@ function expectedPlayCallStrength(playCall: PlayCallType, roster: Player[], avai
 /** Expected strength per play call, computed once and reused for every candidate system -- these
  *  depend only on the roster, never on the playbook, which is what keeps affinity linear in the
  *  playbook's weights (and therefore coherent across the whole set of systems). */
-function playCallStrengths(roster: Player[], rotationMinutes?: Record<PlayerId, number>): Record<PlayCallType, number> {
-  const availabilityWeights = availability(roster, rotationMinutes)
+function playCallStrengths(roster: Player[], rotation?: RotationSource): Record<PlayCallType, number> {
+  const availabilityWeights = availability(roster, rotation)
   return Object.fromEntries(
     ALL_PLAY_CALLS.map((pc) => [pc, expectedPlayCallStrength(pc, roster, availabilityWeights)]),
   ) as Record<PlayCallType, number>
@@ -125,10 +164,10 @@ export function computePlayerSystemAffinity(playbook: OffensivePlaybook, player:
 export function computeInitialSynergyScore(
   playbook: OffensivePlaybook,
   roster: Player[],
-  rotationMinutes?: Record<PlayerId, number>,
+  rotation?: RotationSource,
 ): number {
   if (roster.length === 0) return SYNERGY_NEUTRAL
-  const affinity = affinityFromStrengths(playbook, playCallStrengths(roster, rotationMinutes))
+  const affinity = affinityFromStrengths(playbook, playCallStrengths(roster, rotation))
   return Math.round(clamp(SYNERGY_NEUTRAL + affinity * SYNERGY_AFFINITY_AMPLIFICATION, SYNERGY_SCORE_FLOOR, SYNERGY_SCORE_CEILING))
 }
 
@@ -144,13 +183,13 @@ export function computeInitialSynergyScore(
 export function computeProjectedUsageShares(
   playbook: OffensivePlaybook,
   roster: Player[],
-  rotationMinutes?: Record<PlayerId, number>,
+  rotation?: RotationSource,
 ): Map<PlayerId, number> {
   const shares = new Map<PlayerId, number>(roster.map((p) => [p.id, 0]))
   const weights = normalizedWeights(playbook)
   if (!weights || roster.length === 0) return shares
 
-  const availabilityWeights = availability(roster, rotationMinutes)
+  const availabilityWeights = availability(roster, rotation)
   let totalRoleWeight = 0
 
   for (const pc of ALL_PLAY_CALLS) {
@@ -185,7 +224,7 @@ export interface PlayCallFit {
 export function computeSystemFitBreakdown(
   playbook: OffensivePlaybook,
   roster: Player[],
-  rotationMinutes?: Record<PlayerId, number>,
+  rotation?: RotationSource,
 ): PlayCallFit[] {
   const totalPlaybookWeight = ALL_PLAY_CALLS.reduce((sum, pc) => sum + playbook.weights[pc], 0)
   if (roster.length === 0) {
@@ -197,7 +236,7 @@ export function computeSystemFitBreakdown(
     }))
   }
 
-  const strengths = playCallStrengths(roster, rotationMinutes)
+  const strengths = playCallStrengths(roster, rotation)
   const baseline = ALL_PLAY_CALLS.reduce((sum, pc) => sum + strengths[pc], 0) / ALL_PLAY_CALLS.length
 
   return ALL_PLAY_CALLS.filter((pc) => playbook.weights[pc] > 0)

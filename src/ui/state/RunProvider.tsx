@@ -2,10 +2,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { AttributeKey, Game, GameId, PlayerId, RotationPlan } from '../../data/types'
 import { OFFENSIVE_PLAYBOOKS, type SystemId } from '../../data/presets'
 import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from '../../data/persistence/runRepository'
-import { REGULATION_MINUTES } from '../../engine/constants'
 import { defaultRng } from '../../engine/rng'
 import { generateLeague } from '../../engine/generator/randomLeague'
-import { clamp } from '../../engine/math'
 import { pickWorstTeamId } from '../../run/assignWorstTeam'
 import { beginSeason } from '../../run/beginSeason'
 import { createChunkSimContext } from '../../run/chunkSimContext'
@@ -28,6 +26,7 @@ import {
 } from '../../run/constants'
 import { pickConsumableOffers, type ConsumableId } from '../../run/consumables'
 import { pickRandomMarketSize } from '../../run/marketSize'
+import { clampToPositionBudget } from '../../run/minutesBudget'
 import { createRun } from '../../run/runState'
 import { applyPlayerCamp, applyTeamCamp, openShopVisit, type ShopTier } from '../../run/shop'
 import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
@@ -149,7 +148,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
       const userTeam = teams.find((t) => t.id === teamId)
       if (!userTeam) return
       const finalRoster = players.filter((p) => p.teamId === teamId)
-      const synergyScore = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[system], finalRoster, userTeam.rotationMinutes)
+      const synergyScore = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[system], finalRoster, userTeam)
       const teamsWithSystem = teams.map((t) => (t.id === teamId ? { ...t, offensiveStrategyId: system, synergyScore } : t))
 
       const newBundle: RunBundle = {
@@ -393,7 +392,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
                 computeInitialSynergyScore(
                   OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId],
                   updatedPlayers.filter((p) => p.teamId === t.id),
-                  t.rotationMinutes,
+                  t,
                 ) + upgradeBonus,
             }
           : t,
@@ -405,7 +404,12 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const setRotationMinutes = useCallback(
     async (playerId: PlayerId, minutes: number) => {
       if (!bundle) return
-      const clamped = clamp(Math.round(minutes), 0, REGULATION_MINUTES)
+      const team = bundle.teams.find((t) => t.id === bundle.run.teamId)
+      if (!team) return
+      // Bounded by what's left at this player's own position rather than by a flat 0-48, so the
+      // minutes a GM hands out are minutes that actually exist to give (run/minutesBudget.ts).
+      const roster = bundle.players.filter((p) => p.teamId === team.id)
+      const clamped = clampToPositionBudget(team, roster, playerId, minutes)
       const withNewMinutes = bundle.teams.map((t) =>
         t.id === bundle.run.teamId ? { ...t, rotationMinutes: { ...t.rotationMinutes, [playerId]: clamped } } : t,
       )
@@ -439,12 +443,17 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const setRotationPlan = useCallback(
     async (plan: RotationPlan) => {
       if (!bundle) return
-      const teams = bundle.teams.map((t) => (t.id === bundle.run.teamId ? { ...t, rotationPlan: plan } : t))
+      const withNewPlan = bundle.teams.map((t) => (t.id === bundle.run.teamId ? { ...t, rotationPlan: plan } : t))
+      // Recomputed on the just-edited teams for the same reason a minutes edit is: the chart is now
+      // an input to computeInitialSynergyScore (systemDraft's `availability` reads charted spans
+      // directly and prorates rotationMinutes across whatever the chart leaves Auto), so charting a
+      // system's best-fit players into real minutes genuinely moves the score.
+      const teams = teamsWithRecomputedSynergy(bundle, bundle.players, withNewPlan)
       const updatedBundle: RunBundle = { ...bundle, teams }
       await saveRunBundle(updatedBundle)
       setBundle(updatedBundle)
     },
-    [bundle],
+    [bundle, teamsWithRecomputedSynergy],
   )
 
   const openShop = useCallback(async () => {
