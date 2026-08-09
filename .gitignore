@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# itch.io build output and the upload artifact built from it (npm run package:itch)
+dist-itch
+hot-seat-itch.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
