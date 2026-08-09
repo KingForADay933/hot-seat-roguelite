@@ -1,5 +1,6 @@
 import type { AttributeKey, Player, Team } from '../../data/types'
 import { splitRoster } from '../rosterGroups'
+import { PlayerName } from './PlayerName'
 import { MinutesInput, PositionMinutesSummary, TrainingFocusSelect } from './RotationControls'
 
 function RosterAdjustmentGroup({
@@ -33,7 +34,9 @@ function RosterAdjustmentGroup({
         <tbody>
           {players.map((player) => (
             <tr key={player.id}>
-              <td>{player.name}</td>
+              <td>
+                <PlayerName playerId={player.id} name={player.name} />
+              </td>
               <td className="numeric">
                 <MinutesInput team={team} roster={roster} playerId={player.id} onSetMinutes={onSetMinutes} />
               </td>

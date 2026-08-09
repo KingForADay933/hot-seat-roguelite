@@ -1,6 +1,7 @@
 import type { Player, Team } from '../../data/types'
 import { AGE_CURVE_LABELS, TENDENCY_LABELS } from '../playerDisplay'
 import { splitRoster } from '../rosterGroups'
+import { PlayerName } from './PlayerName'
 
 function ScoutingGroup({ label, players }: { label: string; players: Player[] }) {
   if (players.length === 0) return null
@@ -24,7 +25,9 @@ function ScoutingGroup({ label, players }: { label: string; players: Player[] })
           <tbody>
             {players.map((player) => (
               <tr key={player.id}>
-                <td>{player.name}</td>
+                <td>
+                  <PlayerName playerId={player.id} name={player.name} />
+                </td>
                 <td>{AGE_CURVE_LABELS[player.development.ageCurveStage]}</td>
                 <td className={`numeric${player.development.developmentPoints < 0 ? ' text-negative' : ''}`}>
                   {/* dpFormula sums fractional bonuses, so this is routinely 37.599999999999994. */}

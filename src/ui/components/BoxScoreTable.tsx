@@ -1,4 +1,5 @@
 import type { Player, PlayerBoxScoreLine } from '../../data/types'
+import { PlayerName } from './PlayerName'
 
 export function BoxScoreTable({ lines, players }: { lines: PlayerBoxScoreLine[]; players: Player[] }) {
   const playerById = new Map(players.map((p) => [p.id, p]))
@@ -25,7 +26,9 @@ export function BoxScoreTable({ lines, players }: { lines: PlayerBoxScoreLine[];
       <tbody>
         {sortedLines.map((line) => (
           <tr key={line.playerId}>
-            <td>{playerById.get(line.playerId)?.name ?? line.playerId}</td>
+            <td>
+              <PlayerName playerId={line.playerId} name={playerById.get(line.playerId)?.name ?? line.playerId} />
+            </td>
             <td className="numeric">{Math.round(line.minutesPlayed)}</td>
             <td className="numeric">{line.points}</td>
             <td className="numeric">
