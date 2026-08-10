@@ -50,6 +50,28 @@ export function recordsThroughGame(games: Game[], throughGameId: GameId): Map<Te
 }
 
 /**
+ * The season as one team has actually lived through it: every game dated no later than the most
+ * recent one *they* have played. Empty until they have played anything.
+ *
+ * Exists because `isPlayed` stopped meaning "has happened yet". A stretch opens by resolving every
+ * AI-vs-AI game in the chunk at once (RunProvider's beginStretch), so at the moment a GM sits down
+ * to their first game of the season, half the league already carries a record from games dated up to
+ * two weeks *after* the one they are about to play. Feeding those straight to recordsThroughGame put
+ * "DUN (4-1)" beside an unplayed fixture in a season where the GM had played nothing -- reading, from
+ * the only side that matters, as though the schedule had run without them.
+ *
+ * Capping by date rather than by chunk keeps the GM's own record carrying across stretches: a new
+ * chunk opening with nothing played in it still counts everything before it.
+ */
+export function gamesReachedBy(games: Game[], teamId: TeamId): Game[] {
+  const ownPlayed = games.filter((g) => g.isPlayed && (g.homeTeamId === teamId || g.awayTeamId === teamId))
+  if (ownPlayed.length === 0) return []
+
+  const reachedDate = ownPlayed.reduce((latest, g) => (g.date.localeCompare(latest) > 0 ? g.date : latest), ownPlayed[0].date)
+  return games.filter((g) => g.date.localeCompare(reachedDate) <= 0)
+}
+
+/**
  * How one team has fared against another, counting only games the two have played each other --
  * `wins`/`losses` are from `teamId`'s side.
  *
