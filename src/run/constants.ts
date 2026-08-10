@@ -55,6 +55,22 @@ export const BUDGET_PER_WIN = 10
  *  before the market multiplier -- ties the economy to the escalation system, not just wins. */
 export const STRETCH_CLEAR_BUDGET_BONUS = 150
 
+/**
+ * What Fan Culture Buy-In adds to every season's earnings once owned, before the market multiplier.
+ *
+ * Flat rather than a percentage on purpose. A percentage pays least in the losing seasons where
+ * budget is tightest and most when you are already comfortable -- a win-more card in a game whose
+ * premise is that you are the worst team in the league and about to be fired. Flat is worth
+ * proportionally most exactly when you need camps to dig out, and it is the only shape a GM can
+ * actually evaluate at the shop: "$300 now, +$100 a season" is arithmetic you can do against how
+ * long you think you will survive.
+ *
+ * Sized against COACHING_UPGRADE_COST for a three-season payback at mid market. Whether three
+ * seasons is *available* to a GM by the time they can afford a 300 upgrade is the question the run
+ * harness answered -- see the doc comment on computeBudgetUpgradeBonus.
+ */
+export const FAN_CULTURE_BUY_IN_SEASON_BONUS = 100
+
 // --- Shop (Section 8.4) & Camps (Section 8.5), Phase 7 -- first-pass numbers, needs playtesting to tune ---
 // The condensed tier runs every season; a stretch-clear season instead opens the pricier, wider
 // expanded tier (run/shop/shopVisit.ts's openShopVisit picks which from lastSeasonTargetHit).
