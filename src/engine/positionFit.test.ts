@@ -5,7 +5,6 @@ import { createSeededRng } from './rng'
 import { makeTestPlayer } from './testFixtures'
 import {
   attributeSpread,
-  effectiveFive,
   effectivePlayer,
   heightBandsContaining,
   heightMisfitInches,
@@ -289,24 +288,5 @@ describe('effectivePlayer', () => {
     const player = makeTestPlayer({ positions: ['SF'], heightInches: 79 })
     player.overallRating = 12345 // decoy -- must survive unread and unchanged
     expect(effectivePlayer(player, 'C').overallRating).toBe(12345)
-  })
-})
-
-describe('effectiveFive', () => {
-  it('maps effectivePlayer across a whole five, preserving each slot', () => {
-    const guard = makeTestPlayer({ positions: ['PG'], heightInches: 72 })
-    const center = makeTestPlayer({ positions: ['C'], heightInches: 85 })
-    const five = [
-      { player: guard, slot: 'PG' as const },
-      { player: center, slot: 'PG' as const }, // charted out of position on purpose
-    ]
-
-    const effective = effectiveFive(five)
-
-    expect(effective[0].slot).toBe('PG')
-    expect(effective[0].player).toBe(guard) // native slot, untouched reference
-    expect(effective[1].slot).toBe('PG')
-    expect(effective[1].player).not.toBe(center) // out of position, attribute-shifted copy
-    expect(effective[1].player.id).toBe(center.id)
   })
 })

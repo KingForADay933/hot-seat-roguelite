@@ -7,12 +7,22 @@ import {
   FATIGUE_MULT_MAX,
   FATIGUE_MULT_MIN,
   FATIGUE_PERIOD_BREAK_RECOVERY,
+  FATIGUE_PENALTY_FULL_AT,
+  FATIGUE_PENALTY_THRESHOLD,
   FATIGUE_RECOVERY_PER_SECOND,
   HALFTIME_AFTER_PERIOD,
   REGULATION_PERIODS,
 } from '../constants'
 import { slotByPosition } from '../matchup'
-import { applyBreakRecovery, breakRecoveryPoints, fatigueGainPerSecond, fatigueRecoveryPerSecond, tickFatigue } from './fatigue'
+import {
+  applyBreakRecovery,
+  breakRecoveryPoints,
+  fatiguedPlayer,
+  fatigueGainPerSecond,
+  fatiguePenaltyScale,
+  fatigueRecoveryPerSecond,
+  tickFatigue,
+} from './fatigue'
 import type { RotationState } from './rotationState'
 
 describe('fatigueGainPerSecond / fatigueRecoveryPerSecond', () => {
@@ -163,5 +173,89 @@ describe('applyBreakRecovery', () => {
     const fatigue = new Map<string, number>()
     applyBreakRecovery(fatigue, [player], 1)
     expect(fatigue.get(player.id)).toBe(0)
+  })
+})
+
+describe('fatiguePenaltyScale', () => {
+  it('is zero at and below the threshold, where most of the league lives', () => {
+    expect(fatiguePenaltyScale(0)).toBe(0)
+    expect(fatiguePenaltyScale(FATIGUE_PENALTY_THRESHOLD)).toBe(0)
+  })
+
+  it('reaches full at the ceiling and stays there', () => {
+    expect(fatiguePenaltyScale(FATIGUE_PENALTY_FULL_AT)).toBe(1)
+    expect(fatiguePenaltyScale(100)).toBe(1)
+  })
+
+  it('ramps linearly between the two', () => {
+    const midpoint = (FATIGUE_PENALTY_THRESHOLD + FATIGUE_PENALTY_FULL_AT) / 2
+    expect(fatiguePenaltyScale(midpoint)).toBeCloseTo(0.5, 8)
+  })
+
+  it('tops out inside the fatigue players actually reach', () => {
+    // The measured ceiling across 30 games was 65.3, so a band ending at 100 would have meant the
+    // penalty never got past about a third of its strength. This is the assertion that catches
+    // somebody later "tidying" the band back to the nominal 0-100 scale.
+    expect(FATIGUE_PENALTY_FULL_AT).toBeLessThanOrEqual(70)
+  })
+})
+
+describe('fatiguedPlayer', () => {
+  const fresh = () => makeTestPlayer({ hidden: { consistency: 70 }, attributes: { outsideShot: 80, passing: 80 } })
+
+  it('hands back the same reference below the threshold', () => {
+    const player = fresh()
+    expect(fatiguedPlayer(player, FATIGUE_PENALTY_THRESHOLD)).toBe(player)
+  })
+
+  it('takes more off the legs than the hands', () => {
+    // The weighting that makes a late-game lineup a decision: shooters fade, passers mostly do not.
+    const player = fresh()
+    const tired = fatiguedPlayer(player, FATIGUE_PENALTY_FULL_AT)
+    const shotLost = 80 - tired.attributes.outsideShot
+    const passLost = 80 - tired.attributes.passing
+
+    expect(shotLost).toBeGreaterThan(passLost)
+    expect(passLost).toBeGreaterThan(0)
+  })
+
+  it('scales with how tired he is', () => {
+    const player = fresh()
+    const midpoint = (FATIGUE_PENALTY_THRESHOLD + FATIGUE_PENALTY_FULL_AT) / 2
+    const halfway = fatiguedPlayer(player, midpoint).attributes.outsideShot
+    const spent = fatiguedPlayer(player, FATIGUE_PENALTY_FULL_AT).attributes.outsideShot
+
+    expect(halfway).toBeLessThan(80)
+    expect(spent).toBeLessThan(halfway)
+  })
+
+  it('makes him less consistent as well as worse, which is the variance half', () => {
+    // possession/variance.ts derives its noise from (100 - consistency), so docking it here is the
+    // whole of the mechanism -- no new parameter, no change to that file.
+    const player = fresh()
+    expect(fatiguedPlayer(player, FATIGUE_PENALTY_FULL_AT).hidden.consistency).toBeLessThan(player.hidden.consistency)
+  })
+
+  it('leaves durability and clutch alone', () => {
+    // Durability drives fatigue accrual itself, so docking it would make tiredness compound into more
+    // tiredness. Clutch is a separate late-game read and has no business moving here.
+    const player = fresh()
+    const tired = fatiguedPlayer(player, FATIGUE_PENALTY_FULL_AT)
+    expect(tired.hidden.durability).toBe(player.hidden.durability)
+    expect(tired.hidden.clutch).toBe(player.hidden.clutch)
+  })
+
+  it('never mutates the player it was handed, and never touches overallRating', () => {
+    const player = fresh()
+    player.overallRating = 12345
+    const tired = fatiguedPlayer(player, 100)
+    expect(player.attributes.outsideShot).toBe(80)
+    expect(player.hidden.consistency).toBe(70)
+    expect(tired.overallRating).toBe(12345)
+  })
+
+  it('never drives an attribute below zero', () => {
+    const weak = makeTestPlayer({ attributes: { outsideShot: 1 } })
+    expect(fatiguedPlayer(weak, 100).attributes.outsideShot).toBeGreaterThanOrEqual(0)
   })
 })

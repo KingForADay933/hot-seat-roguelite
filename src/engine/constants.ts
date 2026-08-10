@@ -430,6 +430,60 @@ export const FATIGUE_EMERGENCY_THRESHOLD = 95
 export const FATIGUE_HALFTIME_RECOVERY = 35
 export const FATIGUE_PERIOD_BREAK_RECOVERY = 12
 
+/**
+ * The band over which fatigue starts costing a player something on the floor: nothing at or below
+ * the threshold, the full penalty at or above the ceiling, linear between.
+ *
+ * **Both numbers are calibrated to the fatigue that actually occurs, not to the 0-100 scale**, and
+ * that distinction is the whole reason they are not 50 and 100. Measured across 30 games and 32,075
+ * player-possessions, on-court fatigue runs: median 24.4, p75 35.4, p90 45.5, p99 56.2, **max 65.3**.
+ * Nobody is ever gassed, because the rotation is specifically built to prevent it -- substitutions
+ * trigger at FATIGUE_ROTATE_THRESHOLD's 55, and the period breaks hand everyone points back on top.
+ *
+ * So the 0-100 scale is nominal and the lived range is roughly 0-65. A penalty ramping to full at
+ * 100 would have reached about a third of its strength at the tiredest moment any player reached all
+ * season, and one starting at 70 would never have fired at all. 35 to 65 puts the median player at
+ * no penalty, the p75 player just starting to feel it, and the rare p99 player near the full cost.
+ */
+export const FATIGUE_PENALTY_THRESHOLD = 35
+export const FATIGUE_PENALTY_FULL_AT = 65
+
+/** Attribute points docked at the full penalty, before the per-attribute weighting below. */
+export const FATIGUE_ATTRIBUTE_PENALTY_MAX = 16
+
+/**
+ * Consistency points docked at the full penalty -- the variance half of the effect.
+ *
+ * Costs nothing to wire: possession/variance.ts's computeConsistencyNoise already sets its standard
+ * deviation from `(100 - consistency) / 100 * CONSISTENCY_NOISE_MAX`, so lowering a tired player's
+ * consistency on the same transient copy widens his night-to-night swing with no new parameter
+ * anywhere. Against a generated range of roughly 40-90, 15 points is a real widening without turning
+ * a tired player into a coin flip.
+ */
+export const FATIGUE_CONSISTENCY_PENALTY_MAX = 15
+
+/**
+ * How much of the dock each attribute takes -- what goes first when a player tires is the jump shot
+ * and the first step, not his hands or his sense of where a rebound is going.
+ *
+ * Weighted rather than flat because this is what makes a late-game lineup a decision: shooters fade
+ * and bigs endure, so who closes a game is a choice rather than "play the best five". It is also
+ * what gives Durability, the Iron Man Program and the Gasses Out tag a meaning on the floor instead
+ * of only in a substitution log.
+ */
+export const FATIGUE_ATTRIBUTE_WEIGHTS: Record<AttributeKey, number> = {
+  outsideShot: 1,
+  speed: 1,
+  lateralQuickness: 1,
+  vertical: 1,
+  insideShot: 0.6,
+  perimeterDefense: 0.6,
+  interiorDefense: 0.4,
+  rebounding: 0.3,
+  ballHandling: 0.3,
+  passing: 0.2,
+}
+
 /** A bench player must be rested to at or below this to be sub-in eligible -- left well below
  *  FATIGUE_SUB_OUT_THRESHOLD so a just-subbed-out player can never immediately re-qualify. */
 export const FATIGUE_SUB_IN_MAX = 30
