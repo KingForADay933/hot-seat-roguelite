@@ -744,6 +744,28 @@ h3 {
   overflow: visible;
 }
 
+/* The 30-second grid boundaries snap to (ROTATION_SNAP_SECONDS): 24 ticks across a 12-minute
+   period. Drawn *over* the spans rather than behind them -- a span paints its whole width opaquely,
+   so a background grid would be hidden exactly where the GM is dragging. pointer-events: none keeps
+   it clear of the boundary handles it sits on top of. */
+.rotation-timeline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 4px;
+  /* Minute marks only -- twelve across the period, not the twenty-four the 30-second snap actually
+     uses. Drawing every snap point was tried and abandoned: at this bar's ~200px the ticks land
+     8px apart and read as a barcode, competing with the Auto hatching instead of orienting anyone.
+     Minutes are what a GM counts rotations in, and the half-minute stops announce themselves the
+     moment a boundary is dragged.
+     currentColor rather than --border: these sit on top of opaque spans, so they have to contrast
+     with the *span* -- and --border is near-identical to the span fill in dark mode, where an
+     earlier version of this vanished entirely. */
+  background-image: linear-gradient(to right, color-mix(in srgb, currentColor 22%, transparent) 1px, transparent 1px);
+  background-size: calc(100% / 12) 100%;
+}
+
 .rotation-segment {
   position: absolute;
   top: 0;

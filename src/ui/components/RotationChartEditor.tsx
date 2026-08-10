@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { Player, PlayerId, Position, RotationPlan, RotationSegment, Team } from '../../data/types'
-import { PERIOD_SECONDS } from '../../engine/constants'
+import { PERIOD_SECONDS, SECONDS_PER_MINUTE } from '../../engine/constants'
 import { POSITION_ORDER } from '../../engine/matchup'
 import { clamp } from '../../engine/math'
 import { slotSlideDistance } from '../../engine/positionFit'
-import { MIN_ROTATION_SEGMENT_SECONDS } from '../../run/constants'
+import { MIN_ROTATION_SEGMENT_SECONDS, ROTATION_SNAP_SECONDS } from '../../run/constants'
 import { CHARTABLE_PERIODS, getSegments, mergeWithNext, moveBoundary, setSegmentFill, splitSegment } from '../../run/rotationChart'
 import { chartedMinutesByPlayer, doubleBookedConflicts, projectedFatigueAtPeriodEnd } from '../../run/rotationChartValidation'
 import { splitRoster } from '../rosterGroups'
@@ -152,8 +152,10 @@ export function RotationChartEditor({
     <div>
       <p className="section-note">
         Click a span to assign it or change it. Drag the divider between two spans to move the
-        boundary between them. Auto spans (and any AI team) still run on the fatigue/pace coach --
-        this only takes over the spans you actually chart.
+        boundary between them -- boundaries snap to the {ROTATION_SNAP_SECONDS}-second marks, and no
+        span goes below {MIN_ROTATION_SEGMENT_SECONDS / SECONDS_PER_MINUTE} minute. Auto spans (and
+        any AI team) still run on the fatigue/pace coach -- this only takes over the spans you
+        actually chart.
       </p>
 
       <div className="rotation-chart-periods">
