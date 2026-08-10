@@ -13,6 +13,7 @@ import { FiredScreen } from './ui/screens/FiredScreen'
 import { StretchScreen } from './ui/screens/StretchScreen'
 import { SimcastScreen } from './ui/screens/SimcastScreen'
 import { PlayerScreen } from './ui/screens/PlayerScreen'
+import { InsightsScreen } from './ui/screens/InsightsScreen'
 import { PlayerInspectorContext } from './ui/state/playerInspector.core'
 import type { PlayerId } from './data/types'
 
@@ -24,6 +25,9 @@ function AppContent() {
   // Whether the abandon confirmation is up. Same local-view-toggle rationale as viewingMyTeam --
   // and deliberately not persisted, so a refresh mid-decision keeps the run rather than the prompt.
   const [confirmingAbandon, setConfirmingAbandon] = useState(false)
+  // Whether the Coaching Insights screen is covering the current one. Same local-view-toggle
+  // rationale as the two above -- it is a reference screen, not a step in the run.
+  const [viewingInsights, setViewingInsights] = useState(false)
   // Which player's detail page is open, if any. Same local-view-toggle rationale as the two above.
   // Closing returns to whichever screen the name was clicked on -- My Team, a checkpoint, a
   // stretch -- rather than to the run's default screen. Like My Team it replaces that screen
@@ -157,6 +161,9 @@ function AppContent() {
       />
     )
   }
+  if (viewingInsights) {
+    return <InsightsScreen bundle={bundle} onBack={() => setViewingInsights(false)} />
+  }
   if (viewingMyTeam) {
     return (
       <PlayerInspectorContext.Provider value={inspector}>
@@ -180,6 +187,7 @@ function AppContent() {
     <PlayerInspectorContext.Provider value={inspector}>
       <nav>
         <button onClick={() => setViewingMyTeam(true)}>My Team</button>
+        <button onClick={() => setViewingInsights(true)}>Insights</button>
         <button className="link-button nav-quit" onClick={() => setConfirmingAbandon(true)}>
           Abandon Run
         </button>

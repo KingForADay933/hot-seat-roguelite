@@ -180,3 +180,57 @@ describe('aggregateRunInsights + describeRunInsight', () => {
     expect(aggregateRunInsights(recordChunkInsights([], [routineSub('once')], 1, TEAM))).toEqual([])
   })
 })
+
+describe('performance trends across a season', () => {
+  const trend = (metric: string, tone: 'positive' | 'negative'): CoachingInsight => ({
+    teamId: TEAM,
+    kind: 'performance-trend',
+    subjectId: metric,
+    subjectName: metric === 'threePointPct' ? 'three-point shooting' : 'points allowed',
+    tone,
+    text: `${metric} moved`,
+  })
+
+  it('counts a trend that recurs across the season stretches', () => {
+    let history: RunInsightRecord[] = []
+    for (let chunk = 0; chunk < 3; chunk++) {
+      history = recordChunkInsights(history, [trend('threePointPct', 'negative')], 1, TEAM)
+    }
+
+    const summary = aggregateRunInsights(history).find((s) => s.subjectId === 'threePointPct')
+    expect(summary).toBeDefined()
+    expect(summary!.totalOccurrences).toBe(3)
+    expect(summary!.tone).toBe('negative')
+    expect(describeRunInsight(summary!)).toContain('a problem')
+  })
+
+  it('keeps a metric that swung both ways as two separate facts', () => {
+    // A team that shot well in two stretches and badly in two others has two things worth saying.
+    // Merging them would report four occurrences of a trend with no direction at all.
+    let history: RunInsightRecord[] = []
+    history = recordChunkInsights(history, [trend('threePointPct', 'positive')], 1, TEAM)
+    history = recordChunkInsights(history, [trend('threePointPct', 'positive')], 1, TEAM)
+    history = recordChunkInsights(history, [trend('threePointPct', 'negative')], 1, TEAM)
+    history = recordChunkInsights(history, [trend('threePointPct', 'negative')], 1, TEAM)
+
+    const summaries = aggregateRunInsights(history).filter((s) => s.subjectId === 'threePointPct')
+    expect(summaries).toHaveLength(2)
+    expect(summaries.map((s) => s.tone).sort()).toEqual(['negative', 'positive'])
+    expect(summaries.every((s) => s.totalOccurrences === 2)).toBe(true)
+  })
+
+  it('does not report a one-off swing as a season pattern', () => {
+    const history = recordChunkInsights([], [trend('threePointPct', 'positive')], 1, TEAM)
+    expect(aggregateRunInsights(history).some((s) => s.subjectId === 'threePointPct')).toBe(false)
+  })
+
+  it('describes a recurring strength as a strength', () => {
+    let history: RunInsightRecord[] = []
+    history = recordChunkInsights(history, [trend('threePointPct', 'positive')], 1, TEAM)
+    history = recordChunkInsights(history, [trend('threePointPct', 'positive')], 1, TEAM)
+
+    const summary = aggregateRunInsights(history).find((s) => s.subjectId === 'threePointPct')!
+    expect(describeRunInsight(summary)).toContain('a strength')
+    expect(describeRunInsight(summary)).toContain('Three-point shooting')
+  })
+})

@@ -28,20 +28,27 @@ import { RUN_INSIGHTS_PER_SEASON, RUN_INSIGHT_MIN_ROUTINE_OCCURRENCES } from './
 const KIND_PRIORITY: Record<CoachingInsightKind, number> = {
   'chart-override': 0,
   'weak-link-targeting': 1,
-  'fatigue-substitution': 2,
+  'performance-trend': 2,
+  'fatigue-substitution': 3,
 }
 
 /** How much of the season a kind has to span before it's worth reporting at run level. Structural
- *  problems count from the first sighting; routine rotation churn has to actually repeat. */
+ *  problems count from the first sighting; routine rotation churn and a swing in form both have to
+ *  actually repeat -- one hot stretch of shooting is not a fact about a season. */
 function minimumOccurrences(kind: CoachingInsightKind): number {
-  return kind === 'fatigue-substitution' ? RUN_INSIGHT_MIN_ROUTINE_OCCURRENCES : 1
+  return kind === 'fatigue-substitution' || kind === 'performance-trend' ? RUN_INSIGHT_MIN_ROUTINE_OCCURRENCES : 1
 }
 
 export interface RunInsightRecord {
   seasonNumber: number
   kind: CoachingInsightKind
-  subjectId: PlayerId
+  subjectId: PlayerId | string
   subjectName: string
+  /** Carried through so the epilogue can tell a run of good shooting from a run of bad. Only
+   *  'performance-trend' sets it; every other kind is a problem by construction. A subject that
+   *  swung both ways across a season is recorded separately per tone (see the key below), because
+   *  "your shooting was up twice and down twice" is two facts, not one. */
+  tone?: CoachingInsight['tone']
   /** How many chunks of that season produced this same observation. Recurrence is the signal: the
    *  same weak link exploited in all four chunks is a season-long problem, once is a bad night. */
   occurrences: number
@@ -70,8 +77,15 @@ export function recordChunkInsights(
 
   const merged = history.map((record) => ({ ...record }))
   for (const insight of notable) {
+    // Tone is part of the key, not just carried along: a team whose shooting ran hot in two
+    // stretches and cold in two others has two separate things worth saying, and merging them would
+    // count four occurrences of a trend that never had a direction.
     const existing = merged.find(
-      (record) => record.seasonNumber === seasonNumber && record.kind === insight.kind && record.subjectId === insight.subjectId,
+      (record) =>
+        record.seasonNumber === seasonNumber &&
+        record.kind === insight.kind &&
+        record.subjectId === insight.subjectId &&
+        record.tone === insight.tone,
     )
     if (existing) existing.occurrences += 1
     else
@@ -80,6 +94,7 @@ export function recordChunkInsights(
         kind: insight.kind,
         subjectId: insight.subjectId,
         subjectName: insight.subjectName,
+        tone: insight.tone,
         occurrences: 1,
       })
   }
@@ -103,8 +118,9 @@ export function recordChunkInsights(
 
 export interface RunInsightSummary {
   kind: CoachingInsightKind
-  subjectId: PlayerId
+  subjectId: PlayerId | string
   subjectName: string
+  tone?: CoachingInsight['tone']
   /** Stretches across the whole run, not one season. */
   totalOccurrences: number
   /** Every season it showed up in, ascending. */
@@ -128,7 +144,7 @@ export function aggregateRunInsights(history: RunInsightRecord[]): RunInsightSum
   const bySubject = new Map<string, RunInsightSummary>()
 
   for (const record of reportable) {
-    const key = `${record.kind}:${record.subjectId}`
+    const key = `${record.kind}:${record.subjectId}:${record.tone ?? ''}`
     const existing = bySubject.get(key)
     if (existing) {
       existing.totalOccurrences += record.occurrences
@@ -138,6 +154,7 @@ export function aggregateRunInsights(history: RunInsightRecord[]): RunInsightSum
         kind: record.kind,
         subjectId: record.subjectId,
         subjectName: record.subjectName,
+        tone: record.tone,
         totalOccurrences: record.occurrences,
         seasons: [record.seasonNumber],
       })
@@ -159,6 +176,10 @@ export function aggregateRunInsights(history: RunInsightRecord[]): RunInsightSum
  * individual game's numbers are noise -- "62 possessions in that game" isn't the story, "hunted all
  * run" is.
  */
+function capitalizeFirst(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 export function describeRunInsight(summary: RunInsightSummary): string {
   const stretches = `in ${summary.totalOccurrences} stretch${summary.totalOccurrences === 1 ? '' : 'es'}`
   const first = summary.seasons[0]
@@ -172,6 +193,13 @@ export function describeRunInsight(summary: RunInsightSummary): string {
       return `${summary.subjectName} had to be pulled against your rotation chart, ${stretches} ${span}.`
     case 'fatigue-substitution':
       return `${summary.subjectName} was rotated out on fatigue, ${stretches} ${span}.`
+    case 'performance-trend': {
+      // Reads as a standing characteristic rather than an event, because at run scale that is what a
+      // rate is: not "your shooting was up in stretch 3" but "this was a team whose shooting kept
+      // coming and going".
+      const direction = summary.tone === 'positive' ? 'a strength' : 'a problem'
+      return `${capitalizeFirst(summary.subjectName)} was ${direction} ${stretches} ${span}.`
+    }
   }
 }
 

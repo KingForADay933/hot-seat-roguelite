@@ -31,6 +31,19 @@ export type CoachingInsightKind =
   | 'chart-override'
   /** An ordinary fatigue substitution -- the rotation working as intended. */
   | 'fatigue-substitution'
+  /**
+   * A team rate that moved: shooting, ball security, what the defence gave up. Produced by
+   * run/performanceInsights.ts from box scores rather than here from a possession log, because it
+   * compares a *window of games* against a baseline and no single game can see that.
+   *
+   * The only kind that is routinely good news, which is why `tone` exists at all.
+   */
+  | 'performance-trend'
+
+/** Whether an insight is something to be pleased about. Optional on the type because the three
+ *  possession-log kinds above are all problems by construction and predate it; anything without a
+ *  tone should be read as a concern. */
+export type CoachingInsightTone = 'positive' | 'negative'
 
 export interface CoachingInsight {
   text: string
@@ -46,9 +59,23 @@ export interface CoachingInsight {
    * the underlying problem is identical. Anything asking "is this the same problem recurring?"
    * -- run/runInsights.ts -- has to compare something stabler than the prose.
    */
-  subjectId: PlayerId
+  /**
+   * What the observation is keyed on, and the thing recurrence is counted against.
+   *
+   * A player id for the three possession-log kinds. For 'performance-trend' it is a *metric* id
+   * ('threePointPct'), because the subject of "your three-point shooting slipped again" is the
+   * shooting, not a person. Both are stable across games, which is all the aggregation in
+   * run/runInsights.ts requires of it.
+   */
+  subjectId: PlayerId | string
   /** Denormalised so a consumer that outlives the roster lookup can still name them. */
   subjectName: string
+  /** Present on 'performance-trend' only; absent means "this is a problem", which is true of every
+   *  kind derived from a possession log. */
+  tone?: CoachingInsightTone
+  /** Which end of the floor the observation is about, for grouping on the insights screen. Only
+   *  meaningful for 'performance-trend'; the possession-log kinds are all defensive or rotational. */
+  side?: 'offense' | 'defense'
   /**
    * Which game produced this observation. Stamped by run/resolveGame.ts rather than here -- the
    * generator is handed a possession log and has no idea which fixture it belongs to.

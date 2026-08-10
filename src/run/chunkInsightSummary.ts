@@ -63,6 +63,11 @@ function describeRepeat(group: CoachingInsight[], defensiveSchemeName: string | 
       return `${first.subjectName} had to be pulled against your rotation chart in ${games}.`
     case 'fatigue-substitution':
       return `${first.subjectName} was pulled with heavy fatigue in ${games}.`
+    case 'performance-trend':
+      // Can't actually be reached today -- a performance trend is computed once per window, so a
+      // window never contains two of the same metric to collapse. Handled rather than thrown so the
+      // switch stays exhaustive if that ever changes.
+      return first.text
   }
 }
 

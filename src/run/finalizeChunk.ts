@@ -5,6 +5,8 @@ import { computeStandings } from '../engine/schedule/standings'
 import { developSeason } from '../engine/season/developSeason'
 import { computeSeasonBudgetEarnings } from './budget'
 import { summarizeChunkInsights } from './chunkInsightSummary'
+import { performanceInsights } from './performanceInsights'
+import { runTeamChunkGames } from './seasonChunks'
 import { SEASON_CHUNK_COUNT } from './constants'
 import { evaluateSeasonEnd } from './runState'
 import { hasHitTarget } from './target'
@@ -52,7 +54,24 @@ export function finalizeChunk(
   // Named so the collapsed weak-link line can say which scheme is being exploited -- it is the
   // thing the GM would change in response, and the single-game text it replaces said so inline.
   const userTeam = teams.find((t) => t.id === run.teamId)
-  const chunkInsights = summarizeChunkInsights(insights, userTeam && DEFENSIVE_SCHEMES[userTeam.defensiveStrategyId]?.name)
+  const eventInsights = summarizeChunkInsights(insights, userTeam && DEFENSIVE_SCHEMES[userTeam.defensiveStrategyId]?.name)
+
+  // How the team actually played over this chunk, measured against its own earlier season (or the
+  // league, before there is enough of one). Computed here rather than accumulated per game because
+  // it is a property of the *window*: a rate needs several games behind it before it means anything,
+  // and no single game can see its own trend. Everything it reads comes off persisted box scores,
+  // so this is a fresh derivation rather than a running total that could drift.
+  const chunkGamesForTeam = runTeamChunkGames(games, run.chunkInSeason, run.teamId)
+  const chunkGameIds = new Set(chunkGamesForTeam.map((g) => g.id))
+  const earlierThisSeason = games.filter((g) => g.isPlayed && !chunkGameIds.has(g.id))
+  const trendInsights = performanceInsights(
+    chunkGamesForTeam,
+    earlierThisSeason,
+    games.filter((g) => g.isPlayed),
+    run.teamId,
+  )
+
+  const chunkInsights = [...trendInsights, ...eventInsights]
   const isLastChunk = run.chunkInSeason + 1 === SEASON_CHUNK_COUNT
 
   if (!isLastChunk) {
