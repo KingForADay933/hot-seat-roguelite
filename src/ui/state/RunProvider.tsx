@@ -24,7 +24,7 @@ import {
   SYSTEM_DRAFT_SIZE,
   TEAM_CAMP_COST,
 } from '../../run/constants'
-import { pickConsumableOffers, type ConsumableId } from '../../run/consumables'
+import { consumableActivationBlockedReason, pickConsumableOffers, type ConsumableId } from '../../run/consumables'
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { clampToPositionBudget } from '../../run/minutesBudget'
 import { recordChunkInsights } from '../../run/runInsights'
@@ -693,6 +693,9 @@ export function RunProvider({ children }: { children: ReactNode }) {
       if (!bundle) return
       const inventoryIndex = bundle.run.consumableInventory.indexOf(consumableId)
       if (inventoryIndex === -1) return
+      // The last boundary before an infinite-money loop reaches run.budget. The shop disables the
+      // control too, but this is the one that has to hold -- see consumableActivationBlockedReason.
+      if (consumableActivationBlockedReason(consumableId, bundle.run)) return
 
       const consumableInventory = [...bundle.run.consumableInventory]
       consumableInventory.splice(inventoryIndex, 1)

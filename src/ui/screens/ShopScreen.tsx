@@ -2,7 +2,7 @@ import type { AttributeKey } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { COACHING_UPGRADES, type CoachingUpgradeId } from '../../run/coachingUpgrades'
 import { COACHING_UPGRADE_COST, CONSUMABLE_COST, CONSUMABLE_INVENTORY_CAPACITY, PLAYER_CAMP_COST, TEAM_CAMP_COST } from '../../run/constants'
-import { CONSUMABLES, type ConsumableId } from '../../run/consumables'
+import { CONSUMABLES, consumableActivationBlockedReason, type ConsumableId } from '../../run/consumables'
 import { CampPurchaseForm } from '../components/CampPurchaseForm'
 import { CoachingUpgradeCard } from '../components/CoachingUpgradeCard'
 import { ConsumableCard } from '../components/ConsumableCard'
@@ -138,6 +138,7 @@ export function ShopScreen({
             <ConsumableInventoryRow
               key={`${consumableId}-${i}`}
               consumable={CONSUMABLES[consumableId]}
+              blockedReason={consumableActivationBlockedReason(consumableId, run)}
               onActivate={() => onActivateConsumable(consumableId)}
             />
           ))}
