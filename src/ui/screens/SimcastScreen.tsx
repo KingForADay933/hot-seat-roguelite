@@ -1,11 +1,12 @@
-﻿import { useCallback, useMemo } from 'react'
+﻿import { useCallback, useMemo, useRef, useState } from 'react'
 import type { DefensiveSchemeId } from '../../data/presets'
-import { BALANCED_FOCUS, type Game, type Player, type TacticalFocus, type Team } from '../../data/types'
+import { BALANCED_FOCUS, type Game, type Player, type PlayerId, type TacticalFocus, type Team } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { defaultRng } from '../../engine/rng'
 import { playGameLive } from '../../run/resolveGame'
 import { resolveSynergyScore } from '../../run/teamSynergy'
 import type { LiveGame } from '../state/runContext.core'
+import { InspectorContext, type Inspector } from '../state/inspector.core'
 import { BoxScoreTable } from '../components/BoxScoreTable'
 import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
 import { TacticalFocusControls } from '../components/TacticalFocusControls'
@@ -14,6 +15,7 @@ import { CommentaryFeed } from '../simcast/CommentaryFeed'
 import { LiveBoxScore } from '../simcast/LiveBoxScore'
 import { OnCourtPanel } from '../simcast/OnCourtPanel'
 import { Scoreboard } from '../simcast/Scoreboard'
+import { SimcastPlayerCard } from '../simcast/SimcastPlayerCard'
 import type { PlaybackContext } from '../simcast/playbackState'
 import { PLAYBACK_SPEEDS, useSimcastPlayback, type PlaybackSpeed } from '../simcast/useSimcastPlayback'
 
@@ -101,6 +103,45 @@ function SimcastBroadcast({
   const userRoster = userIsHome ? playbackContext.homeRoster : playbackContext.awayRoster
 
   /**
+   * Which player's card is open over the broadcast, if any.
+   *
+   * Local to this screen rather than routed through App's viewingPlayerId, and that is forced: the
+   * simcast holds its generator in a ref for the life of the screen, so App rendering a player page
+   * instead would unmount it and lose the game. See Inspector.openTeam for the rest of that story.
+   */
+  const [inspectingId, setInspectingId] = useState<PlayerId | null>(null)
+  // Whether closing the card should start the clock again -- true only if the game was actually
+  // playing when it was opened, so opening a card during a pause doesn't resume on the way out.
+  const resumeOnCloseRef = useRef(false)
+
+  const openPlayer = useCallback(
+    (playerId: PlayerId) => {
+      // Paused while the card is up: at 1x a possession lands every 1.5 seconds, so reading a player
+      // sheet otherwise means missing the game you chose to watch rather than sim.
+      if (status === 'playing') {
+        togglePause()
+        resumeOnCloseRef.current = true
+      }
+      setInspectingId(playerId)
+    },
+    [status, togglePause],
+  )
+
+  const closePlayer = useCallback(() => {
+    setInspectingId(null)
+    if (resumeOnCloseRef.current) {
+      resumeOnCloseRef.current = false
+      togglePause()
+    }
+  }, [togglePause])
+
+  // openTeam is null on purpose -- there is no team page to reach from inside a broadcast, and a
+  // control that looks live and does nothing is worse than plain text.
+  const inspector = useMemo<Inspector>(() => ({ openPlayer, openTeam: null }), [openPlayer])
+
+  const inspectingPlayer = inspectingId ? (playbackContext.playerById.get(inspectingId) ?? null) : null
+
+  /**
    * A scheme change made mid-broadcast has to land in two places, because they are genuinely two
    * things: the run's saved standing instruction, and the game already in flight -- whose generator
    * captured the team as it was at the opening tip and cannot see a later save.
@@ -152,112 +193,127 @@ function SimcastBroadcast({
   const isAwaitingOvertimePrompt = status === 'awaiting-substitutions'
 
   return (
-    <main>
-      <h1>
-        {awayTeam.abbreviation} @ {homeTeam.abbreviation}
-      </h1>
+    <InspectorContext.Provider value={inspector}>
+      <main>
+        <h1>
+          {awayTeam.abbreviation} @ {homeTeam.abbreviation}
+        </h1>
 
-      <Scoreboard
-        homeTeam={homeTeam}
-        awayTeam={awayTeam}
-        homeScore={state.homeScore}
-        awayScore={state.awayScore}
-        periodLabel={isFinal ? `Final${formatOvertimeLabel(finalGame?.result?.overtimePeriods ?? 0)}` : state.periodLabel}
-        // Blank once the buzzer sounds -- "Final 0:00" reads like the clock is still running.
-        clockLabel={isFinal ? '' : state.clockLabel}
-        userTeamId={run.teamId}
-      />
+        <Scoreboard
+          homeTeam={homeTeam}
+          awayTeam={awayTeam}
+          homeScore={state.homeScore}
+          awayScore={state.awayScore}
+          periodLabel={isFinal ? `Final${formatOvertimeLabel(finalGame?.result?.overtimePeriods ?? 0)}` : state.periodLabel}
+          // Blank once the buzzer sounds -- "Final 0:00" reads like the clock is still running.
+          clockLabel={isFinal ? '' : state.clockLabel}
+          userTeamId={run.teamId}
+        />
 
-      {isAwaitingOvertimePrompt && (
-        <p className="section-note">
-          Overtime! The five that closed the fourth quarter carries on automatically -- hit Continue
-          when you're ready.
-        </p>
-      )}
+        {isAwaitingOvertimePrompt && (
+          <p className="section-note">
+            Overtime! The five that closed the fourth quarter carries on automatically -- hit Continue
+            when you're ready.
+          </p>
+        )}
 
-      <div className="simcast-controls">
-        {isFinal ? (
-          <button className="primary" onClick={handleContinue}>
-            Continue
-          </button>
-        ) : isAwaitingOvertimePrompt ? (
-          <>
-            <button className="primary" onClick={acknowledgeOvertimePrompt}>
-              Continue to Overtime
+        <div className="simcast-controls">
+          {isFinal ? (
+            <button className="primary" onClick={handleContinue}>
+              Continue
             </button>
-            <button onClick={skipToEnd}>Skip to Final</button>
-          </>
-        ) : (
-          <>
-            <button onClick={togglePause}>{status === 'playing' ? 'Pause' : 'Resume'}</button>
-            {PLAYBACK_SPEEDS.map((option) => (
-              <button
-                key={option}
-                onClick={() => setSpeed(option as PlaybackSpeed)}
-                disabled={speed === option}
-                aria-pressed={speed === option}
-              >
-                {option}x
+          ) : isAwaitingOvertimePrompt ? (
+            <>
+              <button className="primary" onClick={acknowledgeOvertimePrompt}>
+                Continue to Overtime
               </button>
-            ))}
-            <button onClick={skipToEnd}>Skip to Final</button>
-            {/* Nothing has been committed yet, so leaving here genuinely un-plays the game -- it
-                goes back to the stretch screen unresolved rather than half-recorded. */}
-            <button className="link-button" onClick={onAbandon}>
-              Leave without playing
-            </button>
+              <button onClick={skipToEnd}>Skip to Final</button>
+            </>
+          ) : (
+            <>
+              <button onClick={togglePause}>{status === 'playing' ? 'Pause' : 'Resume'}</button>
+              {PLAYBACK_SPEEDS.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setSpeed(option as PlaybackSpeed)}
+                  disabled={speed === option}
+                  aria-pressed={speed === option}
+                >
+                  {option}x
+                </button>
+              ))}
+              <button onClick={skipToEnd}>Skip to Final</button>
+              {/* Nothing has been committed yet, so leaving here genuinely un-plays the game -- it
+                  goes back to the stretch screen unresolved rather than half-recorded. */}
+              <button className="link-button" onClick={onAbandon}>
+                Leave without playing
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Live coaching, not a settings panel: available right up to the final buzzer and hidden
+            after it, since nothing can still be changed about a game that's over. It applies from the
+            next possession -- the one on screen has already been played and logged. */}
+        {!isFinal && (
+          <>
+            <p className="section-note">
+              <strong>Defense:</strong> <DefensiveSchemeSelect value={liveScheme} onChange={handleDefensiveScheme} /> -- takes effect from the
+              next possession, and sticks for the rest of the run.
+            </p>
+            {/* The dials behave exactly like the scheme above, which is the whole of D2: same control,
+                same "from the next possession", same value the checkpoint will show afterwards. */}
+            <div className="section-note">
+              <TacticalFocusControls focus={liveTeam.tacticalFocus} onChange={handleTacticalFocus} side="offense" />
+              <TacticalFocusControls focus={liveTeam.tacticalFocus} onChange={handleTacticalFocus} side="defense" />
+            </div>
           </>
         )}
-      </div>
 
-      {/* Live coaching, not a settings panel: available right up to the final buzzer and hidden
-          after it, since nothing can still be changed about a game that's over. It applies from the
-          next possession -- the one on screen has already been played and logged. */}
-      {!isFinal && (
-        <>
-          <p className="section-note">
-            <strong>Defense:</strong> <DefensiveSchemeSelect value={liveScheme} onChange={handleDefensiveScheme} /> -- takes effect from the
-            next possession, and sticks for the rest of the run.
-          </p>
-          {/* The dials behave exactly like the scheme above, which is the whole of D2: same control,
-              same "from the next possession", same value the checkpoint will show afterwards. */}
-          <div className="section-note">
-            <TacticalFocusControls focus={liveTeam.tacticalFocus} onChange={handleTacticalFocus} side="offense" />
-            <TacticalFocusControls focus={liveTeam.tacticalFocus} onChange={handleTacticalFocus} side="defense" />
-          </div>
-        </>
-      )}
+        <div className="simcast-body">
+          <section className="simcast-feed">
+            <h2>Play-by-Play</h2>
+            <CommentaryFeed feed={state.feed} userTeamId={run.teamId} />
+          </section>
 
-      <div className="simcast-body">
-        <section className="simcast-feed">
-          <h2>Play-by-Play</h2>
-          <CommentaryFeed feed={state.feed} userTeamId={run.teamId} />
-        </section>
+          <aside className="simcast-floor">
+            <OnCourtPanel
+              label={`${awayTeam.abbreviation} on the floor`}
+              onCourt={state.awayOnCourt}
+              playerById={playbackContext.playerById}
+              fatigue={state.fatigue}
+              isUserTeam={!userIsHome}
+            />
+            <OnCourtPanel
+              label={`${homeTeam.abbreviation} on the floor`}
+              onCourt={state.homeOnCourt}
+              playerById={playbackContext.playerById}
+              fatigue={state.fatigue}
+              isUserTeam={userIsHome}
+            />
+          </aside>
+        </div>
 
-        <aside className="simcast-floor">
-          <OnCourtPanel
-            label={`${awayTeam.abbreviation} on the floor`}
-            onCourt={state.awayOnCourt}
-            playerById={playbackContext.playerById}
-            fatigue={state.fatigue}
+        <h2>
+          {userTeam.abbreviation} {isFinal ? 'Box Score' : 'Box Score (live)'}
+        </h2>
+        {isFinal && finalGame?.result ? (
+          <BoxScoreTable lines={userIsHome ? finalGame.result.boxScore.home : finalGame.result.boxScore.away} players={userRoster} />
+        ) : (
+          <LiveBoxScore roster={userRoster} lines={state.lines} />
+        )}
+
+        {inspectingPlayer && (
+          <SimcastPlayerCard
+            player={inspectingPlayer}
+            isUserTeam={inspectingPlayer.teamId === run.teamId}
+            teamLabel={(inspectingPlayer.teamId === homeTeam.id ? homeTeam : awayTeam).abbreviation}
+            line={state.lines.get(inspectingPlayer.id)}
+            fatigue={state.fatigue.get(inspectingPlayer.id) ?? 0}
+            onClose={closePlayer}
           />
-          <OnCourtPanel
-            label={`${homeTeam.abbreviation} on the floor`}
-            onCourt={state.homeOnCourt}
-            playerById={playbackContext.playerById}
-            fatigue={state.fatigue}
-          />
-        </aside>
-      </div>
-
-      <h2>
-        {userTeam.abbreviation} {isFinal ? 'Box Score' : 'Box Score (live)'}
-      </h2>
-      {isFinal && finalGame?.result ? (
-        <BoxScoreTable lines={userIsHome ? finalGame.result.boxScore.home : finalGame.result.boxScore.away} players={userRoster} />
-      ) : (
-        <LiveBoxScore roster={userRoster} lines={state.lines} />
-      )}
-    </main>
+        )}
+      </main>
+    </InspectorContext.Provider>
   )
 }

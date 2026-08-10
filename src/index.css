@@ -686,9 +686,24 @@ h3 {
 }
 
 .on-court-name {
+  /* Two stacked lines now -- the name, and the one-glance ratings read under it. min-width: 0 so the
+     name still truncates inside the grid track rather than pushing the fatigue bar off the edge. */
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.on-court-name > * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Deliberately quiet: it is reference material sitting under a name, not the thing being watched. */
+.on-court-glance {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .on-court-state {
@@ -846,4 +861,73 @@ h3 {
 
 .rotation-segment-editor label {
   margin-top: 8px;
+}
+
+/* --- The simcast player card ---------------------------------------------------------------- */
+/* An overlay rather than a screen because routing away would unmount the broadcast and destroy the
+   game generator it holds in a ref -- see ui/simcast/SimcastPlayerCard.tsx. */
+
+.simcast-card-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 55%);
+}
+
+.simcast-card {
+  width: min(680px, 100%);
+  /* Without this the card is a flex item at its default min-width: auto, so the ten-column attribute
+     table's min-content width wins and the card grows past the viewport instead of letting
+     .table-scroll scroll. Measured at 568px wide on a 375px screen before it was added. */
+  min-width: 0;
+  /* The broadcast underneath can be long; the card never is. Scrolls internally on a short viewport
+     rather than pushing its own close button off-screen. */
+  max-height: min(80vh, 100%);
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 35%);
+}
+
+.simcast-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.simcast-card-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.simcast-card-sub {
+  margin: 4px 0 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* The two things this card exists for, and the two the run's player page cannot show: tonight's
+   line, which is not committed yet, and fatigue, which only exists in playback state. */
+.simcast-card-live {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-alt);
+  font-size: 14px;
+}
+
+.simcast-card-scout {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
 }

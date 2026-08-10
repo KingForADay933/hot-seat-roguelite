@@ -1,4 +1,5 @@
 import type { Player, PlayerId } from '../../data/types'
+import { PlayerName } from '../components/PlayerName'
 import type { LiveBoxScoreLine } from './playbackState'
 
 /**
@@ -40,7 +41,9 @@ export function LiveBoxScore({
         <tbody>
           {rows.map(({ player, line }) => (
             <tr key={player.id}>
-              <td>{player.name}</td>
+              <td>
+                <PlayerName playerId={player.id} name={player.name} />
+              </td>
               <td className="numeric">{Math.round(line.minutesPlayed)}</td>
               <td className="numeric">{line.points}</td>
               <td className="numeric">

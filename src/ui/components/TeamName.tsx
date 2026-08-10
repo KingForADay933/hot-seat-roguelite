@@ -34,7 +34,11 @@ export function TeamName({
     </>
   )
 
-  if (!team || !inspector) {
+  // Also plain when the inspector offers no team destination -- see Inspector.openTeam. The simcast
+  // provides one of those, so a team name rendered inside a broadcast stays text rather than becoming
+  // a button that leads nowhere.
+  const openTeam = inspector?.openTeam
+  if (!team || !openTeam) {
     return (
       <span className="team-name" style={bold ? { fontWeight: 700 } : undefined}>
         {inner}
@@ -47,7 +51,7 @@ export function TeamName({
       type="button"
       className="team-name player-link"
       style={bold ? { fontWeight: 700 } : undefined}
-      onClick={() => inspector.openTeam(team.id)}
+      onClick={() => openTeam(team.id)}
       title={`Scouting report: ${team.city} ${team.name}`}
     >
       {inner}
