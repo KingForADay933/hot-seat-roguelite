@@ -138,6 +138,11 @@ describe('simulateSeasonChunk', () => {
 
     const originalById = new Map(players.map((p) => [p.id, p]))
     for (const player of result.players) {
+      // The season's wildcard event (breakout/slump) also shifts a player, legitimately and by
+      // design -- it is applied to the returned roster and persisted. Excluded here so this stays a
+      // test of the consumable rather than of whichever mutation the seed happens to produce; an
+      // earlier version compared every player and only passed because its seed rolled no event.
+      if (player.id === result.wildcardEvent?.playerId) continue
       expect(player.attributes).toEqual(originalById.get(player.id)!.attributes)
       expect(player.hidden).toEqual(originalById.get(player.id)!.hidden)
     }

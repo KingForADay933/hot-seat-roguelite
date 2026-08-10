@@ -87,9 +87,15 @@ export function generateLeague(params: GenerateLeagueParams): GeneratedLeague {
 
   const chosen = shuffled(TEAM_POOL, rng).slice(0, teamCount)
 
+  // One set across the whole league, so no two players anywhere share a name -- opponents show up
+  // in scouting, box scores and player pages, where a repeat is as confusing as one on your own
+  // roster.
+  const takenNames = new Set<string>()
+
   const generated = chosen.map((entry, i) => {
     const [primaryColor, secondaryColor] = COLOR_PALETTE[i % COLOR_PALETTE.length]
     return generateTeam({
+      takenNames,
       name: entry.name,
       city: entry.city,
       abbreviation: entry.abbreviation,

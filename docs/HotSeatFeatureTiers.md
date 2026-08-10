@@ -646,14 +646,15 @@ which problems are real.
 
 ### Feel and comprehension
 
-- **Duplicate player names within a team.** Spotted during M1.5 verification: one roster carried two
-  different players both called *Xavier Ellery* (PG, 22, 70 OVR and SG, 28, 72 OVR), and first names
-  repeat heavily across a single roster — four Codys, three Xaviers. `randomPlayer.ts` draws first and
-  last names independently from small pools with no uniqueness check, so collisions are likely rather
-  than freak. Cosmetic, but it undermines every screen that identifies a player by name — the rotation
-  chart shows last names only, which makes it worse — and a playtester reading a starting five with
-  the same name twice will report it as a bug. Cheap fix (reject a name already used on the team, or
-  widen the pools).
+- **Shipped — duplicate player names.** Spotted during M1.5 verification: one roster carried two
+  different players both called *Xavier Ellery*, alongside four Codys and three Xaviers. Not bad
+  luck — 20 first names by 20 last gave 400 combinations for a league's ~96 players, which the
+  birthday maths puts at about eleven expected collisions. Fixed by drawing against a set of names
+  already taken, threaded through the whole league (opponents appear in scouting and player pages, so
+  per-roster uniqueness would not have been enough), and by widening both pools to 40 for 1600
+  combinations, which also stops first names repeating four times in a twelve-man roster. Rolls
+  first and falls back to a deterministic walk of the name space, so the work is bounded rather than
+  left to chance.
 
 - **Audio.** Completely absent today — there is no audio infrastructure of any kind. Named here so it
   doesn't fall through the gap rather than because it should happen soon. The simcast is the obvious
