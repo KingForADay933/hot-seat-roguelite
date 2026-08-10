@@ -2,7 +2,7 @@
 **Repo:** [KingForADay933/hot-seat-roguelite](https://github.com/KingForADay933/hot-seat-roguelite) (private)
 **Companion doc:** [[Roguelite-Basketball-GM-Design-Document]] -- vision, rationale, open questions. This doc is the flat feature/status catalog; that one is the "why."
 **Parent-project doc:** `Basketball Manager Game - Design Document.md` -- Hoop Sim's own design doc, which owns everything in `engine/`. Tier 0 is a port of what it describes.
-**Deep dives:** `rotation-charts.md` (Tier 7.6) covers the clock rewrite and lineup control in detail. `detailed-simcast.md` (Tier 7.7) is the planning doc for the labeled-court-view simcast, not yet built.
+**Deep dives:** `rotation-charts.md` (Tier 7.6) covers the clock rewrite and lineup control in detail. `detailed-simcast.md` (Tier 7.7) is the planning doc for the labeled-court-view simcast, not yet built. `m3-tactical-axis.md` is the build plan for the M3 milestone -- order, decisions, and the measurements behind them.
 
 ### Reading the "Section N" citations in code
 
@@ -48,10 +48,10 @@ playoffs add stakes structure but not a playstyle), and why injuries are schedul
 teeth).
 
 Estimates are **focused working days**, not calendar time — multiply by your own availability.
-Excluding the completed M1 and M1.5, the list totals roughly **96–138 days**: at two solid days a week
-that's 11–16 months, at four it's 6–8. (Was 76–112 before Tiers 18–22 were folded in; owner
-archetypes, focus points, mentorship, analytics and rivalries add 20–26 days, spread across M3
-through M7.)
+Excluding the completed M1 and M1.5, the milestone rows sum to **86–125 days**: at two solid days a
+week that's 10–15 months, at four it's 5–8. (Corrected from a stated 96–138, which did not match the
+column it summarised — worth re-adding whenever a milestone moves, since a headline number nobody
+checks is how a plan quietly stops being one.)
 
 **That is a real increase and worth reading as one.** The list has roughly doubled since it was first
 sequenced, and every addition has been individually justified — which is exactly how a scope grows
@@ -68,7 +68,7 @@ tied to a roster problem M5 could ship without, and focus points are the one tha
 | **M1 — Complete run** ✅ | ~~Simcast pacing~~ · ~~chronological game order~~ · ~~rebounds in-sim + defensive stats~~ · ~~run-end summary~~ — **complete** | 7.5, 1.5, 11, 8 | 10–14 |
 | **M1.5 — Pre-playtest legibility** ✅ | ~~Coaching Insights after every game~~ · ~~team records in the schedule~~ · ~~standings comprehension~~ · ~~weight rebounds toward bigs~~ — **complete** | 16, 11 | 2–4 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
-| **M3 — Tactical axis** | In-game decisions tiers 1–2 (scheme/focus switching) · **opponent scouting** · **tactical focus points** · position-fit tuning · more team-construction options | 13, 17, **19**, 7.6, 3 | 14–20 |
+| **M3 — Tactical axis** | Planned in detail in `m3-tactical-axis.md`, four design decisions settled. Position-fit retune · **opponent scouting** · **tactical focus points** (which *are* Tier 13 level 2, not a separate item) · more team-construction options | 7.6, 17, **19** + 13, 3 | 14–20 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations · **owner archetypes** · **nemesis teams** · richer Coaching Insights | 12, 16, **18**, **22** | 19–28 |
 | **M5 — Roster turnover** | Injuries · foul trouble · retirement, backfill & poaching · shop-based signings · **veteran mentorship** · run-configuration toggles | 14, 15, 12, **20** | 24–36 |
 | **M6 — Live coaching** | In-game decisions tiers 3–4 (substitutions, matchups, timeouts) | 13 | 15–20 |
@@ -310,7 +310,7 @@ Not part of the original phase plan. A 2K-style rotation chart, and the engine r
 - **Unsatisfiable charts degrade safely.** A chart naming one player in two slots at once used to seat him twice -- four bodies on the floor, and doubled minutes flowing into season development. All five slots are now resolved against the chart before any is applied; a double-booked player wins the first slot that asks and the loser falls through to the coach heuristic.
 - **Minutes are a per-position budget.** Each position group shares exactly 48 minutes, 240 team-wide, so raising one player means lowering a teammate at his position. This enforces an invariant the generator already had; a readout above the roster shows each position's allocation.
 - **The chart feeds synergy and projected usage** (see Tier 6). Charted spans count exactly; `rotationMinutes` governs Auto time, prorated by how much of that slot's budget the chart hasn't spent. Reduces identically to the old behavior when no chart exists.
-- **Planned -- tune the position-fit constants** (M3): the slide and height penalties are first-pass estimates written before any chart existed to exercise them. A GM can now build a real out-of-position lineup, so the thing blocking tuning is gone -- but nothing has been tuned against one. Same for the Positionless/Specialist thresholds, with a known skew: PG and C height bands are narrow and mostly consumed by their single neighbour's overlap, so almost any pure PG or C reads as Specialist by height alone. Watch the synergy knock-on as well as the per-possession effect.
+- **Planned -- retune the position-fit constants** (M3, planned in detail in `m3-tactical-axis.md`): the slide and height penalties are first-pass estimates written before any chart existed to exercise them. A GM can now build a real out-of-position lineup, so the thing blocking tuning is gone -- but nothing has been tuned against one. **The suspected Positionless/Specialist skew has now been measured, and it is worse than "almost any pure PG":** across 30 generated leagues (~2,900 players), **76.0% of point guards and 58.2% of centers read as Specialist**, and neutral is the *least* common outcome at every position but center (PG 19.3%, SG 18.2%, SF 25.9%, PF 16.6%, C 40.0%). A label meant to mark a player built for exactly one slot applies to most of the league, so it carries no information -- and since Specialist multiplies the penalty by 1.5, the harsh case is the common case and the neutral player the constants were reasoned around is the rare one. The cause is arithmetic: `SPECIALIST_HEIGHT_EDGE_INCHES` is 1 against a PG band only five inches wide, so four of five heights sit "at an edge". Measured slide cost for reference: 4.96 points of raw overall at one slot, 12.79 at two, 22.29 at three, 27.71 at four. Watch the synergy knock-on as well as the per-possession effect -- `effectivePlayer` feeds the same attribute reads synergy and projected usage do.
 - **Planned -- paint mode** (M7): pick a player, then click-drag across the grid to lay them straight into the time you drag over, instead of splitting and assigning as separate steps. The underlying plan mutations already exist, so this is a new *input* over the same operations -- mostly pointer handling. Decide whether painting respects the minimum-segment floor (probably yes), and make sure a stroke persists once on release, the way the boundary drag already batches to avoid a write per pixel.
 - **Explicitly out of scope here:** foul trouble and injuries as chart deviation rules. Neither system existed to build a rule on top of -- both are now Tier 14, which inherits this as part of its own work.
 
@@ -656,7 +656,22 @@ Turns ownership pressure from a scalar rank-fraction target into distinct behavi
 ---
 
 ## Tier 19 — Tactical Emphasis & Situational Focus Points
-**Planned -- scheduled M3**
+**Planned -- scheduled M3 -- planned in detail in `m3-tactical-axis.md`**
+
+> **This tier *is* Tier 13's level 2, not a separate piece of work, and it introduces *offensive focus* as a layer distinct from the drafted system.** Tier 13 defines level 2 as
+> "changes affecting only future possessions -- defensive scheme, focus points, play-call emphasis",
+> which is this tier's whole contents. Listing both as M3 line items double-counted one job. The
+> mechanism they share already ships: `simulateGameSteps` accepts a `CoachingDirective` through
+> `next()`, and mid-broadcast defensive scheme switching is live. What remains is widening that
+> directive to a discriminated union, adding an offensive and a defensive focus to `Team`, and
+> applying each dial as an offset on a knob the engine already reads.
+>
+> **Offensive focus is deliberately separate from the drafted offensive system.** The system is fixed
+> for a run and is what synergy is scored against; focus is a standing dial changeable any time, like
+> the defensive scheme. Folding focus into the system would have made one name mean both a fixed
+> identity and a live setting. The resulting model is symmetric: each end of the floor has one
+> preset and one live dial. Offensive focus feeds the synergy recompute, which is what keeps it a
+> roster-dependent decision rather than a setting with one correct answer.
 
 Granular pre-game and checkpoint levers, giving immediate counter-play against a scouted opponent (Tier 17) without building a full playbook editor.
 
