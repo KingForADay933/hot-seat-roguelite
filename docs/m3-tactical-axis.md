@@ -86,15 +86,18 @@ first just raised.
 
 ---
 
-## Decisions to make before writing code
+## Decisions — settled
 
-Four, and the first two constrain later milestones rather than just this one.
+All four are decided. Reasoning kept so they can be revisited on evidence rather than re-argued from
+scratch.
 
-### D1. The directive type — decide once, for M6 as well
+### D1. The directive type — build it for M6 now ✅
 
-The tiers doc already flags this: levels 1-2 need only a narrow directive, but the shape should be
-designed with levels 3-4 (substitutions, matchups, timeouts) in mind, because retrofitting it later
-is a rewrite of every call site.
+**Decided: widen it now to carry everything levels 1-4 will need, rather than reworking at M6.**
+
+Levels 1-2 need only a narrow directive, but every place that sends one would have to change when
+substitutions and timeouts arrive, and M6 is already the milestone most likely to slip. The extra
+cost now is roughly half a day.
 
 The current single-purpose shape does not extend. A discriminated union does, and keeps the engine's
 `applyDirective` exhaustive so a new kind cannot be silently ignored:
@@ -102,49 +105,80 @@ The current single-purpose shape does not extend. A discriminated union does, an
 ```ts
 export type CoachingDirective =
   | { kind: 'defensive-scheme'; teamId: TeamId; schemeId: string }
-  | { kind: 'tactical-focus'; teamId: TeamId; focus: Partial<TacticalFocus> }
-  // M6: | { kind: 'substitution'; ... } | { kind: 'timeout'; ... }
+  | { kind: 'tactical-focus'; teamId: TeamId; focus: TacticalFocus }
+  // M6 slots in here without touching any existing sender:
+  // | { kind: 'substitution'; teamId: TeamId; slot: Position; playerId: PlayerId }
+  // | { kind: 'timeout'; teamId: TeamId }
 ```
 
-**Decide:** whether directives are absolute (set focus to X) or relative (nudge focus one step).
-Absolute is simpler to reason about and idempotent, which matters because the playback hook keeps
-only the latest queued directive. Recommend absolute.
+**Directives are absolute, not relative** — they set a value rather than nudging one. The playback
+hook deliberately keeps only the *latest* queued directive, so a relative nudge would be silently
+dropped whenever two arrived between possessions. Absolute is also idempotent, which makes replay
+and testing straightforward.
 
-### D2. Are focus points a standing setting or a per-game tactic?
+### D2. Focus points are picked per game, and changeable live ✅
 
-Defensive scheme resolved this already: it is a persisted standing instruction, changeable from a
-checkpoint, from My Team, or mid-broadcast, and every path writes the same value. Focus points should
-follow it exactly, for the same reason — two mechanisms that mean "how we play" with different
-lifetimes would be a coin toss to the GM every time.
+**Decided: a per-game choice, editable on the fly during a simcast.** Not a standing setting the way
+the defensive scheme is — a tactical plan aimed at the specific opponent in front of you.
 
-That means a `Team.tacticalFocus` field, an optional one so existing saves stay valid, and reuse of
-the `setDefensiveScheme` pattern in `RunProvider`.
+This is the most interesting answer of the four and the one that costs the most, because it collides
+with something the game already does: **games can be played in bulk.** "Sim Next Stretch" and "Sim
+the Rest & Continue" resolve eight games with no per-game interaction, and blocking each on a tactics
+prompt would either gut those buttons or throw away the feature for anyone who uses them.
 
-### D3. How much does scouting reveal?
+So the shape is per-game *choice* over a sticky *value*:
 
-The tiers doc's recommendation stands and is cheap: **system, scheme and starting five, not the full
-attribute sheet.** Full visibility turns every game into homework and sits badly against synergy
-being a hidden property of your own roster. Deeper scouting is a natural thing for the shop to sell
-later, which also gives Budget another claimant.
+- `Team.tacticalFocus` stores the current plan. Optional, so existing saves stay valid.
+- **On the stretch screen**, each of the GM's own upcoming games carries its tactics inline —
+  pre-filled from the stored value, editable in place before hitting Sim or Watch Live. Inline rather
+  than a blocking pre-game screen, so simming a game does not grow a modal.
+- **Editing writes back**, so the next game defaults to what you last chose rather than resetting to
+  nothing. "Per game" means *asked every game*, not *forgotten every game* — nobody wants to rebuild
+  a plan from scratch 32 times a season.
+- **Mid-simcast changes** go through the directive and write back too, exactly as the defensive
+  scheme control already does.
+- **Bulk sim uses the stored value** without prompting. That is the only coherent answer: the
+  alternative is eight modals or a silently ignored feature.
 
-**Decide:** whether opponent *player* pages are reachable from a scouting view. `PlayerScreen` already
-renders any player, so this is a link, not a feature — but it is also the whole attribute sheet, which
-contradicts the paragraph above. Recommend: link to opponents' players but hide the attribute table
-for players not on your team, showing tags and role only.
+> **Consequence worth naming:** this leaves the defensive scheme (standing) and focus points
+> (per-game) with different lifetimes, which is the thing the standing-setting option was meant to
+> avoid. It is defensible — a scheme is who you are, a game plan is who you are *today* — but the UI
+> has to make the difference obvious, or it will read as inconsistent rather than intentional. Two
+> panels labelled by lifetime, not one merged "tactics" panel.
 
-### D4. What should Specialist and Positionless mean?
+### D3. Scouting reveals system, scheme and starting five ✅
 
-Two ways to fix the skew, and they are not the same decision:
+**Decided: not the full attribute sheet.**
 
-- **Retune the thresholds** so the labels are rare again — raise `SPECIALIST_ATTRIBUTE_SPREAD_MIN`,
-  drop `SPECIALIST_HEIGHT_EDGE_INCHES` to 0, or widen the height bands. Cheapest, and keeps the
-  current model.
-- **Redefine them as a spectrum** rather than three buckets — a single `positionalFlexibility` score
-  driving a continuous severity multiplier. Removes the cliff where one inch of height flips a player
-  between a 0.5x and a 1.5x penalty, which is the part most likely to read as arbitrary.
+Full visibility turns every game into homework and sits badly against synergy being a hidden property
+of your own roster. This is enough to make a real plan against an opponent — which is the whole point
+of pairing scouting with focus points — without making optimal play a spreadsheet exercise.
 
-Recommend retuning first and measuring again, because the spectrum is a bigger change and the
-buckets may be fine once they are actually rare.
+**Opponent player pages stay reachable** (`PlayerScreen` already renders any player) **but hide the
+attribute table for players not on your team**, showing identity, tags and role instead. Otherwise
+the link quietly reinstates exactly the full-sheet visibility this decision rules out.
+
+Deeper scouting as a shop purchase stays available as a later addition, and would give Budget another
+claimant — but it is not part of M3, and adding a shop card before scouting has proved fun is the
+wrong order.
+
+### D4. Retune the position-fit thresholds ✅
+
+**Decided: adjust the numbers so the labels become rare again, keeping the three-bucket model.**
+
+Cheapest fix, keeps a model that is otherwise working, and the result can be measured exactly the way
+the problem was. Candidate levers, in order of bluntness: drop `SPECIALIST_HEIGHT_EDGE_INCHES` from 1
+to 0, raise `SPECIALIST_ATTRIBUTE_SPREAD_MIN` above 55, widen `POSITION_HEIGHT_RANGE_INCHES` for PG
+and C.
+
+**Target: neutral is the plurality at every position, with each label somewhere near 15-25%.** The
+exact split matters less than neutral being the default, which is what makes a quirk mean something.
+
+**If it still reads as arbitrary after retuning, the escalation is the spectrum** — one
+`positionalFlexibility` score driving a continuous severity multiplier, removing the cliff where one
+inch of height flips a player between a 0.5x and a 1.5x penalty. Deliberately not done first: it is a
+bigger change, it touches the reveal screen and synergy, and the buckets may well be fine once they
+are actually rare.
 
 ---
 
@@ -157,12 +191,14 @@ separated by the two feature items (tuning back to back is hard to judge).
 |---|---|---|---|---|
 | 1 | Position-fit retune | 7.6 | 2–3 | Independent, measurement-driven, and currently mis-scaled in a way that will distort any judgment about out-of-position play made after it |
 | 2 | Opponent scouting | 17 | 3–4 | Gives the next item something to aim at |
-| 3 | Tactical focus points + directive widening | 19 + 13 L2 | 5–7 | The milestone's centerpiece; the answer to what scouting reveals |
+| 3 | Tactical focus points + directive widening | 19 + 13 L2 | 6–8 | The milestone's centerpiece; the answer to what scouting reveals |
 | 4 | Team-construction options | 3 | 2–3 | Independent and small; good closing item while focus points settle |
 | 5 | Generalized pause-on-condition | 13 L1 | 1–2 | Only worth doing if focus points want a mid-game prompt — decide after 3 |
 
-**Total 13–19 days**, against the milestone table's 14–20. The overlap found above roughly cancels the
-work added by taking position-fit tuning seriously, so the headline number stands.
+**Total 14–20 days**, matching the milestone table. Item 3 grew by a day over the first estimate once
+D2 settled as per-game rather than standing: an inline per-game editor on the stretch screen is more
+surface than a single settings control, and bulk sim has to be handled explicitly rather than
+inheriting one value.
 
 ### 1. Position-fit retune (2-3 days)
 
@@ -206,8 +242,13 @@ Work breakdown:
 - Widen `CoachingDirective` to the union in D1, and make `applyDirective` exhaustive over it.
 - Add `Team.tacticalFocus` (optional), and a `setTacticalFocus` action mirroring `setDefensiveScheme`.
 - Apply the offsets at the four sites above, each behind a named constant so they can be tuned.
-- UI: a focus panel on My Team and the checkpoint, and a compact version in the simcast beside the
-  existing defensive-scheme control.
+- UI, per D2: an **inline per-game editor on the stretch screen** (pre-filled from the last plan,
+  editable before Sim or Watch Live), a compact version in the simcast beside the existing
+  defensive-scheme control, and nothing on My Team — the scheme lives there because it is standing,
+  and putting a per-game plan next to it is what would make the two lifetimes confusing.
+- Bulk sim paths (`Sim Next Stretch`, `Sim the Rest & Continue`, `Sim First Stretch`) read the stored
+  plan without prompting. Worth an explicit test: the failure mode is a feature that silently does
+  nothing for anyone who plays that way.
 - **Every dial needs a real cost.** Push the pace and you take worse shots; crash the boards and you
   concede transition. A dial with only an upside is a strictly-correct setting, which is the failure
   mode to design against here.

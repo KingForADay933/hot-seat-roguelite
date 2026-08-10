@@ -48,8 +48,8 @@ playoffs add stakes structure but not a playstyle), and why injuries are schedul
 teeth).
 
 Estimates are **focused working days**, not calendar time — multiply by your own availability.
-Excluding the completed M1 and M1.5, the milestone rows sum to **85–124 days**: at two solid days a
-week that's 10–14 months, at four it's 5–7. (Corrected from a stated 96–138, which did not match the
+Excluding the completed M1 and M1.5, the milestone rows sum to **86–125 days**: at two solid days a
+week that's 10–15 months, at four it's 5–8. (Corrected from a stated 96–138, which did not match the
 column it summarised — worth re-adding whenever a milestone moves, since a headline number nobody
 checks is how a plan quietly stops being one.)
 
@@ -68,7 +68,7 @@ tied to a roster problem M5 could ship without, and focus points are the one tha
 | **M1 — Complete run** ✅ | ~~Simcast pacing~~ · ~~chronological game order~~ · ~~rebounds in-sim + defensive stats~~ · ~~run-end summary~~ — **complete** | 7.5, 1.5, 11, 8 | 10–14 |
 | **M1.5 — Pre-playtest legibility** ✅ | ~~Coaching Insights after every game~~ · ~~team records in the schedule~~ · ~~standings comprehension~~ · ~~weight rebounds toward bigs~~ — **complete** | 16, 11 | 2–4 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
-| **M3 — Tactical axis** | Planned in detail in `m3-tactical-axis.md`. Position-fit retune · **opponent scouting** · **tactical focus points** (which *are* Tier 13 level 2, not a separate item) · more team-construction options | 7.6, 17, **19** + 13, 3 | 13–19 |
+| **M3 — Tactical axis** | Planned in detail in `m3-tactical-axis.md`, four design decisions settled. Position-fit retune · **opponent scouting** · **tactical focus points** (which *are* Tier 13 level 2, not a separate item) · more team-construction options | 7.6, 17, **19** + 13, 3 | 14–20 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations · **owner archetypes** · **nemesis teams** · richer Coaching Insights | 12, 16, **18**, **22** | 19–28 |
 | **M5 — Roster turnover** | Injuries · foul trouble · retirement, backfill & poaching · shop-based signings · **veteran mentorship** · run-configuration toggles | 14, 15, 12, **20** | 24–36 |
 | **M6 — Live coaching** | In-game decisions tiers 3–4 (substitutions, matchups, timeouts) | 13 | 15–20 |
