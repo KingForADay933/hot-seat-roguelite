@@ -2,7 +2,7 @@
 import { ASSIST_ELIGIBLE_PLAY_CALLS } from '../../engine/boxScore'
 import { generateCommentaryLine } from '../../engine/commentary/generateCommentaryLine'
 import { PERIOD_SECONDS, REGULATION_PERIODS, SECONDS_PER_MINUTE } from '../../engine/constants'
-import { fatigueGainPerSecond, fatigueRecoveryPerSecond } from '../../engine/rotation/fatigue'
+import { applyBreakRecovery, fatigueGainPerSecond, fatigueRecoveryPerSecond } from '../../engine/rotation/fatigue'
 import { formatGameClock, getPeriodLabel, type SimulationStep } from '../../engine/simulateGame'
 
 /**
@@ -150,6 +150,13 @@ export function advancePlayback(context: PlaybackContext, state: PlaybackState, 
   const fatigue = new Map(state.fatigue)
   const homeIds = entry.homeOnCourt.map((o) => o.playerId)
   const awayIds = entry.awayOnCourt.map((o) => o.playerId)
+  // A quarter has ended between the last possession and this one, so the break the sim gave everyone
+  // has to land here too -- otherwise the energy bars would tell a GM watching the broadcast a
+  // different story from the game they are watching.
+  if (entry.period > state.period) {
+    applyBreakRecovery(fatigue, context.homeRoster, state.period)
+    applyBreakRecovery(fatigue, context.awayRoster, state.period)
+  }
   tickTeamFatigue(fatigue, context.homeRoster, homeIds, entry.durationSeconds)
   tickTeamFatigue(fatigue, context.awayRoster, awayIds, entry.durationSeconds)
 

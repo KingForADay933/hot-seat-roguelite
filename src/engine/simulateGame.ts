@@ -11,7 +11,7 @@ import { possessionDurationSeconds } from './possession/possessionDuration'
 import { offensiveReboundProbability, pickRebounder } from './possession/rebound'
 import { resolvePossession } from './possession/outcomeResolver'
 import { computeResistance } from './possession/resistance'
-import { tickFatigue } from './rotation/fatigue'
+import { applyBreakRecovery, tickFatigue } from './rotation/fatigue'
 import { createRotationState } from './rotation/rotationState'
 import { checkSubstitutions } from './rotation/substitution'
 import type { Rng } from './rng'
@@ -344,12 +344,22 @@ export function* simulateGameSteps(
     }
   }
 
+  /** Everybody sits down. The one moment fatigue moves for a reason other than who is playing. */
+  function takeBreak(periodJustEnded: number): void {
+    applyBreakRecovery(homeRotation.fatigue, homeRoster, periodJustEnded)
+    applyBreakRecovery(awayRotation.fatigue, awayRoster, periodJustEnded)
+  }
+
   for (let period = 1; period <= REGULATION_PERIODS; period++) {
     yield* runPeriod(period, PERIOD_SECONDS, rollJumpBall(rng))
+    // Not after the last regulation period: if the game is over there is no break, and if it isn't
+    // the overtime loop below takes one before it plays.
+    if (period < REGULATION_PERIODS) takeBreak(period)
   }
 
   let overtimePeriods = 0
   while (homeScore === awayScore) {
+    takeBreak(REGULATION_PERIODS + overtimePeriods)
     overtimePeriods += 1
     yield* runPeriod(REGULATION_PERIODS + overtimePeriods, OVERTIME_SECONDS, rollJumpBall(rng))
   }

@@ -3,7 +3,7 @@ import { PERIOD_SECONDS } from '../engine/constants'
 import { clamp } from '../engine/math'
 import { POSITION_ORDER } from '../engine/matchup'
 import { slotSlideDistance } from '../engine/positionFit'
-import { fatigueGainPerSecond, fatigueRecoveryPerSecond } from '../engine/rotation/fatigue'
+import { applyBreakRecovery, fatigueGainPerSecond, fatigueRecoveryPerSecond } from '../engine/rotation/fatigue'
 import { CHARTABLE_PERIODS, getSegments } from './rotationChart'
 
 /** Live-validation reads on a rotation chart (rotation-charts.md Phase G): what a GM sees while
@@ -153,6 +153,14 @@ export function projectedFatigueAtPeriodEnd(team: Team, playersById: Map<PlayerI
       }
       if (cursor < PERIOD_SECONDS) fatigue = clamp(fatigue - fatigueRecoveryPerSecond(player) * (PERIOD_SECONDS - cursor), 0, 100)
       atPeriodEnd.push(Math.round(fatigue))
+      // Reported *before* the break, then carried forward *after* it: the number in the column is
+      // where this player finished the quarter, which is what the GM is charting against, while what
+      // rolls into the next period is where the break left him. Omitting this would have the editor
+      // promise rest the game does not give -- the chart's whole job is to be believable about the
+      // game it is planning.
+      const breakFatigue = new Map([[playerId, fatigue]])
+      applyBreakRecovery(breakFatigue, [player], period)
+      fatigue = breakFatigue.get(playerId) ?? fatigue
     }
     trajectories.set(playerId, atPeriodEnd)
   }

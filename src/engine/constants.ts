@@ -258,6 +258,9 @@ export const OVERTIME_MINUTES = 5
 
 export const SECONDS_PER_MINUTE = 60
 export const REGULATION_PERIODS = 4
+/** The period after which the long break falls -- derived rather than written as 2, so a rules
+ *  variant with a different period count keeps its halftime in the middle. */
+export const HALFTIME_AFTER_PERIOD = REGULATION_PERIODS / 2
 /** 12-minute quarters. */
 export const PERIOD_SECONDS = (REGULATION_MINUTES / REGULATION_PERIODS) * SECONDS_PER_MINUTE
 export const REGULATION_SECONDS = REGULATION_MINUTES * SECONDS_PER_MINUTE
@@ -405,6 +408,27 @@ export const FATIGUE_ROTATE_THRESHOLD = 55
 
 /** Fatigue so high a player is pulled immediately, bypassing MIN_SHIFT_SECONDS's cooldown. */
 export const FATIGUE_EMERGENCY_THRESHOLD = 95
+
+/**
+ * Fatigue points handed back at a break in play, before the durability multiplier. Everyone gets
+ * them, on court or not -- the whole point is that a break is time nobody spends playing, which is
+ * the one thing the per-second model above cannot express.
+ *
+ * Flat rather than a share of what a player has accumulated: a break is a fixed span of sitting
+ * down, and how much good it does should not depend on how tired you happened to be when it started.
+ *
+ * Denominated in points rather than in "seconds of bench rest", even though the two are the same
+ * thing through FATIGUE_RECOVERY_PER_SECOND. Seconds would invite writing down the real fifteen-
+ * minute halftime, which at 0.174/s restores 156 points against a 100-point scale and would reset
+ * every player to zero every game. Points state the intent directly instead of passing a fudged
+ * number and hoping nobody reads it as wall clock.
+ *
+ * 35 undoes roughly 3.7 minutes of play; 12 undoes about 80 seconds. A player who never leaves the
+ * floor still gets only 59 back across a whole game and still runs out -- nobody plays 48 minutes
+ * fresh -- but it now happens in the fourth quarter rather than the middle of the second.
+ */
+export const FATIGUE_HALFTIME_RECOVERY = 35
+export const FATIGUE_PERIOD_BREAK_RECOVERY = 12
 
 /** A bench player must be rested to at or below this to be sub-in eligible -- left well below
  *  FATIGUE_SUB_OUT_THRESHOLD so a just-subbed-out player can never immediately re-qualify. */
