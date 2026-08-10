@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { DEFENSIVE_SCHEMES } from '../../data/presets'
 import type { GameId } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
-import { recordsThroughGame } from '../../engine/schedule/standings'
+import { gamesReachedBy, recordsThroughGame } from '../../engine/schedule/standings'
 import { summarizeChunkInsights } from '../../run/chunkInsightSummary'
 import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { nextPlayableGameId, runTeamChunkGames } from '../../run/seasonChunks'
@@ -43,7 +43,15 @@ export function StretchScreen({
 
   // Records read from the whole season's games, not just this chunk's -- a record that restarted at
   // 0-0 every stretch would be a different and much less useful number. One pass per listed game.
-  const recordsByGame = new Map(stretchGames.map((game) => [game.id, recordsThroughGame(games, game.id)]))
+  //
+  // Capped at what the GM has actually reached, though, which is the whole reason gamesReachedBy
+  // exists: this chunk's AI-vs-AI games are all resolved the moment the stretch opens (beginStretch),
+  // so reading `games` straight put a record beside teams from fixtures dated *after* the one being
+  // played -- a league that had run a fortnight ahead of the only person meant to be playing it.
+  // An unplayed row's id is not in the capped list, so recordsThroughGame's documented fallback gives
+  // it every team's record as of now, which is exactly what "carried into this game" should mean.
+  const gamesSoFar = gamesReachedBy(games, run.teamId)
+  const recordsByGame = new Map(stretchGames.map((game) => [game.id, recordsThroughGame(gamesSoFar, game.id)]))
 
   const openGame = stretchGames.find((g) => g.id === openBoxScoreId)
   const openResult = openGame?.result
