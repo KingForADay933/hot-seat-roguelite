@@ -1,4 +1,4 @@
-﻿import type { Position, TendencyProfile } from '../data/types'
+﻿import type { AttributeKey, Position, TendencyProfile } from '../data/types'
 
 /** All formula weights live here so balance tuning is a config change, not a code change. */
 
@@ -21,6 +21,61 @@ export const POSITION_HEIGHT_RANGE_INCHES: Record<Position, [number, number]> = 
   SF: [77, 81],
   PF: [80, 84],
   C: [82, 88],
+}
+
+/**
+ * Position-flavored attribute bias, in points, applied on top of a bell-ish baseline roll
+ * (engine/generator/randomPlayer.ts).
+ *
+ * Lives here rather than privately in the generator because it has a second, non-obvious reader:
+ * engine/positionFit.ts measures how *spiked* a player's profile is, and the honest version of that
+ * question subtracts what his position is rolled with first. A PG comes out of the generator +15
+ * ballHandling and -15 rebounding, so 30 points of spread are baked in before any dice -- measuring
+ * raw max-minus-min was really asking "is this PG shaped like a PG", which every PG is.
+ *
+ * Same arrangement, and the same reason, as POSITION_HEIGHT_RANGE_INCHES above: one table, two
+ * readers, no chance of the two drifting apart.
+ */
+export const POSITION_BIAS: Record<Position, Partial<Record<AttributeKey, number>>> = {
+  PG: {
+    ballHandling: 15,
+    passing: 15,
+    speed: 10,
+    lateralQuickness: 10,
+    outsideShot: 5,
+    insideShot: -10,
+    interiorDefense: -15,
+    rebounding: -15,
+  },
+  SG: {
+    outsideShot: 15,
+    ballHandling: 5,
+    speed: 5,
+    perimeterDefense: 5,
+    interiorDefense: -10,
+    rebounding: -10,
+  },
+  SF: {},
+  PF: {
+    insideShot: 10,
+    rebounding: 10,
+    interiorDefense: 10,
+    vertical: 5,
+    outsideShot: -10,
+    ballHandling: -10,
+    speed: -5,
+  },
+  C: {
+    insideShot: 15,
+    rebounding: 15,
+    interiorDefense: 15,
+    vertical: 10,
+    outsideShot: -15,
+    ballHandling: -15,
+    speed: -10,
+    lateralQuickness: -10,
+    passing: -5,
+  },
 }
 
 export const POSSESSION_STRENGTH_WEIGHTS = {
@@ -497,15 +552,17 @@ export const SLOT_INTERIOR_LEAN: Record<Position, number> = {
  *  6'9"-SF example, which is in-range for both SF and PF). */
 export const POSITIONLESS_MIN_HEIGHT_BANDS = 2
 
-/** Spread (max attribute - min attribute) at/below which a profile counts as "balanced" for
- *  Positionless, and at/above which it counts as "spiked" for Specialist. Attributes run 0-100, so
- *  this is a generous band on each side of "roughly flat". */
-export const POSITIONLESS_ATTRIBUTE_SPREAD_MAX = 35
-export const SPECIALIST_ATTRIBUTE_SPREAD_MIN = 55
-
-/** A height within this many inches of either edge of the player's own position's band counts as
- *  "at the extreme" for Specialist -- the tall end of PG or the short end of C, say. */
-export const SPECIALIST_HEIGHT_EDGE_INCHES = 1
+/** Spread at/below which a profile counts as "balanced" for Positionless, and at/above which it
+ *  counts as "spiked" for Specialist. Both read positionFit.ts's `positionRelativeSpread`, not the
+ *  raw max-minus-min: POSITION_BIAS above builds 30 points of raw spread into a point guard before
+ *  a die is thrown, so a raw test mostly asks "is this PG shaped like a PG".
+ *
+ *  Derived from the residual distribution across 30 generated leagues (~2,880 players), where the
+ *  median sits at 32-34 at every position and p90 at 44-52. 26 and 42 put roughly the flattest fifth
+ *  and the spikiest fifth on either side, leaving neutral the clear plurality everywhere -- see
+ *  positionFit.test.ts's distribution test, which is the real specification. */
+export const POSITIONLESS_ATTRIBUTE_SPREAD_MAX = 26
+export const SPECIALIST_ATTRIBUTE_SPREAD_MIN = 42
 
 /** Multiplies the slide/height severity before it's applied: a Positionless player's height and
  *  attribute profile already fit more than one slot, so a slide costs them less; a Specialist is

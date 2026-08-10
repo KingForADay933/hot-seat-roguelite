@@ -207,7 +207,8 @@ Positionless and Specialist should follow suit and be derived:
 
 - **Positionless**: height sits inside more than one band, attribute profile balanced rather than
   spiked. A genuinely 6'7" player with no glaring hole *is* positionless; nothing needs writing down.
-- **Specialist**: height at the extreme of a single band, or a sharply spiked attribute profile.
+- **Specialist**: a sharply spiked attribute profile. (This originally also read "height at the
+  extreme of a single band, or"; that arm was removed in M3 -- see §8's threshold note.)
 
 No schema change, so no save breakage, and it cannot drift out of sync with the player.
 
@@ -318,8 +319,9 @@ uniform" rule from §4, derived from the engine's own interior/perimeter split (
 than routing through `PLAY_CALL_MODELS`, which has no notion of slot to hang a demand weight off of;
 see the open questions below for why that's a placeholder rather than the last word.
 
-Positionless/Specialist are derived (never stored) from height-band overlap and attribute spread --
-`isPositionless`/`isSpecialist` in the same file -- and feed back into `quirkMultiplier`: 0.5x for
+Positionless/Specialist are derived (never stored) from height-band overlap and position-relative
+attribute spread -- `isPositionless`/`isSpecialist` in the same file -- and feed back into
+`quirkMultiplier`: 0.5x for
 Positionless, 1.5x for Specialist, 1x otherwise. `ui/playerTags.ts` wraps the same two functions for
 the team-reveal card, satisfying §4's "reconcile the vocabulary" note.
 
@@ -606,14 +608,16 @@ right direction, and the new score survived a reload.
   but nothing has actually been tuned against one yet. Watch the synergy knock-on
   (`computeInitialSynergyScore` reads the same attributes through `possessionRoles.ts`) as well as
   the per-possession effect, as originally planned.
-- **Quirk derivation thresholds are now real, tunable numbers, not settled.**
+- **Quirk derivation thresholds -- retuned and now measured, but still tunable.**
   `POSITIONLESS_MIN_HEIGHT_BANDS` / `POSITIONLESS_ATTRIBUTE_SPREAD_MAX` / `SPECIALIST_ATTRIBUTE_SPREAD_MIN`
-  / `SPECIALIST_HEIGHT_EDGE_INCHES` in `constants.ts`. One consequence worth knowing before tuning
-  further: because PG's and C's own height bands are narrow and mostly consumed by their one neighbor's
-  overlap, almost every single-band PG/C height is close enough to that band's outer edge to read as
-  Specialist by height alone -- SG/SF/PF, each with two neighbors, have more room to be genuinely
-  neutral. Not obviously wrong (a "pure", non-overlapping point guard height *is* a shorter point
-  guard), but it means Positionless/Specialist are not evenly distributed across positions today.
+  in `constants.ts`. The consequence flagged here originally -- that PG and C read as Specialist by
+  height alone far more often than SG/SF/PF -- was measured in M3 and was severe (76% of PGs, 58% of
+  Cs). Both causes are fixed: the two attribute thresholds now run on `positionRelativeSpread`, which
+  subtracts `POSITION_BIAS` before measuring, and `SPECIALIST_HEIGHT_EDGE_INCHES` is **deleted** along
+  with the height arm of `isSpecialist` (`heightMisfitInches` already prices extreme height per inch,
+  so the arm double-counted, and no value of it could be rare given five-to-seven-inch bands). Neutral
+  is now the plurality at every position. `positionFit.test.ts` asserts the distribution; see
+  `m3-tactical-axis.md` finding 2 for the tables.
 - **Attribute-fit "role fit" is not separately modeled.** §4 flagged `PLAY_CALL_MODELS` as a better
   basis than `POSITION_BIAS` for the penalty's attribute-fit component; Phase E's demand-weighting
   instead derives directly from the engine's interior/perimeter split (see Phase E above) because

@@ -59,19 +59,62 @@ Specialist multiplies the out-of-position penalty by 1.5, **the harsh case is th
 neutral player the penalty constants were reasoned around is the rarest of the three at every
 position except center.
 
-The cause is arithmetic, not judgment: `SPECIALIST_HEIGHT_EDGE_INCHES` is 1, and PG's height band is
-only five inches wide (72-76), so four of five possible heights sit "at an edge." SF is the only
-position with enough band width and enough neighbor overlap to come out mostly neutral — which is
-exactly why it is the one position that reads as Positionless more often than Specialist.
+The cause was arithmetic, not judgment, and there were two of them.
 
-Slide cost, same sample, in points of raw overall quality:
+**The attribute test was reading the position back to itself.** `SPECIALIST_ATTRIBUTE_SPREAD_MIN` ran
+against a raw max-minus-min, but `POSITION_BIAS` builds spread in by construction — a PG is rolled at
++15 ballHandling and −15 rebounding, a 30-point gap before a die is thrown. So the test largely asked
+*"is this point guard shaped like a point guard."* The table above is the proof: SF is the only
+position with an empty bias entry and the only one that came out mostly neutral.
 
-| Slide | Average cost |
-|---|---|
-| 1 slot | 4.96 |
-| 2 slots | 12.79 |
-| 3 slots | 22.29 |
-| 4 slots | 27.71 |
+**The height test could never be rare.** `SPECIALIST_HEIGHT_EDGE_INCHES` was 1 against a PG band only
+five inches wide, so four of five possible heights sat "at an edge" — but even at 0, a quarter of
+every position lands exactly on a band edge, because the bands are five to seven discrete inches
+wide. No value of the constant makes that arm uncommon.
+
+### Shipped ✅
+
+`positionRelativeSpread` subtracts `POSITION_BIAS` before measuring, which collapses the between-
+position gap: median residual spread is 32-34 at *every* position, against a raw median that ran from
+34 (SF) to 48.5 (C). One threshold now means the same thing everywhere. Thresholds re-derived from
+that distribution: `POSITIONLESS_ATTRIBUTE_SPREAD_MAX` 35 → **26**, `SPECIALIST_ATTRIBUTE_SPREAD_MIN`
+55 → **42**.
+
+The height arm of `isSpecialist` was **removed rather than retuned**, which the plan did not
+anticipate. It double-counted: `effectivePlayer` already charges an extreme height per inch through
+`heightMisfitInches`, continuously and in the right direction (the shortest PG is the one who misfits
+every slot he slides to). Worse, flagging him Specialist multiplied the *slide-distance* term by 1.5
+too, which has nothing to do with his height — and it did so as a cliff, one inch flipping a player
+between 1x and 1.5x. `SPECIALIST_HEIGHT_EDGE_INCHES` is deleted. Height inflexibility is still
+priced; it is priced once, smoothly, where it belongs.
+
+| Position | Positionless | Neutral | Specialist |
+|---|---|---|---|
+| PG | 18.7% | **64.4%** | 16.9% |
+| SG | 20.1% | **59.9%** | 20.0% |
+| SF | 14.6% | **67.3%** | 18.1% |
+| PF | 21.9% | **60.5%** | 17.5% |
+| C | 9.4% | **66.0%** | 24.6% |
+
+Neutral is the plurality everywhere at 60-67%, and both labels sit in the 15-25% target band. The one
+outlier is C's 9.4% Positionless, which is structural and correct: a center's height lands in a
+second position's band only 37.6% of the time, so centers really are the least positionally flexible
+players in the league. `positionFit.test.ts` now asserts this distribution rather than anyone
+eyeballing it once.
+
+Slide cost, same sample, in points of raw overall quality — down 10-15% purely from removing 1.5x
+surcharges that should never have applied:
+
+| Slide | Before | After |
+|---|---|---|
+| 1 slot | 4.96 | 4.43 |
+| 2 slots | 12.79 | 11.52 |
+| 3 slots | 22.29 | 18.78 |
+| 4 slots | 27.71 | 24.33 |
+
+`POSITION_FIT_SLIDE_PENALTY_PER_SLOT` and `POSITION_FIT_HEIGHT_PENALTY_PER_INCH` were deliberately
+**not** touched — changing labels and magnitudes in the same pass means being unable to attribute
+either effect. Whether the numbers above are the right size is an M2 playtest question.
 
 A one-slot slide costing ~5 points is mild; a four-slot slide costing ~28 turns a 70 into a 42. Both
 are defensible in isolation. Neither has been checked against whether a GM ever *wants* to slide
@@ -182,18 +225,22 @@ wrong order.
 **Decided: adjust the numbers so the labels become rare again, keeping the three-bucket model.**
 
 Cheapest fix, keeps a model that is otherwise working, and the result can be measured exactly the way
-the problem was. Candidate levers, in order of bluntness: drop `SPECIALIST_HEIGHT_EDGE_INCHES` from 1
-to 0, raise `SPECIALIST_ATTRIBUTE_SPREAD_MIN` above 55, widen `POSITION_HEIGHT_RANGE_INCHES` for PG
-and C.
+the problem was.
 
 **Target: neutral is the plurality at every position, with each label somewhere near 15-25%.** The
 exact split matters less than neutral being the default, which is what makes a quirk mean something.
 
-**If it still reads as arbitrary after retuning, the escalation is the spectrum** — one
-`positionalFlexibility` score driving a continuous severity multiplier, removing the cliff where one
-inch of height flips a player between a 0.5x and a 1.5x penalty. Deliberately not done first: it is a
-bigger change, it touches the reveal screen and synergy, and the buckets may well be fine once they
-are actually rare.
+**Shipped, and the target was met** — see finding 2 above for the numbers. The measurement changed
+the shape of the fix twice: the attribute threshold had to be re-derived against a *position-relative*
+spread rather than merely raised, and the height arm had to be removed rather than tuned, because no
+value of `SPECIALIST_HEIGHT_EDGE_INCHES` makes a quarter of the league uncommon.
+
+**The escalation is no longer needed for the reason it was written.** A `positionalFlexibility`
+spectrum was held in reserve against the cliff where one inch of height flips a player between 0.5x
+and 1.5x. Removing the height arm removes that cliff on the Specialist side outright. Positionless
+still has a discrete height gate (`heightBandsContaining(...).length >= 2`), so a one-inch cliff
+between 0.5x and 1x survives there — smaller, one-sided, and worth revisiting only if playtesting
+says it reads as arbitrary.
 
 ---
 
@@ -204,7 +251,7 @@ separated by the two feature items (tuning back to back is hard to judge).
 
 | # | Item | Tier | Days | Why here |
 |---|---|---|---|---|
-| 1 | Position-fit retune | 7.6 | 2–3 | Independent, measurement-driven, and currently mis-scaled in a way that will distort any judgment about out-of-position play made after it |
+| 1 | Position-fit retune ✅ | 7.6 | 2–3 | Independent, measurement-driven, and currently mis-scaled in a way that will distort any judgment about out-of-position play made after it |
 | 2 | Opponent scouting | 17 | 3–4 | Gives the next item something to aim at |
 | 3 | Tactical focus points + directive widening | 19 + 13 L2 | 6–8 | The milestone's centerpiece; the answer to what scouting reveals |
 | 4 | Team-construction options | 3 | 2–3 | Independent and small; good closing item while focus points settle |
@@ -215,19 +262,30 @@ dropping the per-game editor and the bulk-sim special case gave back about a day
 offensive focus from the drafted system — including routing it through the synergy recompute and
 making the playbook re-readable mid-game — took it straight back.
 
-### 1. Position-fit retune (2-3 days)
+### 1. Position-fit retune (2-3 days) ✅ shipped
 
-Not a feature — a measurement, a constant change, and a re-measurement.
+Not a feature — a measurement, a constant change, and a re-measurement. Finding 2 above carries the
+before/after tables; what actually shipped:
 
-- Reuse the diagnostic shape this doc's tables came from: quirk distribution by position, and average
-  quality lost per slide distance.
-- Target: Specialist and Positionless each land somewhere near 15-25% per position, with neutral the
-  plurality everywhere. The exact numbers matter less than *neutral being the default*, which is what
-  makes a quirk mean something.
-- Re-measure slide cost afterwards. The severity multipliers act on it, so changing which players are
-  labelled changes the effective penalty even if no penalty constant moves.
-- **Watch the synergy knock-on.** `effectivePlayer` feeds attribute reads, and synergy and projected
-  usage read the same attributes, so this moves numbers on the reveal screen as well as in the sim.
+- `POSITION_BIAS` moved from `engine/generator/randomPlayer.ts` into `engine/constants.ts`, so the
+  generator and `positionFit` read one table rather than two that can drift. Same precedent as
+  `POSITION_HEIGHT_RANGE_INCHES`, which already had a second reader for the same reason.
+- `positionRelativeSpread` added beside `attributeSpread`: subtract the position's own bias, *then*
+  take max-minus-min. Both quirks read it. `attributeSpread` stays exported — it is independently
+  tested and is the honest name for the raw measure.
+- `POSITIONLESS_ATTRIBUTE_SPREAD_MAX` 35 → 26, `SPECIALIST_ATTRIBUTE_SPREAD_MIN` 55 → 42, both
+  derived from the residual distribution rather than adjusted by feel.
+- `SPECIALIST_HEIGHT_EDGE_INCHES` deleted along with the height arm of `isSpecialist`.
+- The distribution is now a regression test in `positionFit.test.ts` (five seeded leagues, ~480
+  players), asserting neutral is the plurality everywhere and neither label is dead or dominant. It
+  doubles as the measurement tool if generation changes.
+- Slide cost re-measured and recorded; no penalty magnitude touched.
+
+**The synergy knock-on turned out to be a non-issue.** `effectivePlayer` returns the same reference
+when the slot matches the player's own position, and every AI team and every un-charted user team is
+in that case — so the reveal screen's synergy and projected-usage numbers only move for a team the GM
+has deliberately charted out of position. The full scoring-calibration suite passing unchanged is the
+evidence.
 
 ### 2. Opponent scouting (3-4 days)
 
