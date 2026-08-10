@@ -50,9 +50,13 @@ export function growthHeadroom(player: Player): number {
   )
 }
 
-/** Highest and lowest attribute by value, as display labels -- the one-glance "what is he" read. */
-export function attributeExtremes(player: Player): { best: { label: string; value: number }; worst: { label: string; value: number } } {
-  const scored = ATTRIBUTE_COLUMNS.map((col) => ({ label: col.label, value: player.attributes[col.key] }))
+/** Highest and lowest attribute by value, as display labels -- the one-glance "what is he" read.
+ *  Carries both spellings so a caller can pick: `label` for a dense line, `long` for a sentence. */
+export function attributeExtremes(player: Player): {
+  best: { label: string; long: string; value: number }
+  worst: { label: string; long: string; value: number }
+} {
+  const scored = ATTRIBUTE_COLUMNS.map((col) => ({ label: col.label, long: col.long, value: player.attributes[col.key] }))
   const best = scored.reduce((top, cur) => (cur.value > top.value ? cur : top))
   const worst = scored.reduce((low, cur) => (cur.value < low.value ? cur : low))
   return { best, worst }

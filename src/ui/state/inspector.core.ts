@@ -18,7 +18,17 @@ import type { PlayerId, TeamId } from '../../data/types'
  */
 export interface Inspector {
   openPlayer: (playerId: PlayerId) => void
-  openTeam: (teamId: TeamId) => void
+  /**
+   * Null where a team page cannot be reached from here, and the simcast is the case that matters.
+   *
+   * A live broadcast holds its game generator in a ref for the life of the screen
+   * (simcast/useSimcastPlayback.ts), so routing away to a full screen would unmount it and lose the
+   * game in progress. The simcast therefore provides an inspector that opens players in an overlay
+   * and offers no team destination at all. Rather than hand it a no-op -- a control that looks live
+   * and does nothing -- TeamName degrades to plain text on null, exactly as both names already do
+   * when there is no inspector in scope at all.
+   */
+  openTeam: ((teamId: TeamId) => void) | null
 }
 
 export const InspectorContext = createContext<Inspector | null>(null)

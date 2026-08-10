@@ -16,11 +16,13 @@ describe('growthHeadroom', () => {
 })
 
 describe('attributeExtremes', () => {
-  it('names the highest and lowest attribute by display label', () => {
+  it('names the highest and lowest attribute in both spellings', () => {
+    // Both, because the callers want different ones: a dense line takes the abbreviation, and the
+    // simcast card's scouting sentence takes the written-out name.
     const player = makeTestPlayer({ attributes: { outsideShot: 91, rebounding: 22 } })
     const { best, worst } = attributeExtremes(player)
-    expect(best).toEqual({ label: 'OUT', value: 91 })
-    expect(worst).toEqual({ label: 'REB', value: 22 })
+    expect(best).toEqual({ label: 'OUT', long: 'Outside Shot', value: 91 })
+    expect(worst).toEqual({ label: 'REB', long: 'Rebounding', value: 22 })
   })
 })
 
