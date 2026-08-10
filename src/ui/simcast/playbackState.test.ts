@@ -3,7 +3,7 @@ import type { Game, Player, PlayerId, Team } from '../../data/types'
 import { deriveBoxScore } from '../../engine/boxScore'
 import { generateLeague } from '../../engine/generator/randomLeague'
 import { createSeededRng } from '../../engine/rng'
-import { tickFatigue } from '../../engine/rotation/fatigue'
+import { applyBreakRecovery, tickFatigue } from '../../engine/rotation/fatigue'
 import { createRotationState } from '../../engine/rotation/rotationState'
 import { simulateGameSteps, type SimulationStep } from '../../engine/simulateGame'
 import { advancePlayback, createPlaybackState, entersNewOvertimePeriod, type PlaybackContext, type PlaybackState } from './playbackState'
@@ -85,9 +85,20 @@ describe('advancePlayback', () => {
     const { steps, context, homeTeam, playerById } = playOneGame(13)
 
     // An independent RotationState driven through tickFatigue with the on-court five the log
-    // recorded -- exactly what simulateGameSteps did internally as it played.
+    // recorded, plus the break recovery at each period boundary -- exactly what simulateGameSteps
+    // did internally as it played.
+    //
+    // The break half is not incidental. This test is the guard that the simcast's energy bars show
+    // the game the sim actually played, and when period breaks were added it failed first, because
+    // this reference was still the old continuous model. Anything that changes how fatigue moves has
+    // to be reflected in both sides here, which is the point of keeping two implementations.
     const rotation = createRotationState(homeTeam, playerById)
+    let previousPeriod = steps[0]?.entry.period ?? 1
     for (const step of steps) {
+      if (step.entry.period > previousPeriod) {
+        applyBreakRecovery(rotation.fatigue, context.homeRoster, previousPeriod)
+        previousPeriod = step.entry.period
+      }
       rotation.onCourt = step.entry.homeOnCourt.map(({ playerId, slot }) => ({ player: playerById.get(playerId)!, slot }))
       tickFatigue(rotation, context.homeRoster, step.entry.durationSeconds)
     }

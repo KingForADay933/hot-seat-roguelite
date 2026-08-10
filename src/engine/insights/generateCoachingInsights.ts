@@ -10,7 +10,7 @@ import {
   REGULATION_PERIODS,
 } from '../constants'
 import { worstInteriorDefender, worstPerimeterDefender } from '../possession/playerSelector'
-import { tickFatigue } from '../rotation/fatigue'
+import { applyBreakRecovery, tickFatigue } from '../rotation/fatigue'
 import { chartedPlayerId } from '../rotation/rotationPlan'
 import type { RotationState } from '../rotation/rotationState'
 import { getPeriodLabel } from '../simulateGame'
@@ -260,6 +260,12 @@ function detectFatigueSubstitutionEvents(
 
     const next = possessionLog[i + 1]
     if (!next) continue
+    // A period boundary in the log is a break in the game, and the live sim handed everyone recovery
+    // there. Reconstructing without it would have this replay drifting further from the real
+    // trajectory with every quarter -- and this replay is what decides whether a substitution gets
+    // reported as a fatigue pull, so the drift would show up as insights about games that didn't
+    // happen that way.
+    if (next.period > entry.period) applyBreakRecovery(state.fatigue, roster, entry.period)
     const onCourtIds = onCourt.map((o) => o.playerId)
     const nextOnCourtIds = (teamIsHome ? next.homeOnCourt : next.awayOnCourt).map((o) => o.playerId)
     const nextSet = new Set(nextOnCourtIds)
