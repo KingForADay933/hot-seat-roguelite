@@ -1,12 +1,14 @@
 ﻿import { useCallback, useMemo } from 'react'
 import type { DefensiveSchemeId } from '../../data/presets'
-import type { Game, Player, Team } from '../../data/types'
+import { BALANCED_FOCUS, type Game, type Player, type TacticalFocus, type Team } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { defaultRng } from '../../engine/rng'
 import { playGameLive } from '../../run/resolveGame'
+import { resolveSynergyScore } from '../../run/teamSynergy'
 import type { LiveGame } from '../state/runContext.core'
 import { BoxScoreTable } from '../components/BoxScoreTable'
 import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
+import { TacticalFocusControls } from '../components/TacticalFocusControls'
 import { formatOvertimeLabel } from '../formatOvertime'
 import { CommentaryFeed } from '../simcast/CommentaryFeed'
 import { LiveBoxScore } from '../simcast/LiveBoxScore'
@@ -25,12 +27,14 @@ export function SimcastScreen({
   onCommit,
   onAbandon,
   onSetDefensiveScheme,
+  onSetTacticalFocus,
 }: {
   bundle: RunBundle
   liveGame: LiveGame
   onCommit: (played: Game) => void
   onAbandon: () => void
   onSetDefensiveScheme: (schemeId: DefensiveSchemeId) => void
+  onSetTacticalFocus: (focus: Partial<TacticalFocus>) => void
 }) {
   const { game, context } = liveGame
   const homeTeam = context.teamsById.get(game.homeTeamId)
@@ -58,6 +62,7 @@ export function SimcastScreen({
       onCommit={onCommit}
       onAbandon={onAbandon}
       onSetDefensiveScheme={onSetDefensiveScheme}
+      onSetTacticalFocus={onSetTacticalFocus}
     />
   )
 }
@@ -74,6 +79,7 @@ function SimcastBroadcast({
   onCommit,
   onAbandon,
   onSetDefensiveScheme,
+  onSetTacticalFocus,
 }: {
   bundle: RunBundle
   game: Game
@@ -84,6 +90,7 @@ function SimcastBroadcast({
   onCommit: (played: Game) => void
   onAbandon: () => void
   onSetDefensiveScheme: (schemeId: DefensiveSchemeId) => void
+  onSetTacticalFocus: (focus: Partial<TacticalFocus>) => void
 }) {
   const { run } = bundle
   const { state, status, finalGame, speed, setSpeed, togglePause, skipToEnd, acknowledgeOvertimePrompt, applyDirective } =
@@ -103,13 +110,36 @@ function SimcastBroadcast({
    */
   const handleDefensiveScheme = useCallback(
     (schemeId: DefensiveSchemeId) => {
-      applyDirective({ teamId: run.teamId, defensiveSchemeId: schemeId })
+      applyDirective({ kind: 'defensive-scheme', teamId: run.teamId, schemeId })
       onSetDefensiveScheme(schemeId)
     },
     [applyDirective, onSetDefensiveScheme, run.teamId],
   )
 
   const liveScheme = bundle.teams.find((t) => t.id === run.teamId)?.defensiveStrategyId ?? userTeam.defensiveStrategyId
+  const liveTeam = bundle.teams.find((t) => t.id === run.teamId) ?? userTeam
+
+  /**
+   * A dial changed mid-broadcast, landing in the same two places a scheme change does -- with one
+   * extra piece of freight.
+   *
+   * Shot selection changes the play-call mix, and synergy scores the roster against that mix, so the
+   * running generator's synergy multiplier would otherwise go stale the moment the dial moved. The
+   * engine cannot recompute it: computeInitialSynergyScore lives in `run/`, and `engine/` does not
+   * import from there. So the score is resolved here -- where the roster and the playbook are both
+   * in hand -- and travels with the directive. That is the same direction synergy already flows,
+   * via Team.synergyScore; this is just the mid-game edition of it.
+   */
+  const handleTacticalFocus = useCallback(
+    (partial: Partial<TacticalFocus>) => {
+      const focus: TacticalFocus = { ...BALANCED_FOCUS, ...liveTeam.tacticalFocus, ...partial }
+      const roster = bundle.players.filter((p) => p.teamId === liveTeam.id)
+      const synergyScore = resolveSynergyScore(liveTeam, roster, run.coachingUpgrades, focus)
+      applyDirective({ kind: 'tactical-focus', teamId: run.teamId, focus, synergyScore })
+      onSetTacticalFocus(partial)
+    },
+    [applyDirective, bundle.players, liveTeam, onSetTacticalFocus, run.coachingUpgrades, run.teamId],
+  )
 
   const handleContinue = useCallback(() => {
     if (finalGame) onCommit(finalGame)
@@ -184,10 +214,18 @@ function SimcastBroadcast({
           after it, since nothing can still be changed about a game that's over. It applies from the
           next possession -- the one on screen has already been played and logged. */}
       {!isFinal && (
-        <p className="section-note">
-          <strong>Defense:</strong> <DefensiveSchemeSelect value={liveScheme} onChange={handleDefensiveScheme} /> -- takes effect from the
-          next possession, and sticks for the rest of the run.
-        </p>
+        <>
+          <p className="section-note">
+            <strong>Defense:</strong> <DefensiveSchemeSelect value={liveScheme} onChange={handleDefensiveScheme} /> -- takes effect from the
+            next possession, and sticks for the rest of the run.
+          </p>
+          {/* The dials behave exactly like the scheme above, which is the whole of D2: same control,
+              same "from the next possession", same value the checkpoint will show afterwards. */}
+          <div className="section-note">
+            <TacticalFocusControls focus={liveTeam.tacticalFocus} onChange={handleTacticalFocus} side="offense" />
+            <TacticalFocusControls focus={liveTeam.tacticalFocus} onChange={handleTacticalFocus} side="defense" />
+          </div>
+        </>
       )}
 
       <div className="simcast-body">

@@ -1,6 +1,7 @@
-import type { AttributeKey, RotationPlan } from '../../data/types'
+import type { AttributeKey, RotationPlan, TacticalFocus } from '../../data/types'
 import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS, type DefensiveSchemeId } from '../../data/presets'
 import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
+import { TacticalFocusControls } from '../components/TacticalFocusControls'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { computeStandings } from '../../engine/schedule/standings'
 import { COACHING_UPGRADES } from '../../run/coachingUpgrades'
@@ -34,6 +35,7 @@ export function MyTeamScreen({
   onSetFocus,
   onSetRotationPlan,
   onSetDefensiveScheme,
+  onSetTacticalFocus,
   onBack,
 }: {
   bundle: RunBundle
@@ -41,6 +43,7 @@ export function MyTeamScreen({
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
   onSetRotationPlan: (plan: RotationPlan) => void
   onSetDefensiveScheme: (schemeId: DefensiveSchemeId) => void
+  onSetTacticalFocus: (focus: Partial<TacticalFocus>) => void
   onBack: () => void
 }) {
   const { run, teams, players, games } = bundle
@@ -80,10 +83,15 @@ export function MyTeamScreen({
         <p>
           <strong>Offense: {offense.name}</strong> -- {offense.description} (Synergy: {team.synergyScore})
         </p>
+        {/* Grouped under the system rather than in a block of their own: the system is who the team
+            is and these are how it plays, and reading them apart invites the question of whether
+            changing a dial changed the offense. It doesn't -- the system is drafted once. */}
+        <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="offense" />
         <p>
           <strong>Defense:</strong> <DefensiveSchemeSelect value={team.defensiveStrategyId} onChange={onSetDefensiveScheme} /> --{' '}
           {defense.description}
         </p>
+        <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="defense" />
         <p>
           <strong>Head Coach: {team.coaching.headCoachRating}</strong> -- {team.practiceSettings.individualDevelopmentShare}% of
           practice goes to individual development.

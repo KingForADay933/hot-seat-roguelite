@@ -1,5 +1,5 @@
 ﻿import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../data/presets'
-import type { Game, OnCourtRecord, Player, PossessionLogEntry, Team, TeamId } from '../data/types'
+import type { Game, OnCourtRecord, Player, PossessionLogEntry, TacticalFocus, Team, TeamId } from '../data/types'
 import { deriveBoxScore } from './boxScore'
 import { OVERTIME_SECONDS, PERIOD_SECONDS, REGULATION_PERIODS } from './constants'
 import { playersOf, type OnCourtPlayer } from './matchup'
@@ -15,6 +15,13 @@ import { tickFatigue } from './rotation/fatigue'
 import { createRotationState } from './rotation/rotationState'
 import { checkSubstitutions } from './rotation/substitution'
 import type { Rng } from './rng'
+import {
+  fastBreakResistanceScale,
+  focusedPlaybook,
+  focusPaceEfficiency,
+  focusPaceScale,
+  focusReboundOffset,
+} from './tacticalFocus'
 
 /** Flattens a slot-assigned five into the form the possession log records it in. */
 function toOnCourtRecords(five: OnCourtPlayer[]): OnCourtRecord[] {
@@ -77,10 +84,19 @@ export interface SimulationStep {
  * Named by team rather than assumed to be the user's, because the engine has no concept of which
  * team a human is coaching and should not acquire one.
  */
-export interface CoachingDirective {
-  teamId: TeamId
-  defensiveSchemeId: string
-}
+export type CoachingDirective =
+  | { kind: 'defensive-scheme'; teamId: TeamId; schemeId: string }
+  /**
+   * The dials, plus the synergy score they imply.
+   *
+   * Carrying the score looks redundant until you ask who could compute it: shot selection changes
+   * the play-call mix, synergy scores the roster against that mix, and the function that scores it
+   * (run/variation/systemDraft.ts's computeInitialSynergyScore) lives a layer above the engine,
+   * which never imports from `run/`. Rather than invert that, the sender -- which is UI, and already
+   * holds the bundle -- resolves the number and hands it over. Consistent rather than a workaround:
+   * the engine is already told its synergy this way, via Team.synergyScore.
+   */
+  | { kind: 'tactical-focus'; teamId: TeamId; focus: TacticalFocus; synergyScore: number }
 
 /**
  * Simulates one game possession-by-possession (Section 5.5's independent resolution model),
@@ -124,24 +140,52 @@ export function* simulateGameSteps(
   const homeRotation = createRotationState(homeTeam, playersById)
   const awayRotation = createRotationState(awayTeam, playersById)
 
-  const homePlaybook = OFFENSIVE_PLAYBOOKS[homeTeam.offensiveStrategyId]
-  const awayPlaybook = OFFENSIVE_PLAYBOOKS[awayTeam.offensiveStrategyId]
-  // Re-readable rather than fixed for the game: a CoachingDirective can swap either side's scheme
-  // between possessions. Everything else resolved up here genuinely can't change mid-game.
+  // Every one of these is re-readable rather than fixed for the game, because a CoachingDirective
+  // can move it between possessions. The scheme got there first (mid-broadcast defensive switching);
+  // focus points brought the other three with them. Synergy in particular used to be a `const` with
+  // a comment saying it couldn't change mid-game -- shot selection changes the play-call mix, so it
+  // can, and leaving it fixed would have quietly left the multiplier describing the wrong offense.
+  let homeFocus = homeTeam.tacticalFocus
+  let awayFocus = awayTeam.tacticalFocus
+  let homePlaybook = focusedPlaybook(OFFENSIVE_PLAYBOOKS[homeTeam.offensiveStrategyId], homeFocus)
+  let awayPlaybook = focusedPlaybook(OFFENSIVE_PLAYBOOKS[awayTeam.offensiveStrategyId], awayFocus)
   let homeScheme = DEFENSIVE_SCHEMES[homeTeam.defensiveStrategyId]
   let awayScheme = DEFENSIVE_SCHEMES[awayTeam.defensiveStrategyId]
+  let homeSynergy = synergyMultiplier(homeTeam.synergyScore)
+  let awaySynergy = synergyMultiplier(awayTeam.synergyScore)
 
   /** Ignores a directive naming a team that isn't playing, or a scheme that doesn't exist -- the
-   *  engine is the last boundary before a bad id would reach possession resolution. */
+   *  engine is the last boundary before a bad id would reach possession resolution. Exhaustive over
+   *  the union on purpose (D1): a kind added for M6's substitutions and timeouts will fail to
+   *  compile here rather than being silently dropped. */
   function applyDirective(directive: CoachingDirective): void {
-    const scheme = DEFENSIVE_SCHEMES[directive.defensiveSchemeId]
-    if (!scheme) return
-    if (directive.teamId === homeTeam.id) homeScheme = scheme
-    else if (directive.teamId === awayTeam.id) awayScheme = scheme
+    const isHome = directive.teamId === homeTeam.id
+    if (!isHome && directive.teamId !== awayTeam.id) return
+
+    switch (directive.kind) {
+      case 'defensive-scheme': {
+        const scheme = DEFENSIVE_SCHEMES[directive.schemeId]
+        if (!scheme) return
+        if (isHome) homeScheme = scheme
+        else awayScheme = scheme
+        return
+      }
+      case 'tactical-focus': {
+        const team = isHome ? homeTeam : awayTeam
+        const playbook = focusedPlaybook(OFFENSIVE_PLAYBOOKS[team.offensiveStrategyId], directive.focus)
+        if (isHome) {
+          homeFocus = directive.focus
+          homePlaybook = playbook
+          homeSynergy = synergyMultiplier(directive.synergyScore)
+        } else {
+          awayFocus = directive.focus
+          awayPlaybook = playbook
+          awaySynergy = synergyMultiplier(directive.synergyScore)
+        }
+        return
+      }
+    }
   }
-  // Computed once -- synergyScore doesn't change mid-game.
-  const homeSynergy = synergyMultiplier(homeTeam.synergyScore)
-  const awaySynergy = synergyMultiplier(awayTeam.synergyScore)
 
   const possessionLog: PossessionLogEntry[] = []
   let homeScore = 0
@@ -161,6 +205,12 @@ export function* simulateGameSteps(
     // Set when the previous attempt was rebounded by its own offense, making this one a putback
     // rather than a fresh trip up the floor.
     let isSecondChance = false
+    // Set when the previous possession was a miss the *defense* rebounded, so the ball has turned
+    // over live and whoever just shot is now defending in transition. Whether that costs them
+    // anything is decided by their glass dial, not by this flag -- which is what keeps a balanced
+    // team's game byte-identical. Exactly the shape of isSecondChance above, and the only
+    // cross-possession state focus points needed.
+    let isFastBreak = false
 
     while (clock > 0) {
       possessionNumber += 1
@@ -186,21 +236,36 @@ export function* simulateGameSteps(
       // and rebounding only care who is out there, so they take the plain fives.
       const offenseOnCourt = playersOf(offenseFive)
       const defenseOnCourt = playersOf(defenseFive)
-      const playbook = homeIsOffense ? homePlaybook : awayPlaybook
       const scheme = homeIsOffense ? awayScheme : homeScheme
       const synergy = homeIsOffense ? homeSynergy : awaySynergy
+      const offenseFocus = homeIsOffense ? homeFocus : awayFocus
+      const defenseFocus = homeIsOffense ? awayFocus : homeFocus
+      const playbook = homeIsOffense ? homePlaybook : awayPlaybook
       const scoreMargin = homeIsOffense ? homeScore - awayScore : awayScore - homeScore
 
       const playCall = selectPlayCall(playbook, rng)
       const selection = selectPlayers(playCall, offenseFive, defenseFive, scheme, rng)
-      const strength = computeOffenseStrength(playCall, selection, playbook, offenseOnCourt, synergy)
-      const resistance = computeResistance(playCall, selection, scheme, offenseOnCourt, defenseOnCourt)
+      const strength = computeOffenseStrength(
+        playCall,
+        selection,
+        playbook,
+        offenseOnCourt,
+        synergy * focusPaceEfficiency(offenseFocus),
+      )
+      // The glass dial's whole cost and payout, on the one trip where it means anything: the
+      // defense here is the team that just missed, so crashing means they are not back yet and
+      // getting back means they arrived set. 1 for a balanced team, which is why an un-dialled
+      // game is unchanged.
+      const resistance =
+        computeResistance(playCall, selection, scheme, offenseOnCourt, defenseOnCourt, defenseFocus) *
+        (isFastBreak ? fastBreakResistanceScale(defenseFocus) : 1)
       const resolved = resolvePossession(playCall, selection, strength, resistance, clock, isFinalPeriod, scoreMargin, rng)
 
       // Only a miss can be rebounded by the offense: a make is inbounded by the other team, a
       // turnover hands it over, and a foul stops play for free throws.
       const offensiveRebound =
-        resolved.outcome === 'miss' && rng() < offensiveReboundProbability(offenseOnCourt, defenseOnCourt)
+        resolved.outcome === 'miss' &&
+        rng() < offensiveReboundProbability(offenseOnCourt, defenseOnCourt, focusReboundOffset(offenseFocus))
       // Who actually came down with it, decided here rather than in deriveBoxScore so the rebounder
       // exists while the possession is still happening -- the live box score and commentary both
       // read the log, and neither can see a stat that isn't settled until the final buzzer.
@@ -214,7 +279,14 @@ export function* simulateGameSteps(
       // runs long.
       const durationSeconds = Math.min(
         clock,
-        possessionDurationSeconds(playCall, resolved.outcome, possessionsPerGame, rng, isSecondChance),
+        possessionDurationSeconds(
+          playCall,
+          resolved.outcome,
+          possessionsPerGame,
+          rng,
+          isSecondChance,
+          focusPaceScale(offenseFocus),
+        ),
       )
       clock -= durationSeconds
       elapsedSeconds += durationSeconds
@@ -260,6 +332,10 @@ export function* simulateGameSteps(
       // makes a trip able to span several attempts.
       if (!offensiveRebound) homeIsOffense = !homeIsOffense
       isSecondChance = offensiveRebound
+      // A live rebound the other way: the ball has turned over off a miss, so the team that shot it
+      // is now getting back. Set for every such board rather than only for a crashing offense, so
+      // the flag describes the *situation* and the dial alone decides what it costs.
+      isFastBreak = resolved.outcome === 'miss' && !offensiveRebound
 
       // Whatever the caller hands back takes effect from the next possession -- this one is already
       // resolved and logged.

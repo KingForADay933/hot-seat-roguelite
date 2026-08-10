@@ -570,3 +570,68 @@ export const SPECIALIST_ATTRIBUTE_SPREAD_MIN = 42
  *  fresh from height and attributes every time (rotation-charts.md Section 4, "derive, don't store"). */
 export const POSITIONLESS_SEVERITY_MULTIPLIER = 0.5
 export const SPECIALIST_SEVERITY_MULTIPLIER = 1.5
+
+/**
+ * Tuning constants for the four tactical dials (data/types/team.ts's TacticalFocus). Read only
+ * through engine/tacticalFocus.ts, which is the single place a dial turns into a number.
+ *
+ * Every one of these is an *offset* on a quantity computed elsewhere in this file, and every dial's
+ * balanced setting applies none of them -- that is what keeps an un-focused team byte-identical to
+ * the game before focus points existed.
+ */
+
+/** Scales a sampled possession duration. Pushing takes ~8% off the clock a trip burns, controlling
+ *  adds ~8% -- worth roughly five possessions a game each way against a ~100-possession baseline,
+ *  which is a real tempo swing without turning a half-court team into a track meet. */
+export const FOCUS_PACE_DURATION_SCALE = 0.08
+
+/**
+ * The efficiency half of the pace trade, applied to the offense multiplier: rushed looks are worse
+ * looks, and working the clock buys quality back.
+ *
+ * Small on purpose, and it was measured down to this. The volume half of the trade is *symmetric* --
+ * a period is a fixed length and possessions alternate, so changing tempo hands the opponent exactly
+ * as many extra trips as it hands you -- which means the two volume effects cancel between evenly
+ * matched teams and what is left is whatever this constant does. At 0.02 that made Control Tempo a
+ * flat, free +2% offense: measured across four systems and five opponent playbooks, it won every
+ * single cell, which is the definition of a setting rather than a decision.
+ *
+ * What should decide the dial is the volume effect itself: more possessions amplify the gap between
+ * two teams, so push when you are better and control when you are not. That is a real per-opponent
+ * read, and it is exactly what the scouting report exists to inform.
+ */
+export const FOCUS_PACE_EFFICIENCY = 0.004
+
+/** How hard shot selection leans the playbook. Applied multiplicatively (see tacticalFocus.ts), so
+ *  the drafted system stays the identity -- a 40% lean on a play call the system never runs is still
+ *  nothing, and a system with no transition cannot buy any. */
+export const FOCUS_SHOT_SELECTION_LEAN = 0.4
+
+
+/** Added to or taken off the defensive scheme's interiorFocus (0-1). resistance.ts's
+ *  applyInteriorFocus is already symmetric around 0.5, so this gains inside exactly as much as it
+ *  concedes outside; clamped in tacticalFocus.ts so a tilted Pack-the-Paint stays inside the range
+ *  its formula was reasoned on. */
+export const FOCUS_DEFENSIVE_TILT = 0.1
+
+/** Added to or taken off the offensive rebound probability, against a 0.25 base -- a fifth of the
+ *  rate either way, which shows up as a couple of extra second-chance possessions a game. */
+export const FOCUS_GLASS_REBOUND_OFFSET = 0.04
+
+/**
+ * What the glass dial does to your *defense* on the possession right after your own missed shot --
+ * the trip where whether you crashed or retreated decides if you are back in front of the ball.
+ * Multiplies resistance: crashing concedes an unset defense, getting back arrives already set.
+ *
+ * This replaced a first attempt that granted the rebounding team extra transition weight instead,
+ * on the reasoning that crashing concedes fast breaks. Measurement killed it: **transition is the
+ * least efficient play call in the engine** (0.872 points per possession against spot-up's 1.134),
+ * so handing the opponent more of it was a *gift* to the crasher rather than a cost. Crash then won
+ * every cell of a four-system by five-opponent sweep by up to +6 points a game.
+ *
+ * Charging the cost as resistance instead is both correctly signed and truer to what a fast break
+ * actually is: not a particular play call, but any play call against a defense that has not got
+ * back. It also gives Get Back a real payout on the same quantity, so the dial is symmetric.
+ */
+export const FOCUS_GLASS_CRASH_RESISTANCE = 0.76
+export const FOCUS_GLASS_GET_BACK_RESISTANCE = 1.14

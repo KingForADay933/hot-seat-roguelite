@@ -257,7 +257,7 @@ separated by the two feature items (tuning back to back is hard to judge).
 |---|---|---|---|---|
 | 1 | Position-fit retune ✅ | 7.6 | 2–3 | Independent, measurement-driven, and currently mis-scaled in a way that will distort any judgment about out-of-position play made after it |
 | 2 | Opponent scouting ✅ | 17 | 3–4 | Gives the next item something to aim at |
-| 3 | Tactical focus points + directive widening | 19 + 13 L2 | 6–8 | The milestone's centerpiece; the answer to what scouting reveals |
+| 3 | Tactical focus points + directive widening ✅ | 19 + 13 L2 | 6–8 | The milestone's centerpiece; the answer to what scouting reveals |
 | 4 | Team-construction options | 3 | 2–3 | Independent and small; good closing item while focus points settle |
 | 5 | Generalized pause-on-condition | 13 L1 | 1–2 | Only worth doing if focus points want a mid-game prompt — decide after 3 |
 
@@ -319,7 +319,51 @@ evidence.
   tactically useful. The rule that fell out is worth keeping for item 3: **a scouting tag is
   something you could learn by watching them play.**
 
-### 3. Tactical focus points + directive widening (5-7 days)
+### 3. Tactical focus points + directive widening (5-7 days) ✅ shipped
+
+Four standing dials on `Team.tacticalFocus` (optional, so an absent focus is byte-identical to the
+game before focus points and every old save, seed and calibration figure survives). Directive widened
+to the D1 union. Controls sit on My Team, the checkpoint and the simcast, exactly where the defensive
+scheme already does, and the scouting report shows an opponent's dials.
+
+**Balance was the hard part, and three of the four dials had to be redesigned or retuned against
+measurement.** 400 games per cell, four user systems against five opponent playbooks and four
+schemes, with AI focus off so only one side was moving. Findings, in the order they bit:
+
+1. **60 games per cell is noise.** The first sweep said Control Tempo won every cell; at 400 games it
+   is within a point of Push everywhere. The per-possession scoring column was bouncing
+   non-monotonically, which is what gave it away. Anything measured at 60 here should be re-measured.
+2. **The Glass dial's cost was inverted.** Crashing was supposed to concede fast breaks, implemented
+   as extra transition weight for the rebounding team. But **transition is the least efficient play
+   call in the engine (0.872 PPP against spot-up's 1.134)**, so handing it to the opponent *rewarded*
+   the crasher. Crash won every cell by up to +6. Rebuilt: the cost is now a resistance multiplier on
+   the possession right after your own miss -- a fast break is not a play call, it is a defense that
+   has not got back -- which is correctly signed and gives Get Back a payout on the same quantity.
+   After retuning, the best glass setting varies by system and every margin is under a point.
+3. **Pace needed its efficiency term cut 5x, to 0.004.** The volume half of the trade is symmetric
+   (a period is a fixed length, so tempo hands the opponent as many extra trips as it hands you), so
+   whatever the efficiency term does is *all* that is left. At 0.02 it was a flat free +2% offense.
+   What should decide the dial is the volume effect itself: more possessions amplify the gap between
+   two teams, so push when you are better. That is a per-opponent read, which is what scouting is for.
+
+**One imbalance is left, deliberately.** Hunt Threes is still the best or joint-best shot selection
+for all four systems -- by 0.1 for Grit and Grind and 4.7 for Balanced, so the dial does discriminate,
+but it never actively loses. The cause is not the dial: **spot-up is the engine's most efficient play
+call by a wide margin**, and `RIM_LEAN` happens to run from the least efficient call to the most, so
+any dial that shifts volume along it is buying points. A quality-cost mechanism was built to offset
+it, measured, and **reverted** -- it punished Attack the Rim far harder than it punished Hunt Threes,
+making the spread worse while adding a constant and a code path. The honest fix is in the shot model
+itself (spot-up 1.134 vs transition 0.872 PPP), which is an M2 calibration question and not something
+to change in the same pass as the dials, for the same reason the position-fit retune refused to move
+penalty magnitudes and labels together.
+
+**AI focus is derived from each team's system, not rolled** (`focusForSystem`). Rolling would have
+drawn from `rng` in `randomLeague` and invalidated every seed in the suite; deriving costs no draws.
+It also reads better -- 7 Seconds or Less scouts as pushing the tempo, where a rolled dial would have
+given Twin Towers "Hunt Threes". Only five of nine systems get a lean; the rest stay balanced. The
+scoring calibration suite passes unchanged with it on.
+
+The original plan, for reference:
 
 The centerpiece. Four dials, each modifying something the engine already reads:
 

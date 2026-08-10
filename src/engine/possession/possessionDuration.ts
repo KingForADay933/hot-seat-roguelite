@@ -41,6 +41,14 @@ export function possessionDurationSeconds(
   possessionsPerGame: number,
   rng: Rng,
   isSecondChance = false,
+  /** The offense's pace dial, already resolved to a multiplier by engine/tacticalFocus.ts's
+   *  focusPaceScale. 1 for a balanced dial and for every team that has none, which is what keeps an
+   *  un-focused game identical to the game before focus points existed.
+   *
+   *  Note this shortens the trip for *both* teams' share of the clock, since a period is a fixed
+   *  length and possessions alternate -- pushing the tempo hands the opponent extra possessions too,
+   *  which is half of what makes the dial a decision rather than a free upgrade. */
+  focusPaceMultiplier = 1,
 ): number {
   // A putback is a shot already under the rim, not a trip up the floor, so it ignores the play
   // call's band entirely -- otherwise second chances would cost a full possession of clock and
@@ -53,5 +61,5 @@ export function possessionDurationSeconds(
   const adjusted =
     outcome === 'turnover' ? sampled * TURNOVER_DURATION_FACTOR : outcome === 'miss' ? sampled + REBOUND_SECONDS : sampled
 
-  return adjusted * paceScale(possessionsPerGame)
+  return adjusted * paceScale(possessionsPerGame) * focusPaceMultiplier
 }

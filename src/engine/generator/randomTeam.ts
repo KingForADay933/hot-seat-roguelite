@@ -2,6 +2,7 @@ import { createId } from '../../data/ids'
 import type { Player, PlayerId, Position, Team } from '../../data/types'
 import { DEFAULT_INDIVIDUAL_DEVELOPMENT_SHARE, ROTATION_DEPTH_WEIGHTS, REGULATION_MINUTES, SYNERGY_NEUTRAL } from '../constants'
 import type { Rng } from '../rng'
+import { focusForSystem } from '../tacticalFocus'
 import { generatePlayer } from './randomPlayer'
 
 const MAX_ROSTER_SIZE = 12
@@ -77,6 +78,10 @@ export function generateTeam(params: GenerateTeamParams): GeneratedTeam {
     startingFive: startingFive.map((p) => p.id),
     rotationMinutes: computeRotationMinutes(players),
     offensiveStrategyId: params.offensiveStrategyId,
+    // Derived from the system rather than rolled, so no rng draw moves and a scouted opponent's
+    // dials agree with its identity. See engine/tacticalFocus.ts's focusForSystem. Undefined for
+    // the systems with no particular lean, which is most of them.
+    tacticalFocus: focusForSystem(params.offensiveStrategyId),
     defensiveStrategyId: params.defensiveStrategyId,
     coaching: { headCoachRating: Math.round(40 + rng() * 50) },
     practiceSettings: { individualDevelopmentShare: DEFAULT_INDIVIDUAL_DEVELOPMENT_SHARE },

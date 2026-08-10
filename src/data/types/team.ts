@@ -43,6 +43,41 @@ export interface TeamRecord {
   losses: number
 }
 
+/**
+ * Four standing dials for *how* a team plays, as against the offensive system and defensive scheme
+ * that say *who it is* (m3-tactical-axis.md, D2).
+ *
+ * Every dial is an offset on a quantity the engine already computes -- see engine/tacticalFocus.ts,
+ * which is the only place the offsets live. Nothing here adds resolution logic, and every dial's
+ * middle value is a true no-op, which is what lets an absent focus be identical to a balanced one.
+ *
+ * Each has a real cost, deliberately: a dial with only an upside stops being a decision and becomes
+ * a setting everyone picks once.
+ *
+ *  - `pace` -- possession length. Push for more possessions on both ends, at slightly worse looks.
+ *  - `shotSelection` -- scales the playbook's play-call weights. The only dial that moves synergy,
+ *    because it is the only one that changes the *mix* the roster is scored against, which is what
+ *    makes the right answer roster-dependent rather than universal.
+ *  - `defensiveTilt` -- nudges the scheme's interiorFocus. Gaining inside loses outside by
+ *    construction (engine/possession/resistance.ts's applyInteriorFocus).
+ *  - `glass` -- offensive rebounding. Crash for second chances and concede fast breaks off the
+ *    boards you lose; get back to smother transition and give the second chances up.
+ */
+export interface TacticalFocus {
+  pace: 'control' | 'balanced' | 'push'
+  shotSelection: 'rim' | 'balanced' | 'threes'
+  defensiveTilt: 'paint' | 'balanced' | 'perimeter'
+  glass: 'crash' | 'balanced' | 'getBack'
+}
+
+/** Every dial at its no-op setting -- what an absent Team.tacticalFocus means. */
+export const BALANCED_FOCUS: TacticalFocus = {
+  pace: 'balanced',
+  shotSelection: 'balanced',
+  defensiveTilt: 'balanced',
+  glass: 'balanced',
+}
+
 export interface Team {
   id: TeamId
   name: string
@@ -82,6 +117,16 @@ export interface Team {
    *  Team editor (ui/components/RotationChartEditor.tsx). engine/rotation/substitution.ts's
    *  checkSubstitutions consults this before falling through to the fatigue/pace heuristic. */
   rotationPlan?: RotationPlan
+
+  /** How this team wants to play, as against who it is. Absent means every dial balanced, which is
+   *  byte-identical to the game as it behaved before focus points existed -- so an old save loads
+   *  and plays unchanged, and isValidBundleShape needs no new check.
+   *
+   *  Set from My Team, a checkpoint, or mid-broadcast, all writing this one field (m3-tactical-axis.md
+   *  D2), exactly as defensiveStrategyId already does. AI teams get one derived from their offensive
+   *  system at generation time (engine/generator/randomLeague.ts), so a scouted opponent's dials agree
+   *  with its identity rather than contradicting it. */
+  tacticalFocus?: TacticalFocus
 
   /** Attribute-scale (40-99ish), neutral at engine/constants.ts's SYNERGY_NEUTRAL (65) -- feeds a
    *  small offense-strength multiplier via engine/possession/possessionStrength.ts's

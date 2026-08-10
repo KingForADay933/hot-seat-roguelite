@@ -1,10 +1,11 @@
 import { DEFENSIVE_SCHEMES, type DefensiveSchemeId } from '../../data/presets'
-import type { AttributeKey } from '../../data/types'
+import type { AttributeKey, TacticalFocus } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
 import { computeStandings } from '../../engine/schedule/standings'
 import { summarizeChunkInsights } from '../../run/chunkInsightSummary'
 import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
+import { TacticalFocusControls } from '../components/TacticalFocusControls'
 import { RosterAdjustmentPanel } from '../components/RosterAdjustmentPanel'
 import { StandingsTable } from '../components/StandingsTable'
 
@@ -15,6 +16,7 @@ export function ChunkResultsScreen({
   onSetMinutes,
   onSetFocus,
   onSetDefensiveScheme,
+  onSetTacticalFocus,
 }: {
   bundle: RunBundle
   onContinue: () => void
@@ -22,6 +24,7 @@ export function ChunkResultsScreen({
   onSetMinutes: (playerId: string, minutes: number) => void
   onSetFocus: (playerId: string, attribute: AttributeKey | null) => void
   onSetDefensiveScheme: (schemeId: DefensiveSchemeId) => void
+  onSetTacticalFocus: (focus: Partial<TacticalFocus>) => void
 }) {
   const { run, teams, players, games, lastWildcardEvent, lastChunkInsights } = bundle
   const team = teams.find((t) => t.id === run.teamId)
@@ -80,6 +83,12 @@ export function ChunkResultsScreen({
         <strong>Defense:</strong> <DefensiveSchemeSelect value={team.defensiveStrategyId} onChange={onSetDefensiveScheme} />{' '}
         {DEFENSIVE_SCHEMES[team.defensiveStrategyId]?.description}
       </p>
+      {/* Same argument as the scheme select above: the checkpoint is where a GM reads what went
+          wrong, so it is where the dials that answer it belong. */}
+      <div className="team-summary">
+        <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="offense" />
+        <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="defense" />
+      </div>
       <RosterAdjustmentPanel team={team} roster={roster} houseRule={run.houseRule} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
 
       <div className="stretch-actions">
