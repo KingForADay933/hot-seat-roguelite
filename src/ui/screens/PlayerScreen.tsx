@@ -3,7 +3,7 @@ import type { RunBundle } from '../../data/persistence/runRepository'
 import { aggregateSeasonTotals, type SeasonTotals } from '../../engine/boxScore'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 import { AGE_CURVE_LABELS, attributeLabel, currentTrainingFocus, formatHeight, TENDENCY_LABELS } from '../playerDisplay'
-import { playerTags } from '../playerTags'
+import { playerTags, scoutingTags } from '../playerTags'
 
 /** Per-game average, or a dash when he hasn't played -- "0.0" would imply he played and scored none. */
 function perGame(total: number, gamesPlayed: number): string {
@@ -78,6 +78,13 @@ function SeasonLine({ totals }: { totals: SeasonTotals }) {
  * Read-only by design. Every editable thing about a player (minutes, training focus, his place in
  * the rotation chart) already has a home on My Team where it sits next to its peers, and moving one
  * copy of those controls here would mean two places to change the same value.
+ *
+ * Renders a reduced version for a player on somebody else's roster (m3-tactical-axis.md, D3): the
+ * attribute table and the hidden-rating block are for the GM who employs him. Scouting reports link
+ * here for every player in the league, so without the split this page would quietly reinstate the
+ * full-sheet visibility D3 rules out -- and would hand over consistency, clutch and durability,
+ * which are hidden even on your own attribute sheet. What stays is what the league can see: who he
+ * is, his qualitative tags, and his box-score line.
  */
 export function PlayerScreen({
   bundle,
@@ -96,7 +103,7 @@ export function PlayerScreen({
   const isUserTeam = player.teamId === run.teamId
   const userTeam = teams.find((t) => t.id === run.teamId)
   const isStarter = team?.startingFive.includes(player.id) ?? false
-  const tags = playerTags(player)
+  const tags = isUserTeam ? playerTags(player) : scoutingTags(player)
   const totals = aggregateSeasonTotals(games).get(player.id)
 
   // Rotation role only means anything for the GM's own players -- an opponent's minutes aren't
@@ -110,9 +117,14 @@ export function PlayerScreen({
         <span className="player-pos">{player.positions[0]}</span> {player.name}
       </h1>
       <p>
-        {player.age}y · {formatHeight(player.heightInches)} · #{player.jerseyNumber} · Overall {player.overallRating}
+        {player.age}y · {formatHeight(player.heightInches)} · #{player.jerseyNumber}
+        {/* Overall is a display-only summary the sim is barred from reading, but it is still the
+            one number that ranks a roster at a glance -- exactly the homework D3 rules out for
+            somebody else's players. Their aggregate strength stays readable through the scouting
+            report's group averages. */}
+        {isUserTeam && ` · Overall ${player.overallRating}`}
         {team && ` · ${team.city} ${team.name}`}
-        {isUserTeam && ` · ${isStarter ? 'Starter' : 'Bench'}`}
+        {` · ${isStarter ? 'Starter' : 'Bench'}`}
       </p>
 
       {tags.length > 0 && (
@@ -125,58 +137,67 @@ export function PlayerScreen({
         </div>
       )}
 
-      <h2>Attributes</h2>
-      <p>
-        Current rating, and the ceiling he can still grow toward. A green <span className="headroom">+N</span> is room left
-        before that fixed potential — the number season-end development actually works against.
-      </p>
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Attribute</th>
-              <th className="numeric">Now</th>
-              <th className="numeric">Potential</th>
-              <th className="numeric">Room</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ATTRIBUTE_COLUMNS.map((col) => {
-              const now = Math.round(player.attributes[col.key])
-              const potential = Math.round(player.development.potential[col.key])
-              const room = Math.max(0, potential - now)
-              return (
-                <tr key={col.key}>
-                  <td>{col.label}</td>
-                  <td className={`numeric${attributeTone(now)}`}>{now}</td>
-                  <td className="numeric">{potential}</td>
-                  <td className="numeric">{room > 0 ? <span className="headroom">+{room}</span> : '—'}</td>
+      {isUserTeam ? (
+        <>
+          <h2>Attributes</h2>
+          <p>
+            Current rating, and the ceiling he can still grow toward. A green <span className="headroom">+N</span> is room left
+            before that fixed potential — the number season-end development actually works against.
+          </p>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Attribute</th>
+                  <th className="numeric">Now</th>
+                  <th className="numeric">Potential</th>
+                  <th className="numeric">Room</th>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {ATTRIBUTE_COLUMNS.map((col) => {
+                  const now = Math.round(player.attributes[col.key])
+                  const potential = Math.round(player.development.potential[col.key])
+                  const room = Math.max(0, potential - now)
+                  return (
+                    <tr key={col.key}>
+                      <td>{col.label}</td>
+                      <td className={`numeric${attributeTone(now)}`}>{now}</td>
+                      <td className="numeric">{potential}</td>
+                      <td className="numeric">{room > 0 ? <span className="headroom">+{room}</span> : '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      <h2>Scouting</h2>
-      <p>Ratings the simulation reads that never appear in the attribute sheet.</p>
-      <div className="team-summary">
+          <h2>Scouting</h2>
+          <p>Ratings the simulation reads that never appear in the attribute sheet.</p>
+          <div className="team-summary">
+            <p>
+              <strong>Age curve:</strong> {AGE_CURVE_LABELS[player.development.ageCurveStage]} ·{' '}
+              <strong>DP last season:</strong>{' '}
+              <span className={player.development.developmentPoints < 0 ? 'text-negative' : undefined}>
+                {player.development.developmentPoints.toFixed(1)}
+              </span>
+            </p>
+            <p>
+              <strong>Consistency:</strong> {Math.round(player.hidden.consistency)} — night-to-night variance ·{' '}
+              <strong>Clutch:</strong> {Math.round(player.hidden.clutch)} — late-game modifier ·{' '}
+              <strong>Durability:</strong> {Math.round(player.hidden.durability)} — fatigue resistance
+            </p>
+            <p>
+              <strong>Tendency:</strong> {TENDENCY_LABELS[player.hidden.tendency]}
+            </p>
+          </div>
+        </>
+      ) : (
         <p>
-          <strong>Age curve:</strong> {AGE_CURVE_LABELS[player.development.ageCurveStage]} ·{' '}
-          <strong>DP last season:</strong>{' '}
-          <span className={player.development.developmentPoints < 0 ? 'text-negative' : undefined}>
-            {player.development.developmentPoints.toFixed(1)}
-          </span>
+          {team ? `${team.city} ${team.name} keep` : 'His team keeps'} his attribute sheet to themselves — what you get is what
+          the league can see: the tags above, and what he has actually produced on the floor.
         </p>
-        <p>
-          <strong>Consistency:</strong> {Math.round(player.hidden.consistency)} — night-to-night variance ·{' '}
-          <strong>Clutch:</strong> {Math.round(player.hidden.clutch)} — late-game modifier ·{' '}
-          <strong>Durability:</strong> {Math.round(player.hidden.durability)} — fatigue resistance
-        </p>
-        <p>
-          <strong>Tendency:</strong> {TENDENCY_LABELS[player.hidden.tendency]}
-        </p>
-      </div>
+      )}
 
       {isUserTeam && (
         <>

@@ -1,5 +1,5 @@
 import type { StandingsRow, Team, TeamId } from '../../data/types'
-import { TeamSwatch } from './TeamSwatch'
+import { TeamName } from './TeamName'
 
 /** Average scoring margin, signed, to one decimal -- or a dash before anyone has played, where
  *  "+0.0" would claim an evenly-matched season that hasn't happened. */
@@ -53,10 +53,10 @@ export function StandingsTable({
           return (
             <tr key={row.teamId} className={isUserTeam ? 'user-row' : ''}>
               <td>
-                <span className="team-name">
-                  {team && <TeamSwatch team={team} />}
-                  {team ? `${team.city} ${team.name}` : row.teamId}
-                </span>
+                {/* Clickable through to a scouting report -- the standings is where a GM looks at
+                    the rest of the league, so it is where "who are these people" should be
+                    answerable. Their own row goes there too rather than being a dead spot. */}
+                <TeamName team={team} fallback={row.teamId} />
               </td>
               <td className="numeric text-positive">{row.wins}</td>
               <td className="numeric text-negative">{row.losses}</td>

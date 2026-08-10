@@ -68,7 +68,7 @@ tied to a roster problem M5 could ship without, and focus points are the one tha
 | **M1 — Complete run** ✅ | ~~Simcast pacing~~ · ~~chronological game order~~ · ~~rebounds in-sim + defensive stats~~ · ~~run-end summary~~ — **complete** | 7.5, 1.5, 11, 8 | 10–14 |
 | **M1.5 — Pre-playtest legibility** ✅ | ~~Coaching Insights after every game~~ · ~~team records in the schedule~~ · ~~standings comprehension~~ · ~~weight rebounds toward bigs~~ — **complete** | 16, 11 | 2–4 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
-| **M3 — Tactical axis** | Planned in detail in `m3-tactical-axis.md`, four design decisions settled. ~~Position-fit retune~~ ✅ · **opponent scouting** · **tactical focus points** (which *are* Tier 13 level 2, not a separate item) · more team-construction options | 7.6, 17, **19** + 13, 3 | 14–20 |
+| **M3 — Tactical axis** | Planned in detail in `m3-tactical-axis.md`, four design decisions settled. ~~Position-fit retune~~ ✅ · ~~opponent scouting~~ ✅ · **tactical focus points** (which *are* Tier 13 level 2, not a separate item) · more team-construction options | 7.6, 17, **19** + 13, 3 | 14–20 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations · **owner archetypes** · **nemesis teams** · richer Coaching Insights | 12, 16, **18**, **22** | 19–28 |
 | **M5 — Roster turnover** | Injuries · foul trouble · retirement, backfill & poaching · shop-based signings · **veteran mentorship** · run-configuration toggles | 14, 15, 12, **20** | 24–36 |
 | **M6 — Live coaching** | In-game decisions tiers 3–4 (substitutions, matchups, timeouts) | 13 | 15–20 |
@@ -615,27 +615,42 @@ expand away. Deciding that up front is what stops the two items undoing each oth
 ---
 
 ## Tier 17 — Opponent Scouting
-**Planned**
+**Shipped (M3)**
 
 Seeing what the other seven teams are actually running, so a tactical choice can be aimed at
-something rather than guessed. Currently the GM knows opponents only by their record: rosters,
-systems and schemes are all invisible, which means every pre-game decision is made blind.
+something rather than guessed. The GM used to know opponents only by their record: rosters, systems
+and schemes were all invisible, which meant every pre-game decision was made blind.
 
-- **Opponent lineups and systems** (M3) -- **Planned**: a read-only view of another team's roster,
-  starting five, offensive system and defensive scheme. Most of the parts exist: `bundle.teams` and
-  `bundle.players` already hold every team's full state, `PlayerScreen` was deliberately built to
-  render *any* player rather than only the GM's own (opponents already work today if you can reach
-  one), and `TeamSummary` renders group averages for an arbitrary team. The missing pieces are an
-  entry point -- the schedule and the standings are the two natural ones -- and a decision about how
-  much to reveal.
-- **Decide first: how much is knowable.** Full visibility makes scouting a chore rather than a choice
-  (every game acquires homework), and it interacts badly with Tier 6's synergy being a *hidden*
-  quality of your own roster. Cheaper and more in keeping with the run's other constraints: reveal
-  the opponent's **system, scheme and starting five** but not their full attribute sheet, and treat
-  deeper scouting as something the shop could sell. That also gives the budget another thing to
-  compete for, which Tier 5 wants.
+- **Opponent lineups and systems** (M3) -- **Shipped**: `ui/screens/TeamScoutScreen.tsx` is a
+  read-only report on any team -- offensive system, defensive scheme, starting five, standings
+  position, the season series against you, group averages via the same `TeamSummary` My Team uses,
+  and a roster listing each player's position, age, height and scouting tags. Reached by clicking a
+  team name anywhere one appears: the standings (any team, including your own) and a schedule row's
+  abbreviation (the opponent you are about to play). Both go through `ui/components/TeamName.tsx`,
+  the sibling of `PlayerName`, over a single `InspectorContext` that now carries `openPlayer` and
+  `openTeam`.
+- **How much is knowable -- decided and enforced.** Full visibility would make scouting a chore
+  rather than a choice (every game acquires homework), and interacts badly with Tier 6's synergy
+  being a *hidden* quality of your own roster. So the report reveals **system, scheme, starting five
+  and qualitative tags**, and not the attribute sheet. Enforcing that took two changes beyond the
+  screen itself, because `PlayerScreen` renders *any* player and scouting reports link to it:
+  - **The player page has an opponent mode.** Attribute table, potential, and the hidden
+    consistency/clutch/durability/tendency block are all gated to the GM's own roster, as is the
+    overall rating -- the one number that ranks a roster at a glance. What stays is identity, tags,
+    role and the box-score line, which is what a league can actually see.
+  - **Tags have a scouting form** (`scoutingTags` in `ui/playerTags.ts`). Two rules. Tags that
+    survive lose the rating quoted in their tooltip -- "Clutch 82", "Durability 85", "110 attribute
+    points of room" are hidden even on your own sheet, and handing them over for twelve opposing
+    players would have leaked *more* than the attribute table. And the four development tags
+    (Rising, Declining, Untapped, Maxed Out) are dropped outright: the first two are a pure function
+    of age, which the report already has a column for, and the last two read `development.potential`.
+    This one was found by opening the screen -- with them in, they fired on nearly every player and
+    the column was mostly describing the opponent's *rebuild* rather than the game.
+- **Deeper scouting as a shop purchase** stays available as a later addition, and would give the
+  budget another claimant, which Tier 5 wants. Deliberately not built yet: adding a shop card before
+  scouting has proved fun is the wrong order.
 - **Why M3.** This is the missing half of M3's tactical axis. Switching defensive scheme between games
-  already works, but nothing on screen tells you *what to switch to* -- scouting is what converts that
+  already worked, but nothing on screen told you *what to switch to* -- scouting is what converts that
   control from a guess into a decision, and the two are much less valuable apart than together.
 
 ---
@@ -846,7 +861,7 @@ Recorded so they stay decided rather than getting relitigated:
 | 14 | Risk & attrition (injuries, foul trouble) | Planned, needs design | M5 |
 | 15 | Roster turnover (retirement, poaching, shop signings) | Planned / trades post-launch | M5 |
 | 16 | Legibility & comprehension (per-game insights, schedule records, performance trends, Insights screen) | Shipped / descriptive cards + compact views planned | M4, M7 |
-| 17 | Opponent scouting (lineups, systems, schemes) | Planned | M3 |
+| 17 | Opponent scouting (lineups, systems, schemes) | Shipped | M3 |
 | 18 | Owner archetypes & dynamic directives | Planned | M4 |
 | 19 | Tactical emphasis & focus points | Planned | M3 |
 | 20 | Veteran mentorship & locker room | Planned | M5 |

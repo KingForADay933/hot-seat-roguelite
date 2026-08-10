@@ -1,13 +1,16 @@
 import type { Game, Team, TeamId } from '../../data/types'
 import type { TeamRecord } from '../../engine/schedule/standings'
 import { formatOvertimeLabel } from '../formatOvertime'
-import { TeamSwatch } from './TeamSwatch'
+import { TeamName } from './TeamName'
 
 function TeamLabel({ team, fallback, isUserTeam, record }: { team?: Team; fallback: string; isUserTeam: boolean; record?: TeamRecord }) {
   return (
-    <span className="team-name" style={isUserTeam ? { fontWeight: 700 } : undefined}>
-      {team && <TeamSwatch team={team} />}
-      {team?.abbreviation ?? fallback}
+    <>
+      {/* The abbreviation is the click target through to a scouting report: the schedule is where
+          the opponent you are about to play is named, which makes it the natural place to go and
+          look at them. The record stays outside the control -- it is context on the row, not part
+          of the team's name. */}
+      <TeamName team={team} label={team?.abbreviation} fallback={fallback} bold={isUserTeam} />
       {/* Record as of this game, so a finished row shows what it produced and an upcoming row shows
           what both sides carry into it. Hidden at 0-0, where it's noise rather than context. */}
       {record && record.wins + record.losses > 0 && (
@@ -16,7 +19,7 @@ function TeamLabel({ team, fallback, isUserTeam, record }: { team?: Team; fallba
           ({record.wins}-{record.losses})
         </span>
       )}
-    </span>
+    </>
   )
 }
 

@@ -216,6 +216,10 @@ of pairing scouting with focus points — without making optimal play a spreadsh
 attribute table for players not on your team**, showing identity, tags and role instead. Otherwise
 the link quietly reinstates exactly the full-sheet visibility this decision rules out.
 
+**Shipped, and it needed one more gate than that.** The tags themselves are public but their
+tooltips were not -- `playerTags` quotes the rating behind each one, and those ratings are hidden
+even on your own attribute sheet. See item 2 below.
+
 Deeper scouting as a shop purchase stays available as a later addition, and would give Budget another
 claimant — but it is not part of M3, and adding a shop card before scouting has proved fun is the
 wrong order.
@@ -252,7 +256,7 @@ separated by the two feature items (tuning back to back is hard to judge).
 | # | Item | Tier | Days | Why here |
 |---|---|---|---|---|
 | 1 | Position-fit retune ✅ | 7.6 | 2–3 | Independent, measurement-driven, and currently mis-scaled in a way that will distort any judgment about out-of-position play made after it |
-| 2 | Opponent scouting | 17 | 3–4 | Gives the next item something to aim at |
+| 2 | Opponent scouting ✅ | 17 | 3–4 | Gives the next item something to aim at |
 | 3 | Tactical focus points + directive widening | 19 + 13 L2 | 6–8 | The milestone's centerpiece; the answer to what scouting reveals |
 | 4 | Team-construction options | 3 | 2–3 | Independent and small; good closing item while focus points settle |
 | 5 | Generalized pause-on-condition | 13 L1 | 1–2 | Only worth doing if focus points want a mid-game prompt — decide after 3 |
@@ -287,14 +291,33 @@ in that case — so the reveal screen's synergy and projected-usage numbers only
 has deliberately charted out of position. The full scoring-calibration suite passing unchanged is the
 evidence.
 
-### 2. Opponent scouting (3-4 days)
+### 2. Opponent scouting (3-4 days) ✅ shipped
 
-- A read-only opponent view: roster with tags, starting five, offensive system, defensive scheme.
-- Entry points: the schedule row (the opponent you are about to play) and the standings table (anyone).
-- `bundle.teams` and `bundle.players` already hold every team's full state; `TeamSummary` already
-  renders group averages for an arbitrary team; `PlayerScreen` already renders any player. This is
-  mostly assembly and an entry point.
-- Per D3, hide the attribute table for players not on your team.
+- `ui/screens/TeamScoutScreen.tsx`: offensive system, defensive scheme, starting five, standings
+  position, the season series against you (`headToHeadRecord`, new in `engine/schedule/standings.ts`),
+  group averages through the same `TeamSummary` My Team uses, and a roster of position / age / height
+  / tags.
+- Entry points as planned -- the standings row and the schedule row's abbreviation -- both through
+  `ui/components/TeamName.tsx`, the sibling of `PlayerName`. `playerInspector.core.ts` became
+  `inspector.core.ts` and its context now carries `openTeam` alongside `openPlayer`, rather than a
+  second near-identical context file: every provider site offers both destinations and they behave
+  identically. The scouting report sits directly *under* the player page in `App.tsx`'s routing, so
+  opening one of an opponent's players and coming back lands on the report rather than dropping out
+  to the run.
+- **D3 took more enforcing than "hide the attribute table".** Two leaks the plan did not name:
+  - `PlayerScreen` renders any player and the report links to all of them, so it needed an opponent
+    mode -- attribute table, potential, overall rating and the hidden consistency/clutch/durability
+    block are all gated to your own roster now.
+  - **The tag tooltips were a bigger leak than the attribute sheet.** `playerTags`' `detail` quotes
+    the rating behind each tag ("Clutch 82", "110 attribute points of room") -- numbers hidden even
+    on your own sheet. `scoutingTags` strips them.
+- **One thing the plan got wrong, found by opening the screen.** With every tag shown, the Scouting
+  Notes column was dominated by Rising / Declining / Untapped / Maxed Out, which fire on nearly every
+  player and say nothing about how to play them tonight. `scoutingTags` drops all four: the first two
+  are a pure function of age (`computeAgeCurveStage`) and the report has an Age column, and the last
+  two read `development.potential`, which is both the most private thing on the page and the least
+  tactically useful. The rule that fell out is worth keeping for item 3: **a scouting tag is
+  something you could learn by watching them play.**
 
 ### 3. Tactical focus points + directive widening (5-7 days)
 
