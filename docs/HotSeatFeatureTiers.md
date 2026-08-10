@@ -68,7 +68,7 @@ tied to a roster problem M5 could ship without, and focus points are the one tha
 | **M1 — Complete run** ✅ | ~~Simcast pacing~~ · ~~chronological game order~~ · ~~rebounds in-sim + defensive stats~~ · ~~run-end summary~~ — **complete** | 7.5, 1.5, 11, 8 | 10–14 |
 | **M1.5 — Pre-playtest legibility** ✅ | ~~Coaching Insights after every game~~ · ~~team records in the schedule~~ · ~~standings comprehension~~ · ~~weight rebounds toward bigs~~ — **complete** | 16, 11 | 2–4 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
-| **M3 — Tactical axis** | Planned in detail in `m3-tactical-axis.md`, four design decisions settled. ~~Position-fit retune~~ ✅ · ~~opponent scouting~~ ✅ · **tactical focus points** (which *are* Tier 13 level 2, not a separate item) · more team-construction options | 7.6, 17, **19** + 13, 3 | 14–20 |
+| **M3 — Tactical axis** | Planned in detail in `m3-tactical-axis.md`, four design decisions settled. ~~Position-fit retune~~ ✅ · ~~opponent scouting~~ ✅ · ~~tactical focus points~~ ✅ (which *are* Tier 13 level 2, not a separate item) · more team-construction options | 7.6, 17, **19** + 13, 3 | 14–20 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations · **owner archetypes** · **nemesis teams** · richer Coaching Insights | 12, 16, **18**, **22** | 19–28 |
 | **M5 — Roster turnover** | Injuries · foul trouble · retirement, backfill & poaching · shop-based signings · **veteran mentorship** · run-configuration toggles | 14, 15, 12, **20** | 24–36 |
 | **M6 — Live coaching** | In-game decisions tiers 3–4 (substitutions, matchups, timeouts) | 13 | 15–20 |
@@ -672,7 +672,34 @@ Turns ownership pressure from a scalar rank-fraction target into distinct behavi
 ---
 
 ## Tier 19 — Tactical Emphasis & Situational Focus Points
-**Planned -- scheduled M3 -- planned in detail in `m3-tactical-axis.md`**
+**Shipped (M3) -- build notes and the balance measurements in `m3-tactical-axis.md`**
+
+> **Shipped as four dials on `Team.tacticalFocus`** (optional, so an absent focus is byte-identical to
+> the game before it existed and every old save loads unchanged): **Pace** (control/push, a possession-
+> duration multiplier), **Shot Selection** (rim/threes, scaling the playbook's play-call weights),
+> **Tilt** (paint/perimeter, offsetting the scheme's `interiorFocus`), and **Glass** (crash/get back,
+> offsetting the offensive rebound rate). Every one is an offset on a quantity the engine already
+> computed -- no new resolution logic. Controls sit on My Team, the checkpoint and the simcast, exactly
+> where the defensive scheme already does, and `CoachingDirective` is now the D1 discriminated union so
+> M6's substitutions and timeouts slot in without touching a sender.
+>
+> **Only Shot Selection moves synergy**, because it is the only dial that changes the play-call *mix*
+> the roster is scored against -- which is what makes its right answer roster-dependent rather than
+> universal. A mid-broadcast change carries the recomputed score on the directive, since the engine
+> cannot compute one for itself (`computeInitialSynergyScore` lives in `run/`, and `engine/` does not
+> import from there); `run/teamSynergy.ts` holds the one formula both paths use.
+>
+> **Two dials were rebuilt against measurement, and one imbalance was left on purpose.** The Glass
+> dial's cost was inverted -- transition is the *least* efficient play call in the engine, so the
+> "concede fast breaks" cost was a gift -- and Pace's efficiency term had to drop 5x once it turned out
+> the volume half of that trade is symmetric. Hunt Threes still never actively loses, because spot-up
+> is the engine's most efficient call by a wide margin; that is a shot-model calibration question for
+> M2, not a dial question, and a mechanism built to offset it was measured and reverted. Full numbers
+> in `m3-tactical-axis.md`.
+>
+> **AI teams carry dials too**, derived from their offensive system rather than rolled (rolling would
+> have drawn from `rng` and invalidated every seed in the suite). Five of nine systems get a lean; the
+> scouting report shows it.
 
 > **This tier *is* Tier 13's level 2, not a separate piece of work, and it introduces *offensive focus* as a layer distinct from the drafted system.** Tier 13 defines level 2 as
 > "changes affecting only future possessions -- defensive scheme, focus points, play-call emphasis",
@@ -863,7 +890,7 @@ Recorded so they stay decided rather than getting relitigated:
 | 16 | Legibility & comprehension (per-game insights, schedule records, performance trends, Insights screen) | Shipped / descriptive cards + compact views planned | M4, M7 |
 | 17 | Opponent scouting (lineups, systems, schemes) | Shipped | M3 |
 | 18 | Owner archetypes & dynamic directives | Planned | M4 |
-| 19 | Tactical emphasis & focus points | Planned | M3 |
+| 19 | Tactical emphasis & focus points | Shipped | M3 |
 | 20 | Veteran mentorship & locker room | Planned | M5 |
 | 21 | Analytics suite & shot breakdowns | Planned | M7 |
 | 22 | Nemesis teams & rivalry arc | Planned | M4 |

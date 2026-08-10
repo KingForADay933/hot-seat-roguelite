@@ -375,7 +375,7 @@ describe('simulateGameSteps', () => {
       while (!next.done) {
         handedOver += 1
         // Hand the directive back on the 10th pull; everything after it should be the new scheme.
-        next = handedOver === 10 ? steps.next({ teamId: home.id, defensiveSchemeId: 'packThePaint' }) : steps.next()
+        next = handedOver === 10 ? steps.next({ kind: 'defensive-scheme', teamId: home.id, schemeId: 'packThePaint' }) : steps.next()
       }
 
       const schemes = schemesDefendedAgainst(next.value.possessionLog, away.id)
@@ -392,7 +392,7 @@ describe('simulateGameSteps', () => {
       let pulls = 0
       while (!next.done) {
         pulls += 1
-        next = pulls === 5 ? steps.next({ teamId: home.id, defensiveSchemeId: 'packThePaint' }) : steps.next()
+        next = pulls === 5 ? steps.next({ kind: 'defensive-scheme', teamId: home.id, schemeId: 'packThePaint' }) : steps.next()
       }
 
       expect(new Set(schemesDefendedAgainst(next.value.possessionLog, home.id))).toEqual(new Set([away.defensiveStrategyId]))
@@ -407,8 +407,8 @@ describe('simulateGameSteps', () => {
       let pulls = 0
       while (!next.done) {
         pulls += 1
-        if (pulls === 3) next = steps.next({ teamId: 'some-other-team', defensiveSchemeId: 'packThePaint' })
-        else if (pulls === 6) next = steps.next({ teamId: home.id, defensiveSchemeId: 'not-a-real-scheme' })
+        if (pulls === 3) next = steps.next({ kind: 'defensive-scheme', teamId: 'some-other-team', schemeId: 'packThePaint' })
+        else if (pulls === 6) next = steps.next({ kind: 'defensive-scheme', teamId: home.id, schemeId: 'not-a-real-scheme' })
         else next = steps.next()
       }
 

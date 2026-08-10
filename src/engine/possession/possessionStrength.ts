@@ -20,16 +20,18 @@ export function synergyMultiplier(synergyScore: number): number {
 
 /**
  * Roughly a 0-100 scale offense score. Higher beats a higher defensive resistance more often.
- * `synergy` defaults to a neutral 1 so every existing call site (and every AI-controlled team,
- * which never deviates from SYNERGY_NEUTRAL) is unaffected -- only a roguelite run's
- * user-controlled team ever passes something other than the default.
+ * `offenseMultiplier` defaults to a neutral 1 so every existing call site is unaffected. It carries
+ * two things that both scale the whole possession: the roster's fit to its drafted system
+ * (synergyMultiplier above) and the efficiency half of the pace dial (engine/tacticalFocus.ts's
+ * focusPaceEfficiency -- rushed looks are worse looks). Named for what it does rather than for
+ * either contributor, since it stopped being only synergy when focus points landed.
  */
 export function computeOffenseStrength(
   playCall: PlayCallType,
   selection: PlaySelection,
   playbook: OffensivePlaybook,
   offenseOnCourt: Player[],
-  synergy: number = 1,
+  offenseMultiplier: number = 1,
 ): number {
   const w = POSSESSION_STRENGTH_WEIGHTS
   let raw: number
@@ -89,5 +91,5 @@ export function computeOffenseStrength(
     }
   }
 
-  return raw * synergy
+  return raw * offenseMultiplier
 }

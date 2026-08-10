@@ -215,3 +215,68 @@ export const DEFENSIVE_SCHEMES: Record<string, DefensiveScheme> = {
     pressureCoefficient: 1.3,
   },
 }
+
+/**
+ * GM-facing copy for the four tactical dials (data/types/team.ts's TacticalFocus).
+ *
+ * Lives beside the playbooks and schemes because it is the same kind of thing: a named tactical
+ * option with a sentence explaining the trade it makes. The *numbers* behind each option are
+ * deliberately not here -- they are tuning constants and live in engine/constants.ts, read only
+ * through engine/tacticalFocus.ts.
+ *
+ * Every description names the cost as well as the benefit. That is a rule rather than a style
+ * preference: a dial whose downside is invisible reads as a free upgrade, and a GM who cannot see
+ * what they are giving up is not making a decision.
+ */
+export interface TacticalFocusOption<T extends string> {
+  id: T
+  label: string
+  description: string
+}
+
+export interface TacticalFocusDial<T extends string> {
+  /** Heading for the control, e.g. "Pace". */
+  label: string
+  /** Which end of the floor the control groups under on screen. */
+  side: 'offense' | 'defense'
+  options: TacticalFocusOption<T>[]
+}
+
+export const TACTICAL_FOCUS_DIALS = {
+  pace: {
+    label: 'Pace',
+    side: 'offense',
+    options: [
+      { id: 'control', label: 'Control Tempo', description: 'Work the clock. Fewer possessions for both teams, and better looks out of them.' },
+      { id: 'balanced', label: 'Balanced', description: 'Take what the game gives.' },
+      { id: 'push', label: 'Push Tempo', description: 'Get it up the floor. More possessions for both teams, at slightly worse looks -- a volume bet, and it cuts both ways if you are the weaker side.' },
+    ],
+  },
+  shotSelection: {
+    label: 'Shot Selection',
+    side: 'offense',
+    options: [
+      { id: 'rim', label: 'Attack the Rim', description: 'Lean on post-ups, cuts and the roll man. Punishes a thin front line -- and walks straight into a defense packing the paint.' },
+      { id: 'balanced', label: 'Balanced', description: 'Run the system as drafted.' },
+      { id: 'threes', label: 'Hunt Threes', description: 'Live off spot-up shooting. Suits a roster built to shoot, and drags your system fit down if it is not.' },
+    ],
+  },
+  defensiveTilt: {
+    label: 'Tilt',
+    side: 'defense',
+    options: [
+      { id: 'paint', label: 'Protect the Rim', description: 'Wall off the interior. Whatever you gain inside, you give back on the perimeter.' },
+      { id: 'balanced', label: 'Balanced', description: 'Play the scheme straight.' },
+      { id: 'perimeter', label: 'Chase Shooters', description: 'Run them off the line. Whatever you gain outside, you give back inside.' },
+    ],
+  },
+  glass: {
+    label: 'Glass',
+    side: 'offense',
+    options: [
+      { id: 'crash', label: 'Crash the Glass', description: 'Send bodies to the offensive boards. More second chances -- and the ones you lose come back the other way in transition.' },
+      { id: 'balanced', label: 'Balanced', description: 'Contest what is there.' },
+      { id: 'getBack', label: 'Get Back', description: 'Retreat on the shot. Gives up second chances to smother the break the other way.' },
+    ],
+  },
+} as const

@@ -1,6 +1,6 @@
-import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS } from '../../data/presets'
+import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS, TACTICAL_FOCUS_DIALS } from '../../data/presets'
 import type { RunBundle } from '../../data/persistence/runRepository'
-import type { Player, TeamId } from '../../data/types'
+import { BALANCED_FOCUS, type Player, type TacticalFocus, type TeamId } from '../../data/types'
 import { computeStandings, headToHeadRecord } from '../../engine/schedule/standings'
 import { formatHeight } from '../playerDisplay'
 import { scoutingTags } from '../playerTags'
@@ -8,6 +8,24 @@ import { splitRoster } from '../rosterGroups'
 import { PlayerName } from '../components/PlayerName'
 import { TeamSummary } from '../components/TeamSummary'
 import { TeamSwatch } from '../components/TeamSwatch'
+
+/**
+ * The team's dials as a sentence, naming only the ones that are off balanced.
+ *
+ * Listing all four including the neutral ones would bury the two that matter in noise -- and a team
+ * with every dial centred genuinely has nothing to report, which "Plays it straight" says better
+ * than four rows of "Balanced".
+ */
+function describeFocus(focus: TacticalFocus | undefined): string {
+  const named = (Object.keys(TACTICAL_FOCUS_DIALS) as (keyof TacticalFocus)[]).flatMap<string>((key) => {
+    const value = focus?.[key]
+    if (!value || value === BALANCED_FOCUS[key]) return []
+    const label = TACTICAL_FOCUS_DIALS[key].options.find((option) => option.id === value)?.label
+    return label ? [label] : []
+  })
+
+  return named.length > 0 ? named.join(' · ') : 'Plays it straight -- no particular lean either way.'
+}
 
 /** One roster row: who he is and what he is, with no attribute column anywhere on it. */
 function ScoutRow({ player }: { player: Player }) {
@@ -120,6 +138,13 @@ export function TeamScoutScreen({ bundle, teamId, onBack }: { bundle: RunBundle;
         <p>
           <strong>Defense: {defense?.name ?? team.defensiveStrategyId}</strong>
           {defense && ` -- ${defense.description}`}
+        </p>
+        {/* The dials, in a sentence rather than four rows -- this is a report to read, not a control
+            panel. It is also what makes the shot-selection dial a decision rather than a setting:
+            walking a rim attack into a team already protecting the paint is the mistake scouting
+            exists to let you avoid. */}
+        <p>
+          <strong>Tendencies:</strong> {describeFocus(team.tacticalFocus)}
         </p>
         {series && (
           <p>

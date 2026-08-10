@@ -63,6 +63,7 @@ function AppContent() {
     setTrainingFocus,
     setRotationPlan,
     setDefensiveScheme,
+    setTacticalFocus,
     openShop,
     buyPlayerCamp,
     buyTeamCamp,
@@ -93,6 +94,7 @@ function AppContent() {
         onCommit={commitLiveGame}
         onAbandon={abandonLiveGame}
         onSetDefensiveScheme={setDefensiveScheme}
+        onSetTacticalFocus={setTacticalFocus}
       />
     )
   }
@@ -137,6 +139,7 @@ function AppContent() {
           onSetMinutes={setRotationMinutes}
           onSetFocus={setTrainingFocus}
           onSetDefensiveScheme={setDefensiveScheme}
+          onSetTacticalFocus={setTacticalFocus}
         />
       )
     }
@@ -188,6 +191,7 @@ function AppContent() {
           onSetFocus={setTrainingFocus}
           onSetRotationPlan={setRotationPlan}
           onSetDefensiveScheme={setDefensiveScheme}
+          onSetTacticalFocus={setTacticalFocus}
           onBack={() => setViewingMyTeam(false)}
         />
       </InspectorContext.Provider>

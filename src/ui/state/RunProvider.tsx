@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import type { AttributeKey, Game, GameId, PlayerId, RotationPlan } from '../../data/types'
+import { BALANCED_FOCUS, type AttributeKey, type Game, type GameId, type PlayerId, type RotationPlan, type TacticalFocus } from '../../data/types'
 import { DEFENSIVE_SCHEMES, OFFENSIVE_PLAYBOOKS, type DefensiveSchemeId, type SystemId } from '../../data/presets'
 import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from '../../data/persistence/runRepository'
 import { defaultRng } from '../../engine/rng'
@@ -10,7 +10,7 @@ import { createChunkSimContext } from '../../run/chunkSimContext'
 import { finalizeChunk } from '../../run/finalizeChunk'
 import { resolveGame } from '../../run/resolveGame'
 import { chunkRange, nextPlayableGameId } from '../../run/seasonChunks'
-import { applyCoachingUpgrade, computeSynergyUpgradeBonus, pickCoachingUpgradeOffers, type CoachingUpgradeId } from '../../run/coachingUpgrades'
+import { applyCoachingUpgrade, pickCoachingUpgradeOffers, type CoachingUpgradeId } from '../../run/coachingUpgrades'
 import {
   COACHING_UPGRADE_COST,
   CONSUMABLE_COST,
@@ -31,6 +31,7 @@ import { recordChunkInsights } from '../../run/runInsights'
 import { createRun } from '../../run/runState'
 import { applyPlayerCamp, applyTeamCamp, openShopVisit, type ShopTier } from '../../run/shop'
 import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
+import { resolveSynergyScore } from '../../run/teamSynergy'
 import { applyHouseRule, pickRandomHouseRules, type HouseRuleId } from '../../run/variation/houseRules'
 import { applyRosterQuirk, pickRandomRosterQuirks, type RosterQuirkId } from '../../run/variation/rosterQuirks'
 import { computeInitialSynergyScore, pickRandomSystems } from '../../run/variation/systemDraft'
@@ -155,7 +156,20 @@ export function RunProvider({ children }: { children: ReactNode }) {
       const finalRoster = players.filter((p) => p.teamId === teamId)
       const synergyScore = computeInitialSynergyScore(OFFENSIVE_PLAYBOOKS[system], finalRoster, userTeam)
       const teamsWithSystem = teams.map((t) =>
-        t.id === teamId ? { ...t, offensiveStrategyId: system, defensiveStrategyId: defense, synergyScore } : t,
+        t.id === teamId
+          ? {
+              ...t,
+              offensiveStrategyId: system,
+              defensiveStrategyId: defense,
+              synergyScore,
+              // Cleared, not derived. generateTeam gives every team dials matching the system it was
+              // *generated* with, which for the user's team is a random system they are about to
+              // replace -- inheriting those would start a run with tactical leans the GM never chose,
+              // attached to an offense they no longer run. Balanced is the honest starting point, and
+              // the dials are theirs to turn from the first checkpoint on.
+              tacticalFocus: undefined,
+            }
+          : t,
       )
 
       const newBundle: RunBundle = {
@@ -412,17 +426,18 @@ export function RunProvider({ children }: { children: ReactNode }) {
     (forBundle: RunBundle, updatedPlayers: RunBundle['players'], baseTeams: RunBundle['teams'] = forBundle.teams) => {
       const team = baseTeams.find((t) => t.id === forBundle.run.teamId)
       if (!team) return baseTeams
-      const upgradeBonus = computeSynergyUpgradeBonus(forBundle.run.coachingUpgrades)
       return baseTeams.map((t) =>
         t.id === team.id
           ? {
               ...t,
-              synergyScore:
-                computeInitialSynergyScore(
-                  OFFENSIVE_PLAYBOOKS[t.offensiveStrategyId as SystemId],
-                  updatedPlayers.filter((p) => p.teamId === t.id),
-                  t,
-                ) + upgradeBonus,
+              // Shared with SimcastScreen's mid-game focus directive rather than inlined, so the
+              // score a running game switches to and the score the next checkpoint shows can never
+              // be computed two different ways. See run/teamSynergy.ts.
+              synergyScore: resolveSynergyScore(
+                t,
+                updatedPlayers.filter((p) => p.teamId === t.id),
+                forBundle.run.coachingUpgrades,
+              ),
             }
           : t,
       )
@@ -492,6 +507,37 @@ export function RunProvider({ children }: { children: ReactNode }) {
       setBundle(updatedBundle)
     },
     [bundle],
+  )
+
+  /**
+   * The team's standing tactical dials (data/types/team.ts's TacticalFocus).
+   *
+   * Mirrors setDefensiveScheme deliberately, because m3-tactical-axis.md's D2 decided focus points
+   * *are* the same kind of thing: one stored value, changed from My Team, a checkpoint or
+   * mid-broadcast, with every path writing this field and no per-game override anywhere.
+   *
+   * Unlike the scheme, this recomputes synergy -- shot selection changes the play-call mix, and
+   * synergy is precisely the question of how well the roster fits the mix it will run. That is the
+   * same reason a minutes or rotation-chart edit recomputes, and it routes through the same helper.
+   *
+   * A game already in progress is a separate matter, exactly as it is for the scheme: its generator
+   * captured the team at the opening tip, so SimcastScreen also hands the change to the running
+   * simulation as a CoachingDirective -- carrying the new synergy score with it, since the engine
+   * cannot compute one.
+   */
+  const setTacticalFocus = useCallback(
+    async (partial: Partial<TacticalFocus>) => {
+      if (!bundle) return
+      const current = bundle.teams.find((t) => t.id === bundle.run.teamId)
+      if (!current) return
+      const focus: TacticalFocus = { ...BALANCED_FOCUS, ...current.tacticalFocus, ...partial }
+      const withNewFocus = bundle.teams.map((t) => (t.id === bundle.run.teamId ? { ...t, tacticalFocus: focus } : t))
+      const teams = teamsWithRecomputedSynergy(bundle, bundle.players, withNewFocus)
+      const updatedBundle: RunBundle = { ...bundle, teams }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle, teamsWithRecomputedSynergy],
   )
 
   const setRotationPlan = useCallback(
@@ -692,6 +738,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     setTrainingFocus,
     setRotationPlan,
     setDefensiveScheme,
+    setTacticalFocus,
     openShop,
     buyPlayerCamp,
     buyTeamCamp,

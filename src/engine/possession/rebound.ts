@@ -20,9 +20,16 @@ function teamRebounding(five: Player[]): number {
  * not just who gets the stat credited -- putting a glass-cleaning big out there genuinely buys extra
  * shots. Clamped so no lineup ever guarantees or forfeits the board.
  */
-export function offensiveReboundProbability(offenseOnCourt: Player[], defenseOnCourt: Player[]): number {
+export function offensiveReboundProbability(
+  offenseOnCourt: Player[],
+  defenseOnCourt: Player[],
+  /** The offense's glass dial, already resolved to points of probability by engine/tacticalFocus.ts's
+   *  focusReboundOffset -- positive for crashing, negative for getting back, 0 otherwise. The cost of
+   *  a positive offset is charged elsewhere: see simulateGame's fast-break flag. */
+  focusOffset = 0,
+): number {
   const edge = teamRebounding(offenseOnCourt) - teamRebounding(defenseOnCourt)
-  return clamp(OFFENSIVE_REBOUND_RATE + edge / OFFENSIVE_REBOUND_SENSITIVITY, 0.05, 0.5)
+  return clamp(OFFENSIVE_REBOUND_RATE + edge / OFFENSIVE_REBOUND_SENSITIVITY + focusOffset, 0.05, 0.5)
 }
 
 /** A player's standing in the contest for a loose ball: Rebounding blended with size, since boxing

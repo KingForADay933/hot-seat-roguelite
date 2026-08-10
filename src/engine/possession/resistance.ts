@@ -1,17 +1,23 @@
 import type { DefensiveScheme } from '../../data/presets'
-import type { PlayCallType, Player } from '../../data/types'
+import type { PlayCallType, Player, TacticalFocus } from '../../data/types'
 import { average } from '../math'
 import { PRESS_RESISTANCE_SCALE, RESISTANCE_WEIGHTS } from '../constants'
+import { focusedInteriorFocus } from '../tacticalFocus'
 import type { PlaySelection } from './playerSelector'
 
 /**
  * Pack-the-Paint boosts resistance on interior actions and lowers it on perimeter ones
  * ("forgiving of weak perimeter defenders"); Pick-and-Roll and Transition are treated as
  * neutral since their formulas already blend both defender types directly.
+ *
+ * Takes the already-resolved interior focus rather than the scheme, since the defensive tilt dial
+ * moves it (engine/tacticalFocus.ts's focusedInteriorFocus). The symmetry that makes that dial cost
+ * something is right here: the same `(interiorFocus - 0.5)` term is added on interior actions and
+ * subtracted on perimeter ones, so nothing is gained inside that is not conceded outside.
  */
-function applyInteriorFocus(r: number, scheme: DefensiveScheme, flag: -1 | 0 | 1): number {
+function applyInteriorFocus(r: number, interiorFocus: number, flag: -1 | 0 | 1): number {
   if (flag === 0) return r
-  return r * (1 + (scheme.interiorFocus - 0.5) * flag)
+  return r * (1 + (interiorFocus - 0.5) * flag)
 }
 
 /** Backcourt ball-pressure term applied to every possession, scaled by the scheme's pressureCoefficient
@@ -29,8 +35,12 @@ export function computeResistance(
   scheme: DefensiveScheme,
   offenseOnCourt: Player[],
   defenseOnCourt: Player[],
+  /** The *defending* team's dials. Undefined -- every AI team before focus points, and every call
+   *  site that has no team in hand -- resolves to the scheme's own values, unchanged. */
+  defenseFocus?: TacticalFocus,
 ): number {
   const w = RESISTANCE_WEIGHTS
+  const interiorFocus = focusedInteriorFocus(scheme, defenseFocus)
   let r: number
 
   switch (playCall) {
@@ -50,23 +60,23 @@ export function computeResistance(
           w.isolationPerimeter.perimeter * def.attributes.perimeterDefense
         : w.isolationInterior.interior * def.attributes.interiorDefense +
           w.isolationInterior.vertical * def.attributes.vertical
-      r = applyInteriorFocus(r, scheme, selection.isOutsideShotAction ? -1 : 1)
+      r = applyInteriorFocus(r, interiorFocus, selection.isOutsideShotAction ? -1 : 1)
       break
     }
     case 'post-up': {
       const def = selection.primaryDefender
       r = w.postUp.interior * def.attributes.interiorDefense + w.postUp.vertical * def.attributes.vertical
-      r = applyInteriorFocus(r, scheme, 1)
+      r = applyInteriorFocus(r, interiorFocus, 1)
       break
     }
     case 'spot-up': {
       r = selection.primaryDefender.attributes.perimeterDefense
-      r = applyInteriorFocus(r, scheme, -1)
+      r = applyInteriorFocus(r, interiorFocus, -1)
       break
     }
     case 'cutting': {
       r = selection.primaryDefender.attributes.lateralQuickness
-      r = applyInteriorFocus(r, scheme, -1)
+      r = applyInteriorFocus(r, interiorFocus, -1)
       break
     }
     case 'transition': {
