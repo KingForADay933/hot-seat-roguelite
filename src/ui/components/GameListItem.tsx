@@ -1,12 +1,21 @@
 import type { Game, Team, TeamId } from '../../data/types'
+import type { TeamRecord } from '../../engine/schedule/standings'
 import { formatOvertimeLabel } from '../formatOvertime'
 import { TeamSwatch } from './TeamSwatch'
 
-function TeamLabel({ team, fallback, isUserTeam }: { team?: Team; fallback: string; isUserTeam: boolean }) {
+function TeamLabel({ team, fallback, isUserTeam, record }: { team?: Team; fallback: string; isUserTeam: boolean; record?: TeamRecord }) {
   return (
     <span className="team-name" style={isUserTeam ? { fontWeight: 700 } : undefined}>
       {team && <TeamSwatch team={team} />}
       {team?.abbreviation ?? fallback}
+      {/* Record as of this game, so a finished row shows what it produced and an upcoming row shows
+          what both sides carry into it. Hidden at 0-0, where it's noise rather than context. */}
+      {record && record.wins + record.losses > 0 && (
+        <span className="team-record">
+          {' '}
+          ({record.wins}-{record.losses})
+        </span>
+      )}
     </span>
   )
 }
@@ -29,6 +38,8 @@ export function GameListItem({
   game,
   homeTeam,
   awayTeam,
+  homeRecord,
+  awayRecord,
   userTeamId,
   canPlay = true,
   onSim,
@@ -38,6 +49,10 @@ export function GameListItem({
   game: Game
   homeTeam?: Team
   awayTeam?: Team
+  /** Each side's record as of this game (engine/schedule/standings.ts's recordsThroughGame).
+   *  Optional so the component still renders anywhere a caller has no schedule context to hand. */
+  homeRecord?: TeamRecord
+  awayRecord?: TeamRecord
   userTeamId?: TeamId | null
   /** Whether this game is the one due next. Unplayed games further down the schedule still show
    *  their controls, disabled, so the affordance stays visible rather than the row looking inert. */
@@ -53,8 +68,8 @@ export function GameListItem({
     <tr>
       <td>{dateLabel}</td>
       <td>
-        <TeamLabel team={awayTeam} fallback={game.awayTeamId} isUserTeam={game.awayTeamId === userTeamId} /> @{' '}
-        <TeamLabel team={homeTeam} fallback={game.homeTeamId} isUserTeam={game.homeTeamId === userTeamId} />
+        <TeamLabel team={awayTeam} fallback={game.awayTeamId} isUserTeam={game.awayTeamId === userTeamId} record={awayRecord} /> @{' '}
+        <TeamLabel team={homeTeam} fallback={game.homeTeamId} isUserTeam={game.homeTeamId === userTeamId} record={homeRecord} />
       </td>
       <td>
         {game.isPlayed && game.result ? (

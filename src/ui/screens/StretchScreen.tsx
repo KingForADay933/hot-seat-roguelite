@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { DEFENSIVE_SCHEMES } from '../../data/presets'
 import type { GameId } from '../../data/types'
 import type { RunBundle } from '../../data/persistence/runRepository'
+import { recordsThroughGame } from '../../engine/schedule/standings'
+import { summarizeChunkInsights } from '../../run/chunkInsightSummary'
 import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { nextPlayableGameId, runTeamChunkGames } from '../../run/seasonChunks'
 import { BoxScoreTable } from '../components/BoxScoreTable'
@@ -27,7 +30,7 @@ export function StretchScreen({
   onFinish: () => void
 }) {
   const [openBoxScoreId, setOpenBoxScoreId] = useState<GameId | null>(null)
-  const { run, teams, players, games } = bundle
+  const { run, teams, players, games, pendingChunkInsights } = bundle
 
   const team = teams.find((t) => t.id === run.teamId)
   if (!team) return null
@@ -38,8 +41,22 @@ export function StretchScreen({
   // Only the earliest unplayed game is resolvable; the rest of the chunk is schedule, not a menu.
   const nextGameId = nextPlayableGameId(games, run.chunkInSeason, run.teamId)
 
+  // Records read from the whole season's games, not just this chunk's -- a record that restarted at
+  // 0-0 every stretch would be a different and much less useful number. One pass per listed game.
+  const recordsByGame = new Map(stretchGames.map((game) => [game.id, recordsThroughGame(games, game.id)]))
+
   const openGame = stretchGames.find((g) => g.id === openBoxScoreId)
   const openResult = openGame?.result
+  // This game's own Coaching Insights, already generated when it resolved and already sitting in
+  // the bundle -- the checkpoint used to be the first place any of them were visible. Collapsed the
+  // same way the checkpoint collapses a whole stretch, since one game can still produce two
+  // fatigue pulls on the same player.
+  const openGameInsights = openGame
+    ? summarizeChunkInsights(
+        pendingChunkInsights.filter((insight) => insight.gameId === openGame.id),
+        DEFENSIVE_SCHEMES[team.defensiveStrategyId]?.name,
+      )
+    : []
 
   return (
     <main>
@@ -70,6 +87,8 @@ export function StretchScreen({
                 game={game}
                 homeTeam={teams.find((t) => t.id === game.homeTeamId)}
                 awayTeam={teams.find((t) => t.id === game.awayTeamId)}
+                homeRecord={recordsByGame.get(game.id)?.get(game.homeTeamId)}
+                awayRecord={recordsByGame.get(game.id)?.get(game.awayTeamId)}
                 userTeamId={run.teamId}
                 canPlay={game.id === nextGameId}
                 onSim={() => onSimGame(game.id)}
@@ -91,6 +110,17 @@ export function StretchScreen({
             lines={openGame.homeTeamId === run.teamId ? openResult.boxScore.home : openResult.boxScore.away}
             players={players.filter((p) => p.teamId === run.teamId)}
           />
+
+          {openGameInsights.length > 0 && (
+            <>
+              <h3>What Happened</h3>
+              <ul>
+                {openGameInsights.map((insight, i) => (
+                  <li key={i}>{insight.text}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </>
       )}
 

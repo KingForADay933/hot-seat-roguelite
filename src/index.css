@@ -169,6 +169,13 @@ tr.user-row {
   align-items: center;
 }
 
+/* The W-L beside a team in the schedule: context, not the thing you're reading the row for. */
+.team-record {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
 .team-summary {
   background: var(--bg-alt);
   border: 1px solid var(--border);
