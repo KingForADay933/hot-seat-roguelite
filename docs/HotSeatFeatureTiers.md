@@ -56,7 +56,7 @@ scouting work adds 11–16 days, most of it in M3 and M7.)
 | --- | --- | --- | --- |
 | **M0 — itch page** | Store copy, screenshots, a simcast GIF. Created as a **draft, not published**. Copy drafted in `itch-page-draft.md`. | — | 1 |
 | **M1 — Complete run** ✅ | ~~Simcast pacing~~ · ~~chronological game order~~ · ~~rebounds in-sim + defensive stats~~ · ~~run-end summary~~ — **complete** | 7.5, 1.5, 11, 8 | 10–14 |
-| **M1.5 — Pre-playtest legibility** | Coaching Insights after every game · team records in the schedule · standings comprehension · weight rebounds toward bigs | 16, 11 | 2–4 |
+| **M1.5 — Pre-playtest legibility** ✅ | ~~Coaching Insights after every game~~ · ~~team records in the schedule~~ · ~~standings comprehension~~ · ~~weight rebounds toward bigs~~ — **complete** | 16, 11 | 2–4 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
 | **M3 — Tactical axis** | In-game decisions tiers 1–2 (scheme/focus switching) · **opponent scouting** · position-fit tuning · more team-construction options | 13, 17, 7.6, 3 | 12–17 |
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations · richer Coaching Insights | 12, 16 | 14–21 |
@@ -384,10 +384,10 @@ Tiers 11-13 below were added after this one and are gameplay work, so despite th
 Deepening what the possession model actually tracks. **Both items below change `PossessionLogEntry`'s shape, which invalidates existing saves with no migration path** -- `isValidBundleShape` rejects rather than migrates, deliberately, on the grounds that nothing has shipped. That's still true, so this is the cheap moment, and it stops being cheap the day there are real players with real runs. Treat them as one unit of work.
 
 - **Shipped -- rebounds during the sim** (M1): `PossessionLogEntry.rebounderId` is set when the miss resolves, using `pickRebounder` -- which already existed in `possession/rebound.ts`, exported and entirely unused. Two things fell out of it: `deriveBoxScore` is now a pure function of the log (it took an `Rng` only for this roll, and no longer needs `playersById` either), and the simcast shows **real rebounds live** -- `LiveBoxScoreLine` was `Omit<PlayerBoxScoreLine, 'rebounds'>` and the REB column rendered a dash for the whole game.
-- **Weight rebounds toward bigs** (M1.5) -- **Planned**: boards currently spread too evenly across the five. Two specific causes, both in `possession/rebound.ts`:
+- **Shipped -- rebounds weighted toward bigs** (M1.5): measured before and after over 6 simulated seasons (~35,000 boards). Centres went from 7.76 to **9.64 reb/36** and point guards from 5.31 to **3.76**, moving the C:PG rate ratio from **1.46 to 2.56** against a real-basketball figure near 3 — every position now lands within about a rebound of its NBA rate. Purely an attribution change: `offensiveReboundProbability` decides possession *before* `pickRebounder` is called, and the pick still spends exactly one `rng()` draw however the weights fall, so no game outcome and no existing seed moved. The two causes were:
   - `pickRebounder` weights **linearly** by the `rebounding` attribute, so a 55-rated guard takes nearly as many boards as a 75-rated centre (55/75 = 73% as often). Compare the offensive side, which raises selection scores to `USAGE_WEIGHT_EXPONENT` (3) precisely so the best-suited player dominates a role without monopolising it. Rebounding is the same kind of contest and has no such exponent. **Reusing that constant is the obvious first attempt**, and keeps the two concentration knobs from drifting apart.
   - Nothing but the attribute is read -- not height, not position, not `vertical`. A 6'0" point guard and a 7'0" centre with equal Rebounding are equally likely to come down with it, which is the part that reads as wrong regardless of how the numbers are tuned. `avgInteriorDefense` (interiorDefense + vertical) already exists as the engine's "big man" composite and is the natural blend partner.
-  - Cheap and self-contained: no log shape change, no save invalidation, and `deriveBoxScore` reads `rebounderId` off the log either way. Worth doing **before M2** -- it is a believability issue, and believability is exactly what a first playtest reports on.
+  - Shipped as `REBOUND_WEIGHT_EXPONENT` (equal to `USAGE_WEIGHT_EXPONENT`, named separately so the two can diverge) and `REBOUND_SIZE_WEIGHT` (0.4). Both are first-pass numbers set against real per-position rates, not against play feel -- **a tuning candidate for M2** if boards feel too concentrated in practice.
 - **Shipped -- defensive stats** (M1): steals and blocks, as attribution fields (`stolenById` / `blockedById`) rather than new outcomes -- a steal is still a turnover and a blocked shot is still a miss, with the same attempt and the same rebound, so no existing branch changed. Both are decided *after* the outcome roll, which means turnover and make/miss rates are untouched by their existence and can be tuned independently. Credit goes to the matchup defender the possession already identified. Measured over 160 games: 5.8 steals and 4.3 blocks a team a game, blocks at 4.9% of attempts against a real ~5%. Steals run light because the engine's turnover rate itself is light (~10.4 against a real ~13.5) -- inherited, not introduced, and the fix belongs in `TURNOVER_BASE_PROB`. **Deliberately stopped short of personal fouls committed**, which would drag in foul trouble and foul-outs: that stays Tier 14.
 
 ---
@@ -645,6 +645,16 @@ which problems are real.
   > affordance itself waits.
 
 ### Feel and comprehension
+
+- **Shipped — duplicate player names.** Spotted during M1.5 verification: one roster carried two
+  different players both called *Xavier Ellery*, alongside four Codys and three Xaviers. Not bad
+  luck — 20 first names by 20 last gave 400 combinations for a league's ~96 players, which the
+  birthday maths puts at about eleven expected collisions. Fixed by drawing against a set of names
+  already taken, threaded through the whole league (opponents appear in scouting and player pages, so
+  per-roster uniqueness would not have been enough), and by widening both pools to 40 for 1600
+  combinations, which also stops first names repeating four times in a twelve-man roster. Rolls
+  first and falls back to a deterministic walk of the name space, so the work is bounded rather than
+  left to chance.
 
 - **Audio.** Completely absent today — there is no audio infrastructure of any kind. Named here so it
   doesn't fall through the gap rather than because it should happen soon. The simcast is the obvious

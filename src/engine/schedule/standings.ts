@@ -1,4 +1,53 @@
-import type { Game, StandingsRow, Team, TeamId } from '../../data/types'
+import type { Game, GameId, StandingsRow, Team, TeamId } from '../../data/types'
+
+export interface TeamRecord {
+  wins: number
+  losses: number
+}
+
+/**
+ * Every team's record as of a given point in the schedule -- counting each played game up to *and
+ * including* the named one, in date order.
+ *
+ * Point-in-time rather than season-to-date because the schedule shows a mix of finished and upcoming
+ * games at once: putting today's record beside a game from three weeks ago states a true fact about
+ * the wrong moment. Counting through the game means a finished row reads as the record it produced,
+ * an upcoming row reads as the record both teams carry into it, and the column simply progresses
+ * down the list as a schedule should.
+ *
+ * A game that isn't in `games` at all yields everyone's record through the whole played schedule,
+ * which is the sensible reading of "through a game that hasn't been scheduled".
+ */
+export function recordsThroughGame(games: Game[], throughGameId: GameId): Map<TeamId, TeamRecord> {
+  const chronological = [...games].sort((a, b) => a.date.localeCompare(b.date))
+  const cutoff = chronological.findIndex((g) => g.id === throughGameId)
+  const upTo = cutoff === -1 ? chronological : chronological.slice(0, cutoff + 1)
+
+  const records = new Map<TeamId, TeamRecord>()
+  const recordFor = (teamId: TeamId): TeamRecord => {
+    const existing = records.get(teamId)
+    if (existing) return existing
+    const fresh = { wins: 0, losses: 0 }
+    records.set(teamId, fresh)
+    return fresh
+  }
+
+  for (const game of upTo) {
+    if (!game.isPlayed || !game.result) continue
+    const home = recordFor(game.homeTeamId)
+    const away = recordFor(game.awayTeamId)
+    // Same >= comparison computeStandings uses, for the same defensive reason documented there.
+    if (game.result.homeScore >= game.result.awayScore) {
+      home.wins += 1
+      away.losses += 1
+    } else {
+      away.wins += 1
+      home.losses += 1
+    }
+  }
+
+  return records
+}
 
 /** Pure function over played games only -- recomputed on demand since league sizes here are small. */
 export function computeStandings(teams: Team[], games: Game[]): StandingsRow[] {

@@ -41,10 +41,13 @@ export function resolveGame(context: ChunkSimContext, run: RunState, scheduled: 
   const played = alreadyPlayed ?? simulateGame(scheduled, homeTeam, awayTeam, context.playersById, context.possessionsPerGame, rng)
 
   const involvesRunTeam = played.homeTeamId === run.teamId || played.awayTeamId === run.teamId
+  // Stamped with the fixture here rather than inside the generator, which only ever sees a
+  // possession log and two teams. It's what lets the stretch screen file a line under the game that
+  // produced it instead of showing one undifferentiated list for the whole chunk.
   const insights = involvesRunTeam
-    ? generateCoachingInsights(played.possessionLog, homeTeam, awayTeam, context.playersById).filter(
-        (insight) => insight.teamId === run.teamId,
-      )
+    ? generateCoachingInsights(played.possessionLog, homeTeam, awayTeam, context.playersById)
+        .filter((insight) => insight.teamId === run.teamId)
+        .map((insight) => ({ ...insight, gameId: scheduled.id }))
     : []
 
   return { game: stripPossessionLog(played), insights }

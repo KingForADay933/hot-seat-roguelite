@@ -34,6 +34,9 @@ export interface GenerateTeamParams {
   defensiveStrategyId: string
   rng: Rng
   averageOverallShift?: number
+  /** Names already spoken for elsewhere. Read and added to, so generateLeague can thread one set
+   *  through every team and get league-wide unique names rather than per-roster ones. */
+  takenNames?: Set<string>
 }
 
 export interface GeneratedTeam {
@@ -42,7 +45,9 @@ export interface GeneratedTeam {
 }
 
 export function generateTeam(params: GenerateTeamParams): GeneratedTeam {
-  const { rng, averageOverallShift = 0 } = params
+  // Defaulted rather than left undefined so a team generated on its own still has unique names
+  // within itself -- the roster is the smallest scope where a repeat is confusing.
+  const { rng, averageOverallShift = 0, takenNames = new Set<string>() } = params
   const teamId = createId('team')
 
   const extraPositions = Array.from({ length: MAX_ROSTER_SIZE - ROSTER_TEMPLATE.length }, () => {
@@ -50,7 +55,7 @@ export function generateTeam(params: GenerateTeamParams): GeneratedTeam {
   })
 
   const players = [...ROSTER_TEMPLATE, ...extraPositions].map((position) => {
-    const player = generatePlayer(position, rng, averageOverallShift)
+    const player = generatePlayer(position, rng, averageOverallShift, takenNames)
     player.teamId = teamId
     return player
   })

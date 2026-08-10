@@ -1,5 +1,5 @@
 import { DEFENSIVE_SCHEMES } from '../../data/presets'
-import type { PlayCallType, Player, PlayerId, PossessionLogEntry, Team, TeamId } from '../../data/types'
+import type { GameId, PlayCallType, Player, PlayerId, PossessionLogEntry, Team, TeamId } from '../../data/types'
 import {
   FATIGUE_EMERGENCY_THRESHOLD,
   FATIGUE_SUB_OUT_THRESHOLD,
@@ -49,6 +49,16 @@ export interface CoachingInsight {
   subjectId: PlayerId
   /** Denormalised so a consumer that outlives the roster lookup can still name them. */
   subjectName: string
+  /**
+   * Which game produced this observation. Stamped by run/resolveGame.ts rather than here -- the
+   * generator is handed a possession log and has no idea which fixture it belongs to.
+   *
+   * Needed because the stretch screen shows a game's own insights next to its box score, and
+   * `pendingChunkInsights` is otherwise a flat list with nothing to attribute a line to. Optional
+   * for saves written before it existed; those insights simply can't be filed under a game, which
+   * the stretch screen handles by showing nothing rather than showing them under the wrong one.
+   */
+  gameId?: GameId
   /**
    * The evidence behind the prose, kept as numbers so several games' worth of the same observation
    * can be *added up* rather than listed one line at a time (run/chunkInsightSummary.ts).

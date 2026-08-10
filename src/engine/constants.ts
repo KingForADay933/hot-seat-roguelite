@@ -270,6 +270,33 @@ export const OFFENSIVE_REBOUND_RATE = 0.25
  *  which is about the real spread between the best and worst rebounding teams. */
 export const OFFENSIVE_REBOUND_SENSITIVITY = 250
 
+/**
+ * How sharply the best rebounder on the floor out-competes the worst for a loose ball.
+ *
+ * Starts equal to USAGE_WEIGHT_EXPONENT and means the same thing on the other end of the court: a
+ * contest resolved by weighted pick, where an exponent of 1 spreads the ball evenly across everyone
+ * with a pulse and a high exponent hands it to the best fit every time. Boards were previously
+ * picked with no exponent at all, which is why a 55-rated guard came down with 73% as many as a
+ * 75-rated centre.
+ *
+ * Named separately rather than importing USAGE_WEIGHT_EXPONENT directly so the two can diverge when
+ * one of them needs tuning -- they start equal because there is no evidence yet that rebounding
+ * concentrates differently from shot creation, not because they must move together.
+ */
+export const REBOUND_WEIGHT_EXPONENT = USAGE_WEIGHT_EXPONENT
+
+/**
+ * How much of a player's rebounding contest score comes from *size* rather than from the Rebounding
+ * attribute itself, 0-1.
+ *
+ * Rebounding alone left a 6'0" point guard and a 7'0" centre competing on near-equal terms whenever
+ * their Rebounding ratings were close, which reads as wrong however the rest is tuned. Size is taken
+ * as Interior Defense + Vertical (engine/matchup.ts's avgInteriorDefense) -- the composite the engine
+ * already uses to mean "big", so this introduces no new notion of size and no dependency on
+ * heightInches, which the simulation otherwise never reads.
+ */
+export const REBOUND_SIZE_WEIGHT = 0.4
+
 // --- Bench rotation / fatigue ---
 
 /** Relative target-minutes share by depth-chart rank within a position group (0 = starter),

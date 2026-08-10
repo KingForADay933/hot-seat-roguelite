@@ -35,14 +35,23 @@ describe('beginSeason', () => {
   })
 
   it('rolls the season wildcard event and hands back the roster it already landed on', () => {
-    const { rng, league, players, run } = setUp(3)
+    // A wildcard fires on roughly 30% of seasons, so the seed has to be *found* rather than
+    // assumed. Pinning one was fragile: any change to how much rng league generation consumes moved
+    // the stream and silently turned this into a test of nothing.
+    let started: ReturnType<typeof beginSeason> | null = null
+    let players: ReturnType<typeof setUp>['players'] = []
+    for (let seed = 1; seed <= 40 && started?.wildcardEvent == null; seed++) {
+      const fixture = setUp(seed)
+      players = fixture.players
+      started = beginSeason(fixture.run, fixture.league, fixture.players, fixture.rng)
+    }
 
-    const started = beginSeason(run, league, players, rng)
-
-    expect(started.wildcardEvent).not.toBeNull()
+    expect(started, 'no seed in 1-40 rolled a wildcard event').not.toBeNull()
+    expect(started!.wildcardEvent).not.toBeNull()
+    const startedRun = started!
     // The event is applied to the returned players, not left for the caller to apply.
-    const shifted = started.players.find((p) => p.id === started.wildcardEvent?.playerId)
-    const before = players.find((p) => p.id === started.wildcardEvent?.playerId)
+    const shifted = startedRun.players.find((p) => p.id === startedRun.wildcardEvent?.playerId)
+    const before = players.find((p) => p.id === startedRun.wildcardEvent?.playerId)
     expect(shifted).toBeDefined()
     expect(shifted).not.toEqual(before)
   })

@@ -56,17 +56,70 @@ const POSITION_BIAS: Record<Position, Partial<Record<keyof PlayerAttributes, num
   },
 }
 
+/**
+ * Name pools, deliberately larger than the roster they have to fill.
+ *
+ * At 20x20 a full league drew 96 players from 400 combinations, and the birthday maths makes that
+ * roughly eleven expected collisions -- which is exactly what turned up in play: one roster carried
+ * two different players called Xavier Ellery, and four Codys. 40x40 is 1600 combinations for the
+ * same 96 draws, so `pickUniqueName` below now rarely has to reject anything, and first names stop
+ * repeating four times in a twelve-man roster.
+ */
 const FIRST_NAMES = [
   'Marcus', 'Devon', 'Jalen', 'Isaiah', 'Xavier', 'Tremaine', 'Cody', 'Anthony', 'Miles', 'Julian',
   'Elijah', 'Trevon', 'Damian', 'Cameron', 'Rashad', 'Kobe', 'Andre', 'Malik', 'Terrence', 'Gabriel',
+  'Tyrese', 'Quentin', 'Amari', 'Donovan', 'Zion', 'Corey', 'Bryce', 'Keegan', 'Omari', 'Landon',
+  'Micah', 'Deshawn', 'Roman', 'Silas', 'Emmanuel', 'Kai', 'Nico', 'Trey', 'Vaughn', 'Josiah',
 ]
 const LAST_NAMES = [
   'Whitfield', 'Okafor', 'Bramwell', 'Sinclair', 'Delgado', 'Fenwick', 'Harlow', 'Castellan', 'Ambrose', 'Rourke',
   'Kessler', 'Marsh', 'Voss', 'Tanaka', 'Ellery', 'Baptiste', 'Nakamura', 'Whitlock', 'Solano', 'Ferris',
+  'Adeyemi', 'Brennan', 'Calloway', 'Duval', 'Eastwood', 'Grieves', 'Halvorsen', 'Ivers', 'Jennings', 'Kowalski',
+  'Lindqvist', 'Moreau', 'Novak', 'Prieto', 'Quintero', 'Ridley', 'Stavros', 'Thorne', 'Ulrich', 'Vandermeer',
 ]
+
+/** Rolls before giving up on chance and walking the name space in order. Small because at the pool
+ *  sizes above a collision is already unlikely; the walk exists for correctness, not for speed. */
+const NAME_ROLL_ATTEMPTS = 12
 
 function pick<T>(items: T[], rng: Rng): T {
   return items[Math.floor(rng() * items.length)]
+}
+
+/**
+ * A name nobody in `taken` already has.
+ *
+ * Rolls first, because a random draw is what gives the league its texture, and only falls back to
+ * a deterministic walk of the whole space once the rolls keep colliding -- which bounds the work
+ * instead of looping on chance. If every combination is genuinely spoken for (more players than
+ * FIRST_NAMES x LAST_NAMES, which no league this size can reach) it returns a duplicate rather than
+ * failing: a repeated name is a cosmetic annoyance, and refusing to generate a player is not.
+ *
+ * `taken` is mutated so a caller can thread one set through a whole league and get league-wide
+ * uniqueness, rather than uniqueness that stops at each roster's edge.
+ */
+function pickUniqueName(rng: Rng, taken?: Set<string>): string {
+  if (!taken) return `${pick(FIRST_NAMES, rng)} ${pick(LAST_NAMES, rng)}`
+
+  for (let attempt = 0; attempt < NAME_ROLL_ATTEMPTS; attempt++) {
+    const name = `${pick(FIRST_NAMES, rng)} ${pick(LAST_NAMES, rng)}`
+    if (!taken.has(name)) {
+      taken.add(name)
+      return name
+    }
+  }
+
+  for (const last of LAST_NAMES) {
+    for (const first of FIRST_NAMES) {
+      const name = `${first} ${last}`
+      if (!taken.has(name)) {
+        taken.add(name)
+        return name
+      }
+    }
+  }
+
+  return `${pick(FIRST_NAMES, rng)} ${pick(LAST_NAMES, rng)}`
 }
 
 function rollRange(rng: Rng, min: number, max: number): number {
@@ -101,7 +154,10 @@ function pickTendency(position: Position, rng: Rng): TendencyProfile {
  * inside rollAttribute deliberately ignores both bias and shift: a talent ceiling shouldn't move
  * just because the league's average did.
  */
-export function generatePlayer(position: Position, rng: Rng, shift: number = 0): Player {
+/** `takenNames`, when passed, is read *and added to* -- thread one set through every team in a
+ *  league and no two players anywhere in it share a name. Omit it and names are drawn freely, which
+ *  is what a one-off player (a test, a fixture) wants. */
+export function generatePlayer(position: Position, rng: Rng, shift: number = 0, takenNames?: Set<string>): Player {
   const bias = POSITION_BIAS[position]
   const attributes: PlayerAttributes = {
     insideShot: rollAttribute(rng, (bias.insideShot ?? 0) + shift),
@@ -134,7 +190,7 @@ export function generatePlayer(position: Position, rng: Rng, shift: number = 0):
 
   return {
     id: createId('player'),
-    name: `${pick(FIRST_NAMES, rng)} ${pick(LAST_NAMES, rng)}`,
+    name: pickUniqueName(rng, takenNames),
     age,
     positions: [position],
     heightInches: Math.round(rollRange(rng, minHeight, maxHeight)),

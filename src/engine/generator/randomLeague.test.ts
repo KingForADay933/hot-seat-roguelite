@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createSeededRng } from '../rng'
 import { generateLeague } from './randomLeague'
+import { generateTeam } from './randomTeam'
 
 describe('generateLeague', () => {
   it('generates the requested number of teams with unique ids and abbreviations', () => {
@@ -28,5 +29,40 @@ describe('generateLeague', () => {
       expect(t.offensiveStrategyId.length).toBeGreaterThan(0)
       expect(t.defensiveStrategyId.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('player names', () => {
+  it('gives every player in the league a name nobody else has', () => {
+    // 8 x 12 = 96 players. The pools hold 40 x 40 = 1600 combinations, so this is well inside what
+    // the space can serve -- the point is that it is enforced, not merely likely.
+    const { players } = generateLeague({ teamCount: 8, leagueName: 'Test League', rng: createSeededRng(3) })
+    const names = players.map((p) => p.name)
+
+    expect(new Set(names).size).toBe(names.length)
+  })
+
+  it('holds across several seeds, not just a lucky one', () => {
+    for (let seed = 1; seed <= 25; seed++) {
+      const { players } = generateLeague({ teamCount: 8, leagueName: 'Test League', rng: createSeededRng(seed) })
+      const names = players.map((p) => p.name)
+      const duplicates = names.filter((n, i) => names.indexOf(n) !== i)
+      expect(duplicates, `seed ${seed} produced duplicate names: ${[...new Set(duplicates)].join(', ')}`).toEqual([])
+    }
+  })
+
+  it('keeps a standalone team unique within itself without being handed a set', () => {
+    const { players } = generateTeam({
+      name: 'Test',
+      city: 'Test',
+      abbreviation: 'TST',
+      primaryColor: '#000',
+      secondaryColor: '#fff',
+      offensiveStrategyId: 'balanced',
+      defensiveStrategyId: 'manToMan',
+      rng: createSeededRng(11),
+    })
+    const names = players.map((p) => p.name)
+    expect(new Set(names).size).toBe(names.length)
   })
 })
