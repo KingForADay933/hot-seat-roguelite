@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Game } from '../../data/types'
 import { makeTestTeam } from '../testFixtures'
-import { computeStandings, recordsThroughGame } from './standings'
+import { computeStandings, headToHeadRecord, recordsThroughGame } from './standings'
 
 function playedGame(homeTeamId: string, awayTeamId: string, homeScore: number, awayScore: number): Game {
   return {
@@ -116,5 +116,36 @@ describe('recordsThroughGame', () => {
 
   it('is empty before anything has been played', () => {
     expect(recordsThroughGame([datedGame('g1', a, b, 1)], 'g1').size).toBe(0)
+  })
+})
+
+describe('headToHeadRecord', () => {
+  it('counts only the two teams\' meetings, from the named team\'s side', () => {
+    const a = makeTestTeam()
+    const b = makeTestTeam()
+    const c = makeTestTeam()
+    const games = [
+      playedGame(a.id, b.id, 100, 90), // a wins at home
+      playedGame(b.id, a.id, 95, 105), // a wins away
+      playedGame(b.id, a.id, 110, 100), // b wins
+      playedGame(a.id, c.id, 120, 80), // not part of the series
+    ]
+
+    expect(headToHeadRecord(games, a.id, b.id)).toEqual({ wins: 2, losses: 1 })
+    expect(headToHeadRecord(games, b.id, a.id)).toEqual({ wins: 1, losses: 2 })
+  })
+
+  it('is 0-0 for two teams that have not met', () => {
+    const a = makeTestTeam()
+    const b = makeTestTeam()
+    const c = makeTestTeam()
+    expect(headToHeadRecord([playedGame(a.id, c.id, 100, 90)], a.id, b.id)).toEqual({ wins: 0, losses: 0 })
+  })
+
+  it('ignores scheduled meetings that have not been played', () => {
+    const a = makeTestTeam()
+    const b = makeTestTeam()
+    const unplayed: Game = { ...playedGame(a.id, b.id, 0, 0), isPlayed: false, result: null }
+    expect(headToHeadRecord([unplayed], a.id, b.id)).toEqual({ wins: 0, losses: 0 })
   })
 })

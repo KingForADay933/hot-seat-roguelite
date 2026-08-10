@@ -49,6 +49,36 @@ export function recordsThroughGame(games: Game[], throughGameId: GameId): Map<Te
   return records
 }
 
+/**
+ * How one team has fared against another, counting only games the two have played each other --
+ * `wins`/`losses` are from `teamId`'s side.
+ *
+ * Season series rather than overall record, because that is the number a GM about to face someone
+ * actually wants: a 20-12 opponent you have beaten twice is a different proposition from a 20-12
+ * opponent who has swept you. Nothing else needs it, so it stays a separate pass rather than another
+ * column on StandingsRow.
+ */
+export function headToHeadRecord(games: Game[], teamId: TeamId, opponentId: TeamId): TeamRecord {
+  const record: TeamRecord = { wins: 0, losses: 0 }
+
+  for (const game of games) {
+    if (!game.isPlayed || !game.result) continue
+    const isMeeting =
+      (game.homeTeamId === teamId && game.awayTeamId === opponentId) ||
+      (game.awayTeamId === teamId && game.homeTeamId === opponentId)
+    if (!isMeeting) continue
+
+    const isHome = game.homeTeamId === teamId
+    const own = isHome ? game.result.homeScore : game.result.awayScore
+    const other = isHome ? game.result.awayScore : game.result.homeScore
+    // Same >= comparison computeStandings uses, for the same defensive reason documented there.
+    if (own >= other) record.wins += 1
+    else record.losses += 1
+  }
+
+  return record
+}
+
 /** Pure function over played games only -- recomputed on demand since league sizes here are small. */
 export function computeStandings(teams: Team[], games: Game[]): StandingsRow[] {
   const rows = new Map<TeamId, StandingsRow>(

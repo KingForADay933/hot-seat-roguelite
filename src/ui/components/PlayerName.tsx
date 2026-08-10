@@ -1,5 +1,5 @@
 import type { PlayerId } from '../../data/types'
-import { usePlayerInspector } from '../state/playerInspector.core'
+import { useInspector } from '../state/inspector.core'
 
 /**
  * A player's name, clickable through to their detail page wherever one can be opened.
@@ -22,7 +22,7 @@ export function PlayerName({
    *  because "PG Devon Whitlock" reads as one label. */
   prefix?: string
 }) {
-  const inspector = usePlayerInspector()
+  const inspector = useInspector()
   const label = prefix ? `${prefix} ${name}` : name
 
   if (!inspector) return <>{label}</>

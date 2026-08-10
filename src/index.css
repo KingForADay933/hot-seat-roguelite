@@ -429,6 +429,12 @@ h3 {
   margin-bottom: 0;
 }
 
+/* Tags inside a scouting-report table cell: the row is already the vertical rhythm, so the shared
+   bottom margin would only push every row apart. */
+.scout-tag-row {
+  margin-bottom: 0;
+}
+
 /* Keeps each system's name and its score on the same line -- the pair is the unit being read, and
    a wrap between them turns the row into a puzzle. */
 .player-card-fits > span > span {

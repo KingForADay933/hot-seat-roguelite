@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestPlayer } from '../engine/testFixtures'
-import { attributeExtremes, growthHeadroom, playerTags } from './playerTags'
+import { attributeExtremes, growthHeadroom, playerTags, scoutingTags } from './playerTags'
 
 describe('growthHeadroom', () => {
   it('sums the gap to potential across all ten attributes', () => {
@@ -80,5 +80,49 @@ describe('playerTags', () => {
     })
     expect(labels(spiked)).toContain('Specialist')
     expect(labels(spiked)).not.toContain('Positionless')
+  })
+})
+
+describe('scoutingTags', () => {
+  /** Distinctive hidden ratings, so "does this number leak" is answerable by string search. */
+  const opponent = makeTestPlayer({
+    age: 20,
+    development: { ageCurveStage: 'rising' },
+    hidden: { clutch: 91, consistency: 93, durability: 94, morale: 95 },
+  })
+
+  it('keeps the tags that describe how a player plays', () => {
+    expect(scoutingTags(opponent).map((t) => t.label)).toEqual(
+      expect.arrayContaining(['Ice in the Veins', 'Metronome', 'Iron Man', 'Bought In']),
+    )
+  })
+
+  it('drops the development tags, which are age restated or somebody else\'s private potential', () => {
+    // Rising/Declining is a pure function of age and the report has an Age column; Untapped/Maxed
+    // Out reads development.potential. Both fire on nearly every player, so leaving them in would
+    // make the column mostly about the opponent's rebuild rather than about the game.
+    expect(playerTags(opponent).map((t) => t.label)).toEqual(expect.arrayContaining(['Rising', 'Untapped']))
+    const scouted = scoutingTags(opponent).map((t) => t.label)
+    for (const label of ['Rising', 'Declining', 'Untapped', 'Maxed Out']) expect(scouted).not.toContain(label)
+  })
+
+  it('keeps the tone of every tag it does show, so a strength still reads as a strength', () => {
+    const own = new Map(playerTags(opponent).map((t) => [t.label, t.tone]))
+    scoutingTags(opponent).forEach((tag) => expect(tag.tone).toBe(own.get(tag.label)))
+  })
+
+  it('quotes the underlying rating on your own player and not on somebody else\'s', () => {
+    // The whole point of the split: the label is public, the number behind it is not. 350 is the
+    // default fixture's growth headroom, which Untapped quotes the same way.
+    const leaked = ['91', '93', '94', '95', '350']
+    const ownDetails = playerTags(opponent).map((t) => t.detail).join(' ')
+    const scoutDetails = scoutingTags(opponent).map((t) => t.detail).join(' ')
+
+    leaked.forEach((value) => expect(ownDetails).toContain(value))
+    leaked.forEach((value) => expect(scoutDetails).not.toContain(value))
+  })
+
+  it('still explains what each tag means rather than going blank', () => {
+    scoutingTags(opponent).forEach((tag) => expect(tag.detail.length).toBeGreaterThan(10))
   })
 })

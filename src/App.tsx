@@ -13,9 +13,10 @@ import { FiredScreen } from './ui/screens/FiredScreen'
 import { StretchScreen } from './ui/screens/StretchScreen'
 import { SimcastScreen } from './ui/screens/SimcastScreen'
 import { PlayerScreen } from './ui/screens/PlayerScreen'
+import { TeamScoutScreen } from './ui/screens/TeamScoutScreen'
 import { InsightsScreen } from './ui/screens/InsightsScreen'
-import { PlayerInspectorContext } from './ui/state/playerInspector.core'
-import type { PlayerId } from './data/types'
+import { InspectorContext } from './ui/state/inspector.core'
+import type { PlayerId, TeamId } from './data/types'
 
 function AppContent() {
   // Whether the My Team reference sheet is covering the current screen. Local, not persisted:
@@ -34,7 +35,11 @@ function AppContent() {
   // rather than overlaying it, so the screen underneath remounts on the way back and its own view
   // state resets (an expanded box score returns collapsed).
   const [viewingPlayerId, setViewingPlayerId] = useState<PlayerId | null>(null)
-  const inspector = useMemo(() => ({ openPlayer: setViewingPlayerId }), [])
+  // Which team's scouting report is open, if any. Sits *under* the player page rather than beside
+  // it, so opening one of their players and coming back lands on the report rather than dropping
+  // all the way out to the run -- a scouting report is a place you read several players from.
+  const [viewingTeamId, setViewingTeamId] = useState<TeamId | null>(null)
+  const inspector = useMemo(() => ({ openPlayer: setViewingPlayerId, openTeam: setViewingTeamId }), [])
   const {
     bundle,
     draft,
@@ -143,9 +148,19 @@ function AppContent() {
   // name from there returns to My Team rather than dropping back to the run.
   if (viewingPlayerId) {
     return (
-      <PlayerInspectorContext.Provider value={inspector}>
+      <InspectorContext.Provider value={inspector}>
         <PlayerScreen bundle={bundle} playerId={viewingPlayerId} onBack={() => setViewingPlayerId(null)} />
-      </PlayerInspectorContext.Provider>
+      </InspectorContext.Provider>
+    )
+  }
+
+  // Directly below the player page, for the reason given on viewingTeamId: closing a player opened
+  // from a scouting report reveals the report again rather than the run screen underneath it.
+  if (viewingTeamId) {
+    return (
+      <InspectorContext.Provider value={inspector}>
+        <TeamScoutScreen bundle={bundle} teamId={viewingTeamId} onBack={() => setViewingTeamId(null)} />
+      </InspectorContext.Provider>
     )
   }
 
@@ -166,7 +181,7 @@ function AppContent() {
   }
   if (viewingMyTeam) {
     return (
-      <PlayerInspectorContext.Provider value={inspector}>
+      <InspectorContext.Provider value={inspector}>
         <MyTeamScreen
           bundle={bundle}
           onSetMinutes={setRotationMinutes}
@@ -175,7 +190,7 @@ function AppContent() {
           onSetDefensiveScheme={setDefensiveScheme}
           onBack={() => setViewingMyTeam(false)}
         />
-      </PlayerInspectorContext.Provider>
+      </InspectorContext.Provider>
     )
   }
 
@@ -184,7 +199,7 @@ function AppContent() {
   // particular screen either. Both sit behind the simcast check above, so neither interrupts a
   // game already in motion.
   return (
-    <PlayerInspectorContext.Provider value={inspector}>
+    <InspectorContext.Provider value={inspector}>
       <nav>
         <button onClick={() => setViewingMyTeam(true)}>My Team</button>
         <button onClick={() => setViewingInsights(true)}>Insights</button>
@@ -193,7 +208,7 @@ function AppContent() {
         </button>
       </nav>
       {runScreen()}
-    </PlayerInspectorContext.Provider>
+    </InspectorContext.Provider>
   )
 }
 
