@@ -70,9 +70,15 @@ describe('playerTags', () => {
     expect(labels(swingman)).not.toContain('Specialist')
   })
 
-  it('names a Specialist player instead when height or attributes are spiked for one slot', () => {
-    const shortGuard = makeTestPlayer({ positions: ['PG'], heightInches: 72 })
-    expect(labels(shortGuard)).toContain('Specialist')
-    expect(labels(shortGuard)).not.toContain('Positionless')
+  it('names a Specialist player instead when the attribute profile is spiked for one slot', () => {
+    // Spiked beyond what an SF is already rolled with -- height alone no longer earns the label,
+    // see isSpecialist in engine/positionFit.ts.
+    const spiked = makeTestPlayer({
+      positions: ['SF'],
+      heightInches: 79,
+      attributes: { insideShot: 95, passing: 30 },
+    })
+    expect(labels(spiked)).toContain('Specialist')
+    expect(labels(spiked)).not.toContain('Positionless')
   })
 })

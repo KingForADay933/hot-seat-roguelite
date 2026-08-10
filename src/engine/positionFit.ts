@@ -1,5 +1,6 @@
 import type { AttributeKey, Player, PlayerAttributes, Position } from '../data/types'
 import {
+  POSITION_BIAS,
   POSITION_FIT_HEIGHT_PENALTY_PER_INCH,
   POSITION_FIT_SLIDE_PENALTY_PER_SLOT,
   POSITION_HEIGHT_RANGE_INCHES,
@@ -8,7 +9,6 @@ import {
   POSITIONLESS_SEVERITY_MULTIPLIER,
   SLOT_INTERIOR_LEAN,
   SPECIALIST_ATTRIBUTE_SPREAD_MIN,
-  SPECIALIST_HEIGHT_EDGE_INCHES,
   SPECIALIST_SEVERITY_MULTIPLIER,
 } from './constants'
 import { clamp } from './math'
@@ -57,6 +57,24 @@ export function attributeSpread(player: Player): number {
 }
 
 /**
+ * Spread measured against what the player's own position is *rolled* with -- how spiked he is beyond
+ * what being a point guard already implies.
+ *
+ * The raw spread can't answer that. POSITION_BIAS builds spread in by construction: a PG is generated
+ * at +15 ballHandling and -15 rebounding, a 30-point gap before a single die is thrown, so a raw
+ * max-minus-min test on a PG is largely asking "is this point guard shaped like a point guard" --
+ * which is why 76% of them read as Specialist and why SF, the one position with an empty bias entry,
+ * was the only one coming out mostly neutral. Subtracting the bias first leaves only the dice.
+ */
+export function positionRelativeSpread(player: Player): number {
+  const bias = POSITION_BIAS[player.positions[0]]
+  const residuals = (Object.keys(player.attributes) as AttributeKey[]).map(
+    (key) => player.attributes[key] - (bias[key] ?? 0),
+  )
+  return Math.max(...residuals) - Math.min(...residuals)
+}
+
+/**
  * Height sits in more than one position's band and the attribute profile is roughly flat -- a
  * player who is genuinely comfortable sliding rather than miscast. Derived fresh every time, never
  * stored (Section 4's "derive, don't store").
@@ -64,22 +82,28 @@ export function attributeSpread(player: Player): number {
 export function isPositionless(player: Player): boolean {
   return (
     heightBandsContaining(player.heightInches).length >= POSITIONLESS_MIN_HEIGHT_BANDS &&
-    attributeSpread(player) <= POSITIONLESS_ATTRIBUTE_SPREAD_MAX
+    positionRelativeSpread(player) <= POSITIONLESS_ATTRIBUTE_SPREAD_MAX
   )
 }
 
 /**
- * Height sits at the extreme edge of a single band, or the attribute profile is sharply spiked --
- * built for exactly one slot. Checked after Positionless (which a spiked-but-multi-band player would
- * otherwise also match) so the two quirks are mutually exclusive.
+ * The attribute profile is sharply spiked *for the position* -- built for exactly one slot. Checked
+ * after Positionless (which a spiked-but-multi-band player would otherwise also match) so the two
+ * quirks are mutually exclusive.
+ *
+ * This used to have a second arm: a height within SPECIALIST_HEIGHT_EDGE_INCHES of either edge of
+ * the player's own band. It was removed rather than retuned, for two reasons. It double-counted --
+ * `effectivePlayer` already charges an extreme height per inch, continuously, through
+ * `heightMisfitInches`, and in the right direction (the shortest PG is the one who misfits every
+ * slot he slides to). And multiplying by 1.5 for height also scales the *slide-distance* term, which
+ * has nothing to do with how tall the player is. It could not be made rare either: the bands are
+ * five to seven discrete inches wide, so ~25% of every position lands exactly on an edge, and the
+ * arm handed out a 1.5x cliff for a one-inch difference. Height inflexibility is still priced; it is
+ * just priced once, smoothly, where it belongs.
  */
 export function isSpecialist(player: Player): boolean {
   if (isPositionless(player)) return false
-  const [nativeMin, nativeMax] = POSITION_HEIGHT_RANGE_INCHES[player.positions[0]]
-  const atEdge =
-    player.heightInches - nativeMin <= SPECIALIST_HEIGHT_EDGE_INCHES ||
-    nativeMax - player.heightInches <= SPECIALIST_HEIGHT_EDGE_INCHES
-  return atEdge || attributeSpread(player) >= SPECIALIST_ATTRIBUTE_SPREAD_MIN
+  return positionRelativeSpread(player) >= SPECIALIST_ATTRIBUTE_SPREAD_MIN
 }
 
 /** Positionless takes less of a hit sliding slots, Specialist takes more; everyone else is neutral. */

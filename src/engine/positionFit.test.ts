@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import type { Player, Position } from '../data/types'
+import { generateLeague } from './generator/randomLeague'
+import { createSeededRng } from './rng'
 import { makeTestPlayer } from './testFixtures'
 import {
   attributeSpread,
@@ -9,6 +12,7 @@ import {
   isPositionless,
   isSpecialist,
   positionFitSeverityMultiplier,
+  positionRelativeSpread,
   slotSlideDistance,
 } from './positionFit'
 
@@ -78,16 +82,55 @@ describe('isPositionless / isSpecialist', () => {
     expect(isPositionless(player)).toBe(false)
   })
 
-  it('flags a height at the extreme low edge of a single-band position as Specialist', () => {
-    // PG's own band is 72-76"; 72" is the floor and doesn't reach into SG's band at all.
-    const player = makeTestPlayer({ positions: ['PG'], heightInches: 72 })
-    expect(isPositionless(player)).toBe(false)
-    expect(isSpecialist(player)).toBe(true)
+  it('does not flag a height at the extreme edge of a band, on its own, as Specialist', () => {
+    // PG's own band is 72-76" and C's is 82-88", so these two sit exactly on a floor and a ceiling.
+    // That used to be enough on its own; it no longer is. effectivePlayer already charges an extreme
+    // height per inch through heightMisfitInches, and the bands are narrow enough that a quarter of
+    // every position lands on an edge -- see isSpecialist's comment.
+    expect(isSpecialist(makeTestPlayer({ positions: ['PG'], heightInches: 72 }))).toBe(false)
+    expect(isSpecialist(makeTestPlayer({ positions: ['C'], heightInches: 88 }))).toBe(false)
   })
 
-  it('flags a height at the extreme high edge the same way', () => {
-    // C's own band is 82-88"; 88" is the ceiling and doesn't reach into PF's band.
-    const player = makeTestPlayer({ positions: ['C'], heightInches: 88 })
+  it('measures spread against the position, so a PG built like a PG is not a Specialist', () => {
+    // POSITION_BIAS rolls a point guard at +15 ballHandling and -15 rebounding. This profile is that
+    // shape and nothing more -- 30 points of raw spread, 0 once the bias is subtracted back out.
+    const player = makeTestPlayer({
+      positions: ['PG'],
+      heightInches: 74,
+      attributes: {
+        ballHandling: 65,
+        passing: 65,
+        speed: 60,
+        lateralQuickness: 60,
+        outsideShot: 55,
+        insideShot: 40,
+        interiorDefense: 35,
+        rebounding: 35,
+      },
+    })
+    expect(attributeSpread(player)).toBe(30)
+    expect(positionRelativeSpread(player)).toBe(0)
+    expect(isSpecialist(player)).toBe(false)
+  })
+
+  it('still flags a spike that survives subtracting the position bias', () => {
+    // Same PG, but the outside shot is a genuine outlier rather than part of the position's shape.
+    const player = makeTestPlayer({
+      positions: ['PG'],
+      heightInches: 74,
+      attributes: {
+        ballHandling: 65,
+        passing: 65,
+        speed: 60,
+        lateralQuickness: 60,
+        outsideShot: 100,
+        insideShot: 40,
+        interiorDefense: 35,
+        rebounding: 35,
+      },
+    })
+    // Every residual lands on 50 except the outside shot, which lands on 95.
+    expect(positionRelativeSpread(player)).toBe(45)
     expect(isSpecialist(player)).toBe(true)
   })
 
@@ -103,6 +146,62 @@ describe('isPositionless / isSpecialist', () => {
   })
 })
 
+describe('quirk distribution across generated leagues', () => {
+  // The real specification for the two thresholds. Both quirks modify the out-of-position penalty,
+  // and the penalty constants were reasoned around the *neutral* player -- so if a label stops being
+  // uncommon, the case those constants describe stops being the common one. Before this was
+  // measured, 76% of point guards and 58% of centers read as Specialist and neutral was the rarest
+  // outcome at every position but center, because the raw attribute spread was mostly re-reading
+  // POSITION_BIAS. Asserted rather than eyeballed so it fails if generation or a threshold drifts.
+  const POSITIONS: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
+  const SEEDS = [1, 2, 3, 4, 5]
+
+  const players: Player[] = SEEDS.flatMap(
+    (seed) => generateLeague({ teamCount: 8, leagueName: `L${seed}`, rng: createSeededRng(seed) }).players,
+  )
+
+  const tally = (position: Position) => {
+    const group = players.filter((player) => player.positions[0] === position)
+    const positionless = group.filter(isPositionless).length
+    const specialist = group.filter(isSpecialist).length
+    return {
+      count: group.length,
+      positionless: positionless / group.length,
+      specialist: specialist / group.length,
+      neutral: (group.length - positionless - specialist) / group.length,
+    }
+  }
+
+  it('samples enough players at every position to say anything', () => {
+    POSITIONS.forEach((position) => expect(tally(position).count).toBeGreaterThan(50))
+  })
+
+  it('leaves neutral the most common outcome at every position', () => {
+    POSITIONS.forEach((position) => {
+      const share = tally(position)
+      expect(share.neutral).toBeGreaterThan(share.positionless)
+      expect(share.neutral).toBeGreaterThan(share.specialist)
+      expect(share.neutral).toBeGreaterThan(0.5)
+    })
+  })
+
+  it('keeps both labels uncommon at every position', () => {
+    POSITIONS.forEach((position) => {
+      const share = tally(position)
+      expect(share.positionless).toBeLessThan(0.28)
+      expect(share.specialist).toBeLessThan(0.28)
+    })
+  })
+
+  it('still hands both labels out at every position -- neither is dead', () => {
+    POSITIONS.forEach((position) => {
+      const share = tally(position)
+      expect(share.positionless).toBeGreaterThan(0.02)
+      expect(share.specialist).toBeGreaterThan(0.1)
+    })
+  })
+})
+
 describe('positionFitSeverityMultiplier', () => {
   it('is 1 for a player with neither quirk', () => {
     expect(positionFitSeverityMultiplier(makeTestPlayer({ positions: ['SF'], heightInches: 79 }))).toBe(1)
@@ -113,7 +212,12 @@ describe('positionFitSeverityMultiplier', () => {
   })
 
   it('surcharges severity for a Specialist', () => {
-    expect(positionFitSeverityMultiplier(makeTestPlayer({ positions: ['PG'], heightInches: 72 }))).toBe(1.5)
+    const spiked = makeTestPlayer({
+      positions: ['SF'],
+      heightInches: 79,
+      attributes: { insideShot: 95, passing: 30 },
+    })
+    expect(positionFitSeverityMultiplier(spiked)).toBe(1.5)
   })
 })
 

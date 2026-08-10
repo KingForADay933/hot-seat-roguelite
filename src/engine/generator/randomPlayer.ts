@@ -7,54 +7,12 @@ import {
   ATTRIBUTE_STANDOUT_CHANCE,
   ATTRIBUTE_STANDOUT_MIN,
   ATTRIBUTE_STANDOUT_SPAN,
+  POSITION_BIAS,
   POSITION_HEIGHT_RANGE_INCHES,
 } from '../constants'
 import { average, clamp } from '../math'
 import type { Rng } from '../rng'
 import { computeAgeCurveStage } from './ageCurve'
-
-/** Position-flavored attribute bias, in points, applied on top of a bell-ish baseline roll. */
-const POSITION_BIAS: Record<Position, Partial<Record<keyof PlayerAttributes, number>>> = {
-  PG: {
-    ballHandling: 15,
-    passing: 15,
-    speed: 10,
-    lateralQuickness: 10,
-    outsideShot: 5,
-    insideShot: -10,
-    interiorDefense: -15,
-    rebounding: -15,
-  },
-  SG: {
-    outsideShot: 15,
-    ballHandling: 5,
-    speed: 5,
-    perimeterDefense: 5,
-    interiorDefense: -10,
-    rebounding: -10,
-  },
-  SF: {},
-  PF: {
-    insideShot: 10,
-    rebounding: 10,
-    interiorDefense: 10,
-    vertical: 5,
-    outsideShot: -10,
-    ballHandling: -10,
-    speed: -5,
-  },
-  C: {
-    insideShot: 15,
-    rebounding: 15,
-    interiorDefense: 15,
-    vertical: 10,
-    outsideShot: -15,
-    ballHandling: -15,
-    speed: -10,
-    lateralQuickness: -10,
-    passing: -5,
-  },
-}
 
 /**
  * Name pools, deliberately larger than the roster they have to fill.
