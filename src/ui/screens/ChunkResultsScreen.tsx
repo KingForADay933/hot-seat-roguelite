@@ -55,7 +55,14 @@ export function ChunkResultsScreen({
       {insights.length > 0 ? (
         <ul>
           {insights.map((insight, i) => (
-            <li key={i}>{insight.text}</li>
+            // Toned so good news reads as good news. Only performance trends carry a tone; the
+            // possession-log kinds are problems by construction and stay unstyled.
+            <li
+              key={i}
+              className={insight.tone === 'positive' ? 'text-positive' : insight.tone === 'negative' ? 'text-negative' : undefined}
+            >
+              {insight.text}
+            </li>
           ))}
         </ul>
       ) : (

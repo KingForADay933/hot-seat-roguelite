@@ -565,16 +565,30 @@ expand away. Deciding that up front is what stops the two items undoing each oth
 - **Compact, single-screen sections** (M7) -- **Planned**: My Team in particular has grown to a long
   scroll of independently-designed panels. Pairs with the item above under the progressive-disclosure
   decision; same milestone for the same reason.
-> ⚠️ **Now the bottleneck, and a candidate to pull forward before M2.** Fixing the auto rotation so it
-> stops running players into the ground (Tier 0) removed the *only* insight kind that fired for a
-> typical run. A normal team — no rotation chart authored, a defence that isn't Switch-Everything —
-> now reads "Nothing notable this stretch" at every checkpoint, and the per-game **What Happened**
-> block is empty too. That is honest rather than noisy, which is an improvement, but it leaves two
-> shipped features with nothing to show. The insight catalogue, not the insight *plumbing*, is what
-> is thin: weak-link targeting needs Switch-Everything and chart-override needs a chart, so between
-> them they cover a minority of runs. Broadening it is the item directly below.
+- **Shipped -- performance trends and a dedicated Insights screen** (pulled forward from M4): fixing
+  the auto rotation removed the only insight kind that fired for a typical run, leaving every
+  checkpoint reading "Nothing notable this stretch". The gap was the insight *catalogue*, not the
+  plumbing -- weak-link targeting needs Switch-Everything and chart-override needs an authored chart,
+  so between them they covered a minority of runs. Three things closed it:
+  - **A fourth kind, `performance-trend`**, measuring team *rates* rather than events: shooting from
+    the field and from three, scoring, ball security, the shooting and points allowed, turnovers
+    forced, rebounding. Each window is compared against the team's own earlier season, or against the
+    league before there is enough of one -- which is what lets the very first stretch of a run say
+    something instead of waiting for a baseline. Thresholds and minimum attempt counts keep a cold
+    week from reading as a collapse.
+  - **Tone.** The first insight kind that is routinely *good news*, which is what "what's working"
+    required. Insights that carry no tone are problems by construction, which is true of all three
+    possession-log kinds.
+  - **A dedicated screen** (`InsightsScreen`, reachable from the run nav), split into what's working,
+    what needs work, and the season log. Rates are recomputed from box scores on every render, so the
+    screen moves after every game rather than at the checkpoint; events arrive already captured,
+    since possession logs are stripped as each game resolves.
 
-- **Richer Coaching Insights** (M4) -- **Planned**: three kinds exist today
+  **No new persisted state.** Everything reads `game.result.boxScore`, which is permanent, so a
+  window can be recomputed at any time and can never drift from the games it describes. The same
+  function runs at chunk close to write the season record the fired epilogue reads.
+
+- **Richer Coaching Insights** (M4) -- **Planned**: the remaining ideas. Four kinds exist now
   (`weak-link-targeting`, `chart-override`, `fatigue-substitution`), and only the first says anything
   about *tactics* rather than rotation mechanics. The possession log already carries everything a
   deeper reading needs -- play call, both fives with slots, outcome, scheme, and now the defensive

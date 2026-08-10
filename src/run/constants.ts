@@ -253,6 +253,23 @@ export const ROTATION_SNAP_SECONDS = 30
  *  characterise a season without the screen becoming a log -- and capping per season rather than
  *  overall bounds total growth at this x seasons played while keeping every season represented.
  *  A season's worth is a few short strings, negligible beside the possession logs they came from. */
+/**
+ * Games a window needs before its rates are reported at all.
+ *
+ * Two is enough to stop a single blowout defining a stretch, and low enough that the insights screen
+ * has something to say part-way through a chunk rather than only once all eight games are in --
+ * which is the point of a screen that updates as you play.
+ */
+export const PERFORMANCE_INSIGHT_MIN_WINDOW_GAMES = 2
+
+/**
+ * Games of the team's own season needed before a window is compared against it rather than against
+ * the league. Below this the sample is too thin to call a change in *form*, and the league is both a
+ * steadier yardstick and a more useful one early -- "you are shooting better than the league" is a
+ * real thing to know in October.
+ */
+export const PERFORMANCE_INSIGHT_MIN_BASELINE_GAMES = 6
+
 export const RUN_INSIGHTS_PER_SEASON = 3
 
 /** How many stretches a *routine* fatigue substitution has to span before the epilogue reports it.
