@@ -116,35 +116,50 @@ hook deliberately keeps only the *latest* queued directive, so a relative nudge 
 dropped whenever two arrived between possessions. Absolute is also idempotent, which makes replay
 and testing straightforward.
 
-### D2. Focus points are picked per game, and changeable live ✅
+### D2. Focus points are standing settings, and offense gets its own layer ✅
 
-**Decided: a per-game choice, editable on the fly during a simcast.** Not a standing setting the way
-the defensive scheme is — a tactical plan aimed at the specific opponent in front of you.
+**Decided: focus points behave exactly like the defensive scheme — a standing value, changeable from
+a checkpoint, from My Team, or mid-broadcast, with every path writing the same field.** No per-game
+prompt, no bulk-sim special case.
 
-This is the most interesting answer of the four and the one that costs the most, because it collides
-with something the game already does: **games can be played in bulk.** "Sim Next Stretch" and "Sim
-the Rest & Continue" resolve eight games with no per-game interaction, and blocking each on a tactics
-prompt would either gut those buttons or throw away the feature for anyone who uses them.
+Making them behave the same way required naming a gap first, and this is the substantive part of the
+decision: **offensive focus has to be its own layer, separate from the drafted system.**
 
-So the shape is per-game *choice* over a sticky *value*:
+The two ends of the floor are not currently symmetric, and layering focus on top would have made that
+worse rather than better:
 
-- `Team.tacticalFocus` stores the current plan. Optional, so existing saves stay valid.
-- **On the stretch screen**, each of the GM's own upcoming games carries its tactics inline —
-  pre-filled from the stored value, editable in place before hitting Sim or Watch Live. Inline rather
-  than a blocking pre-game screen, so simming a game does not grow a modal.
-- **Editing writes back**, so the next game defaults to what you last chose rather than resetting to
-  nothing. "Per game" means *asked every game*, not *forgotten every game* — nobody wants to rebuild
-  a plan from scratch 32 times a season.
-- **Mid-simcast changes** go through the directive and write back too, exactly as the defensive
-  scheme control already does.
-- **Bulk sim uses the stored value** without prompting. That is the only coherent answer: the
-  alternative is eight modals or a silently ignored feature.
+| | Named preset | Changeable? | Scored by synergy |
+|---|---|---|---|
+| Offense | System (Motion, Twin Towers…) | **No — drafted once, fixed for the run** | Yes |
+| Defense | Scheme (Man-to-Man, Zone…) | Yes, any time | No |
 
-> **Consequence worth naming:** this leaves the defensive scheme (standing) and focus points
-> (per-game) with different lifetimes, which is the thing the standing-setting option was meant to
-> avoid. It is defensible — a scheme is who you are, a game plan is who you are *today* — but the UI
-> has to make the difference obvious, or it will read as inconsistent rather than intentional. Two
-> panels labelled by lifetime, not one merged "tactics" panel.
+If offensive focus were "a modifier on the drafted system", it would be a changeable thing wearing
+the same name as a fixed thing, and every question about it ("did I change my offense?") would have
+two answers. Separating it gives a clean four-part model where each end of the floor has one fixed-ish
+identity and one live dial:
+
+- **Offensive system** — drafted, fixed for the run, the identity synergy is scored against.
+- **Offensive focus** — pace and shot selection. Standing, changeable any time.
+- **Defensive scheme** — chosen, changeable any time.
+- **Defensive focus** — interior/perimeter emphasis and rebounding vs. transition. Standing,
+  changeable any time.
+
+**Both focuses now behave identically to each other and to the defensive scheme**, which is what the
+decision asked for. One remaining asymmetry is deliberate and stays: the offensive *system* is fixed
+where the defensive *scheme* is not. That is Tier 4's drafted variation doing its job — the system is
+the run's identity and carries a synergy score; making it freely swappable would flatten the draft
+into a menu. Recorded here so it reads as a choice rather than an oversight.
+
+> **Consequence: focus feeds synergy, and that is the point.** Synergy scores how well the roster fits
+> the play-call mix it will actually run, and it already recomputes whenever the inputs move — camps,
+> minutes, the rotation chart. Offensive focus changes that mix, so it belongs in the same recompute
+> (`teamsWithRecomputedSynergy` already exists and routes every other input through it).
+>
+> This is also the best available answer to the risk logged at the bottom of this doc. A dial whose
+> effect is flat is a dial everyone eventually sets the same way; a dial that moves synergy is
+> **roster-dependent** — hunting threes suits a Pace-and-Space roster and actively hurts Twin Towers,
+> so the right answer differs per run rather than being solved once. That is the difference between a
+> setting and a decision.
 
 ### D3. Scouting reveals system, scheme and starting five ✅
 
@@ -195,10 +210,10 @@ separated by the two feature items (tuning back to back is hard to judge).
 | 4 | Team-construction options | 3 | 2–3 | Independent and small; good closing item while focus points settle |
 | 5 | Generalized pause-on-condition | 13 L1 | 1–2 | Only worth doing if focus points want a mid-game prompt — decide after 3 |
 
-**Total 14–20 days**, matching the milestone table. Item 3 grew by a day over the first estimate once
-D2 settled as per-game rather than standing: an inline per-game editor on the stretch screen is more
-surface than a single settings control, and bulk sim has to be handled explicitly rather than
-inheriting one value.
+**Total 14–20 days**, matching the milestone table. Item 3 held at 6–8 through D2 being re-decided:
+dropping the per-game editor and the bulk-sim special case gave back about a day, and separating
+offensive focus from the drafted system — including routing it through the synergy recompute and
+making the playbook re-readable mid-game — took it straight back.
 
 ### 1. Position-fit retune (2-3 days)
 
@@ -240,15 +255,29 @@ resolution logic changes.
 
 Work breakdown:
 - Widen `CoachingDirective` to the union in D1, and make `applyDirective` exhaustive over it.
-- Add `Team.tacticalFocus` (optional), and a `setTacticalFocus` action mirroring `setDefensiveScheme`.
+- Add `Team.offensiveFocus` and `Team.defensiveFocus` (both optional, so existing saves stay valid),
+  and `setOffensiveFocus` / `setDefensiveFocus` actions mirroring `setDefensiveScheme` exactly.
 - Apply the offsets at the four sites above, each behind a named constant so they can be tuned.
-- UI, per D2: an **inline per-game editor on the stretch screen** (pre-filled from the last plan,
-  editable before Sim or Watch Live), a compact version in the simcast beside the existing
-  defensive-scheme control, and nothing on My Team — the scheme lives there because it is standing,
-  and putting a per-game plan next to it is what would make the two lifetimes confusing.
-- Bulk sim paths (`Sim Next Stretch`, `Sim the Rest & Continue`, `Sim First Stretch`) read the stored
-  plan without prompting. Worth an explicit test: the failure mode is a feature that silently does
-  nothing for anyone who plays that way.
+- **Route offensive focus through `teamsWithRecomputedSynergy`**, alongside the minutes and chart
+  edits that already recompute. `computeInitialSynergyScore` and `computeSystemFitBreakdown` take the
+  playbook, so the change is to hand them a focus-adjusted playbook rather than the raw preset — one
+  helper, applied everywhere a playbook is read, including the reveal screen's fit breakdown.
+- UI: focus controls sit **wherever the defensive scheme already sits** — My Team, the checkpoint,
+  and the simcast — because that is what "behave the same way" means. Group them by end of the floor
+  (Offense: system, focus / Defense: scheme, focus) so the fixed item and the live one read as a pair.
+- No per-game editor and no bulk-sim special case. Every path reads the stored value, which is the
+  simplification this decision bought.
+
+**One trap to avoid.** `simulateGameSteps` reads `homeTeam.offensiveStrategyId` and resolves the
+playbook once per game (line ~127), and reads `synergyScore` once with a comment saying it cannot
+change mid-game. Offensive focus *can* change mid-game via a directive, so the playbook has to become
+re-readable the same way `homeScheme` already did when defensive switching landed. Synergy is the
+harder half: the stored score is computed outside the sim, so a mid-game focus change would leave the
+multiplier stale for the rest of the game. **Decide when building:** either recompute the multiplier
+inside the directive handler, or accept that a mid-game focus change moves play-calls immediately and
+synergy only from the next game. The second is simpler and arguably more honest — synergy is a
+season-scale fit measure, not a possession-scale one — but it needs saying on screen or it reads as a
+bug.
 - **Every dial needs a real cost.** Push the pace and you take worse shots; crash the boards and you
   concede transition. A dial with only an upside is a strictly-correct setting, which is the failure
   mode to design against here.

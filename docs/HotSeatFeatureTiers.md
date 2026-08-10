@@ -658,13 +658,20 @@ Turns ownership pressure from a scalar rank-fraction target into distinct behavi
 ## Tier 19 — Tactical Emphasis & Situational Focus Points
 **Planned -- scheduled M3 -- planned in detail in `m3-tactical-axis.md`**
 
-> **This tier *is* Tier 13's level 2, not a separate piece of work.** Tier 13 defines level 2 as
+> **This tier *is* Tier 13's level 2, not a separate piece of work, and it introduces *offensive focus* as a layer distinct from the drafted system.** Tier 13 defines level 2 as
 > "changes affecting only future possessions -- defensive scheme, focus points, play-call emphasis",
 > which is this tier's whole contents. Listing both as M3 line items double-counted one job. The
 > mechanism they share already ships: `simulateGameSteps` accepts a `CoachingDirective` through
 > `next()`, and mid-broadcast defensive scheme switching is live. What remains is widening that
-> directive to a discriminated union, adding `Team.tacticalFocus`, and applying each dial as an
-> offset on a knob the engine already reads.
+> directive to a discriminated union, adding an offensive and a defensive focus to `Team`, and
+> applying each dial as an offset on a knob the engine already reads.
+>
+> **Offensive focus is deliberately separate from the drafted offensive system.** The system is fixed
+> for a run and is what synergy is scored against; focus is a standing dial changeable any time, like
+> the defensive scheme. Folding focus into the system would have made one name mean both a fixed
+> identity and a live setting. The resulting model is symmetric: each end of the floor has one
+> preset and one live dial. Offensive focus feeds the synergy recompute, which is what keeps it a
+> roster-dependent decision rather than a setting with one correct answer.
 
 Granular pre-game and checkpoint levers, giving immediate counter-play against a scouted opponent (Tier 17) without building a full playbook editor.
 
