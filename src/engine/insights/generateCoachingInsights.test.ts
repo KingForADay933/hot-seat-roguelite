@@ -330,7 +330,7 @@ describe('generateCoachingInsights', () => {
     })
   })
 
-  it('produces at least one fatigue insight over a real, fully-simulated game long enough to force natural substitutions', () => {
+  it('leaves nobody run into the ground over a real, fully-simulated game with a full bench', () => {
     const home = generateTeam({
       name: 'Home',
       city: 'Home City',
@@ -368,8 +368,14 @@ describe('generateCoachingInsights', () => {
 
     const insights = generateCoachingInsights(simulated.possessionLog, home.team, away.team, playersById)
 
-    expect(insights.some((i) => i.text.includes('heavy fatigue'))).toBe(true)
+    // This asserted the opposite until FATIGUE_ROTATE_THRESHOLD arrived, and the old expectation was
+    // the bug rather than the specification: a twelve-man roster with a rested body at every slot
+    // has no reason to run anyone to 80, and 28.7% of substitutions were happening there. A fatigue
+    // insight is now a signal that something is genuinely wrong -- a thin group, or a chart holding
+    // someone in -- rather than the background hum of a normal game.
+    expect(insights.some((i) => i.text.includes('heavy fatigue'))).toBe(false)
   })
+
 
   it('is deterministic given the same possession log', () => {
     const starter = makeTestPlayer({ name: 'Starter' })

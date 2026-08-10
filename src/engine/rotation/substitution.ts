@@ -2,6 +2,7 @@ import type { Player, PlayerId, Team } from '../../data/types'
 import { avgInteriorDefense, avgPerimeterDefense, findAtSlot, pickBest, rawOverallQuality, type OnCourtPlayer } from '../matchup'
 import {
   FATIGUE_EMERGENCY_THRESHOLD,
+  FATIGUE_ROTATE_THRESHOLD,
   FATIGUE_SUB_IN_MAX,
   FATIGUE_SUB_OUT_THRESHOLD,
   MIN_SHIFT_SECONDS,
@@ -76,6 +77,20 @@ function resolveChartedFive(
   })
 }
 
+/** A player's share of the game so far, against the share their target minutes imply. Both are
+ *  fractions of elapsed time, so they stay comparable at any point in the game. */
+function minutesShare(
+  state: RotationState,
+  player: Player,
+  elapsedSeconds: number,
+  rotationMinutes: Record<PlayerId, number>,
+): { target: number; actual: number } {
+  return {
+    target: (rotationMinutes[player.id] ?? 0) / REGULATION_MINUTES,
+    actual: elapsedSeconds === 0 ? 0 : (state.secondsPlayed.get(player.id) ?? 0) / elapsedSeconds,
+  }
+}
+
 function shouldConsiderSubOut(
   state: RotationState,
   player: Player,
@@ -92,9 +107,20 @@ function shouldConsiderSubOut(
 
   if (elapsedSeconds < PACE_CHECK_MIN_SECONDS) return false
 
-  const target = (rotationMinutes[player.id] ?? 0) / REGULATION_MINUTES
-  const paceSoFar = (state.secondsPlayed.get(player.id) ?? 0) / elapsedSeconds
-  return paceSoFar > target * (1 + PACE_OVERAGE_THRESHOLD)
+  const { target, actual } = minutesShare(state, player, elapsedSeconds, rotationMinutes)
+  if (actual > target * (1 + PACE_OVERAGE_THRESHOLD)) return true
+
+  // Rest him while it's still cheap, rather than waiting for the 80 above to force it. This only
+  // becomes an actual substitution if checkSubstitutions finds a rested body at the slot, which is
+  // what keeps it a preference rather than a rule: a thin position group, or a chart holding someone
+  // in, still runs a player down exactly as before.
+  //
+  // Deliberately *not* gated on having already played his share, which is how a first version of
+  // this worked. A player's cumulative share starts low and climbs, so anyone coming off the bench
+  // failed that test for most of his shift and went right on tiring -- the gate protected minutes
+  // for the players who least needed protecting and left the bench doing the labouring. Removing it
+  // took substitutions made at 80-plus fatigue from 9.9% to zero.
+  return fatigueLevel >= FATIGUE_ROTATE_THRESHOLD
 }
 
 /**
@@ -179,6 +205,11 @@ export function checkSubstitutions(
     if (candidates.length === 0) continue // whole position group too tired -- outgoing stays in
 
     const opponent = findAtSlot(slot, opponentOnCourt)
+    // Deliberately still quality and matchup only. Weighting this by how far each candidate is
+    // behind his target minutes was tried and measured, and changed nothing: a position group holds
+    // two or three players, of whom usually exactly one is both at the slot and rested, so there is
+    // no choice left for a tie-break to influence. Minutes are governed by *when* players come off,
+    // not by who is picked to replace them.
     const incoming = pickBest(candidates, (c) => rotationValue(c, opponent))
     nextFive[i] = { player: incoming, slot }
     state.shiftEnteredAtSeconds.set(incoming.id, elapsedSeconds)
