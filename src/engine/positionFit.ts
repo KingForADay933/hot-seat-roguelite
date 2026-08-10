@@ -12,7 +12,7 @@ import {
   SPECIALIST_SEVERITY_MULTIPLIER,
 } from './constants'
 import { clamp } from './math'
-import { POSITION_ORDER, type OnCourtPlayer } from './matchup'
+import { POSITION_ORDER } from './matchup'
 
 /**
  * Out-of-position penalty and its derived Positionless/Specialist quirks (rotation-charts.md
@@ -149,12 +149,3 @@ export function effectivePlayer(player: Player, slot: Position): Player {
   return { ...player, attributes: attributes as PlayerAttributes }
 }
 
-/**
- * Applies effectivePlayer across a whole on-court five, for the one call site (simulateGame.ts's
- * per-possession offense/defense fives) that needs the shift to reach every reader -- selection,
- * offense strength, resistance, rebounding -- for free, by handing them an already-adjusted Player
- * rather than threading a penalty through each of those signatures.
- */
-export function effectiveFive(five: OnCourtPlayer[]): OnCourtPlayer[] {
-  return five.map((entry) => ({ slot: entry.slot, player: effectivePlayer(entry.player, entry.slot) }))
-}

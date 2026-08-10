@@ -1,11 +1,16 @@
-import type { Player, PlayerId } from '../../data/types'
+import type { AttributeKey, Player, PlayerId } from '../../data/types'
 import {
   DURABILITY_NEUTRAL,
+  FATIGUE_ATTRIBUTE_PENALTY_MAX,
+  FATIGUE_ATTRIBUTE_WEIGHTS,
+  FATIGUE_CONSISTENCY_PENALTY_MAX,
   FATIGUE_DURABILITY_FACTOR,
   FATIGUE_GAIN_PER_SECOND,
   FATIGUE_HALFTIME_RECOVERY,
   FATIGUE_MULT_MAX,
   FATIGUE_MULT_MIN,
+  FATIGUE_PENALTY_FULL_AT,
+  FATIGUE_PENALTY_THRESHOLD,
   FATIGUE_PERIOD_BREAK_RECOVERY,
   FATIGUE_RECOVERY_PER_SECOND,
   HALFTIME_AFTER_PERIOD,
@@ -34,6 +39,48 @@ export function fatigueGainPerSecond(player: Player): number {
 
 export function fatigueRecoveryPerSecond(player: Player): number {
   return FATIGUE_RECOVERY_PER_SECOND * durabilityRecoveryMultiplier(player)
+}
+
+/**
+ * 0 to 1: how far into the penalty band this player's fatigue has climbed. 0 for anyone at or below
+ * FATIGUE_PENALTY_THRESHOLD, which is most of the league most of the time.
+ */
+export function fatiguePenaltyScale(fatigue: number): number {
+  return clamp((fatigue - FATIGUE_PENALTY_THRESHOLD) / (FATIGUE_PENALTY_FULL_AT - FATIGUE_PENALTY_THRESHOLD), 0, 1)
+}
+
+/**
+ * A transient copy of a player as tired legs have left him -- weaker where it shows first, and
+ * harder to predict.
+ *
+ * **Never persisted, and never fed back into fatigue itself.** The caller hands this to possession
+ * resolution only; rotation state keeps the real players, so a docked copy can't influence its own
+ * accrual and the possession log still records real people. Same contract effectivePlayer carries
+ * for the out-of-position penalty, which is the shift this composes with.
+ *
+ * Consistency is docked alongside the attributes, and that one line is the entire variance half of
+ * the feature: possession/variance.ts's computeConsistencyNoise already derives its standard
+ * deviation from `(100 - consistency)`, so handing it a tired player's lowered consistency widens the
+ * swing with no new parameter, no change to that file, and the same number of rng draws. A gassed
+ * player is not just worse, he is less reliable -- which is the half you feel rather than measure.
+ *
+ * Returns the same reference below the threshold, so the common case allocates nothing.
+ */
+export function fatiguedPlayer(player: Player, fatigue: number): Player {
+  const scale = fatiguePenaltyScale(fatigue)
+  if (scale <= 0) return player
+
+  const attributes = { ...player.attributes }
+  ;(Object.keys(attributes) as AttributeKey[]).forEach((key) => {
+    const dock = FATIGUE_ATTRIBUTE_PENALTY_MAX * scale * FATIGUE_ATTRIBUTE_WEIGHTS[key]
+    if (dock > 0) attributes[key] = clamp(attributes[key] - dock, 0, 100)
+  })
+
+  return {
+    ...player,
+    attributes,
+    hidden: { ...player.hidden, consistency: clamp(player.hidden.consistency - FATIGUE_CONSISTENCY_PENALTY_MAX * scale, 0, 100) },
+  }
 }
 
 /**

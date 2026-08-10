@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Game, Player } from '../../data/types'
-import { FATIGUE_SUB_OUT_THRESHOLD, SECONDS_PER_MINUTE } from '../constants'
+import { FATIGUE_PENALTY_THRESHOLD, FATIGUE_SUB_OUT_THRESHOLD, SECONDS_PER_MINUTE } from '../constants'
 import { generateLeague } from '../generator/randomLeague'
 import { createSeededRng } from '../rng'
 import { applyBreakRecovery, tickFatigue } from './fatigue'
@@ -111,5 +111,58 @@ describe('rotation shape over whole games', () => {
     // the other way: mean error per player improved from 5.80 minutes to 4.82, because less
     // fatigue-driven churn leaves more room for the pace check to do its job.
     expect(result.minutesError).toBeLessThan(6)
+  })
+})
+
+/**
+ * The guard that fatigue still reaches the floor at all.
+ *
+ * The fatigue penalty (engine/rotation/fatigue.ts's fatiguedPlayer) only bites above
+ * FATIGUE_PENALTY_THRESHOLD, and the rotation exists to stop players getting tired. Those two pull
+ * against each other, and the rotation can win silently: measured across 30 games, on-court fatigue
+ * peaks at 65 and sits at a median of 24, so a threshold set casually against the nominal 0-100
+ * scale would have made the whole feature dead code without a single test failing.
+ *
+ * So this asserts the feature is *reachable*. If a future rotation tune keeps everyone under the
+ * threshold, this fails and says why, rather than the penalty quietly ceasing to exist.
+ */
+describe('fatigue reaches possession resolution', () => {
+  const seeds = Array.from({ length: 20 }, (_, i) => i + 1)
+  let shotsInPenaltyBand = 0
+  let shots = 0
+  let peak = 0
+
+  for (const seed of seeds) {
+    const { steps, homeTeam, playerById, roster } = playGame(seed)
+    const state = createRotationState(homeTeam, playerById)
+    let previousPeriod = steps[0]?.entry.period ?? 1
+
+    for (const step of steps) {
+      const entry = step.entry
+      if (entry.period > previousPeriod) {
+        applyBreakRecovery(state.fatigue, roster, previousPeriod)
+        previousPeriod = entry.period
+      }
+      state.onCourt = entry.homeOnCourt.map(({ playerId, slot }) => ({ player: playerById.get(playerId) as Player, slot }))
+      tickFatigue(state, roster, entry.durationSeconds)
+
+      for (const { playerId } of entry.homeOnCourt) peak = Math.max(peak, state.fatigue.get(playerId) ?? 0)
+      if (entry.offenseTeamId !== homeTeam.id) continue
+      if (entry.outcome !== 'make' && entry.outcome !== 'miss') continue
+      shots += 1
+      if ((state.fatigue.get(entry.primaryPlayerId) ?? 0) >= FATIGUE_PENALTY_THRESHOLD) shotsInPenaltyBand += 1
+    }
+  }
+
+  it('has a real share of shots taken by a player the penalty applies to', () => {
+    // Measured at ~26% of attempts. A floor rather than a band: more tired shooters would be a
+    // rotation regression, which the tests above already cover.
+    expect(shotsInPenaltyBand / shots).toBeGreaterThan(0.1)
+  })
+
+  it('reaches far enough up the band for the penalty to be more than a rounding error', () => {
+    // Peak on-court fatigue measured at 65.3 across 30 games, which is why FATIGUE_PENALTY_FULL_AT
+    // is 65 rather than 100 -- see its doc comment.
+    expect(peak).toBeGreaterThan(FATIGUE_PENALTY_THRESHOLD + 10)
   })
 })
