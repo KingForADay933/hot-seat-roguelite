@@ -29,10 +29,6 @@ export interface PossessionRole {
 
 export interface PlayCallModel {
   roles: PossessionRole[]
-  /** Coefficient on a whole-roster average that bypasses selection entirely, if the play call has
-   *  one. Transition is the only such case: computeOffenseStrength reads the on-court five's mean
-   *  rebounding, not the selected outlet's (the outlet is picked but never read for strength). */
-  teamRebounding?: number
 }
 
 const a = (player: Player) => player.attributes
@@ -81,11 +77,12 @@ export const PLAY_CALL_MODELS: Record<PlayCallType, PlayCallModel> = {
   cutting: {
     // Both the cutter and the passer are drawn on the same score in the engine, and the strength
     // formula averages their passing -- so the two roles split the passing term evenly, with the
-    // cutter additionally carrying all of the speed term.
+    // cutter additionally carrying all of the speed term and all of the finishing term.
     roles: [
       {
         selectionScore: (p) => (a(p).passing + a(p).speed) / 2,
-        contribution: (p) => w.cutting.speed * a(p).speed + (w.cutting.passingAvg / 2) * a(p).passing,
+        contribution: (p) =>
+          w.cutting.speed * a(p).speed + w.cutting.insideShot * a(p).insideShot + (w.cutting.passingAvg / 2) * a(p).passing,
       },
       {
         selectionScore: (p) => (a(p).passing + a(p).speed) / 2,
@@ -94,13 +91,17 @@ export const PLAY_CALL_MODELS: Record<PlayCallType, PlayCallModel> = {
     ],
   },
   transition: {
+    // One role: the engine reads only the handler for strength. The outlet is still selected (on
+    // rebounding, for attribution and commentary) but no longer contributes -- transition used to
+    // add the on-court five's mean rebounding, which is why this interface once had a whole-roster
+    // `teamRebounding` escape hatch. Dropping that term from the engine retired it.
     roles: [
       {
         selectionScore: (p) => (a(p).speed + a(p).passing) / 2,
-        contribution: (p) => w.transition.speed * a(p).speed + w.transition.passing * a(p).passing,
+        contribution: (p) =>
+          w.transition.speed * a(p).speed + w.transition.passing * a(p).passing + w.transition.insideShot * a(p).insideShot,
       },
     ],
-    teamRebounding: w.transition.teamRebounding,
   },
 }
 

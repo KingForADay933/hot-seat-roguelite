@@ -76,7 +76,9 @@ export function computeResistance(
     }
     case 'cutting': {
       r = selection.primaryDefender.attributes.lateralQuickness
-      r = applyInteriorFocus(r, interiorFocus, -1)
+      // Interior, not perimeter. A cut ends at the rim, so packing the paint should take it away --
+      // this used to pass -1, which meant Pack-the-Paint *helped* cutters get to the basket.
+      r = applyInteriorFocus(r, interiorFocus, 1)
       break
     }
     case 'transition': {

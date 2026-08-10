@@ -78,8 +78,11 @@ function roleUsageShares(role: PossessionRole, roster: Player[], availabilityWei
 
 /**
  * Expected offense strength for one play call: for each role, who is actually likely to execute it
- * (roleUsageShares) times what they'd contribute (the engine's own strength weights), plus any
- * whole-roster term the play call has.
+ * (roleUsageShares) times what they'd contribute (the engine's own strength weights).
+ *
+ * Every play call is now entirely role-driven. Transition used to also carry a whole-roster mean
+ * rebounding term, mirroring an engine formula that scored fast breaks off team rebounding; when
+ * that term left the engine this stopped needing an escape hatch for it.
  *
  * This is the piece that makes touch logic matter. Averaging the roster instead -- the previous
  * approach -- said a Twin Towers roster of two elite bigs and three non-post guards was mediocre
@@ -88,17 +91,10 @@ function roleUsageShares(role: PossessionRole, roster: Player[], availabilityWei
  * game: the few post-ups they draw, and nothing more.
  */
 function expectedPlayCallStrength(playCall: PlayCallType, roster: Player[], availabilityWeights: number[]): number {
-  const model = PLAY_CALL_MODELS[playCall]
-  const totalAvailability = availabilityWeights.reduce((sum, x) => sum + x, 0)
-
-  const fromRoles = model.roles.reduce((sum, role) => {
+  return PLAY_CALL_MODELS[playCall].roles.reduce((sum, role) => {
     const shares = roleUsageShares(role, roster, availabilityWeights)
     return sum + roster.reduce((roleSum, p, i) => roleSum + shares[i] * role.contribution(p), 0)
   }, 0)
-
-  if (!model.teamRebounding) return fromRoles
-  const meanRebounding = roster.reduce((sum, p, i) => sum + availabilityWeights[i] * p.attributes.rebounding, 0) / totalAvailability
-  return fromRoles + model.teamRebounding * meanRebounding
 }
 
 /** Expected strength per play call, computed once and reused for every candidate system -- these

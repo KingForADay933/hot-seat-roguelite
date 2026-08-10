@@ -94,15 +94,26 @@ describe('selectPlayers', () => {
     }
   })
 
-  it('transition always selects the fastest defender regardless of position matchup', () => {
+  it('transition is defended by the assigned matchup, not by the fastest player on the floor', () => {
+    // This used to be pickBest(defense, scoreSpeed): a fast break faced the opponent's quickest
+    // defender every single time, making transition the one play call that always drew the best
+    // available defense. A break happens precisely because the defense is *not* set, and that
+    // inversion was most of why transition was the engine's least efficient play call by a wide
+    // margin (0.917 points per play, against 1.14 now). See engine/playCallEfficiency.test.ts.
     const offense = makeTestFive()
     const defense = makeTestFive()
-    defense[3].attributes.speed = 99 // PF is fastest, would not be matched to the ball handler normally
+    defense[3].attributes.speed = 99 // PF is fastest, and is not who the ball-handler is matched to
 
+    let sawSomeoneElse = false
     for (let seed = 0; seed < 20; seed++) {
       const selection = selectPlayers('transition', slotByPosition(offense), slotByPosition(defense), manToMan, createSeededRng(seed))
-      expect(selection.primaryDefender).toBe(defense[3])
+      // The defender is whoever is assigned to the player who actually got the ball, so it tracks
+      // the handler across seeds rather than being pinned to one man.
+      const handlerSlot = offense.indexOf(selection.primary)
+      expect(selection.primaryDefender).toBe(defense[handlerSlot])
+      if (selection.primaryDefender !== defense[3]) sawSomeoneElse = true
     }
+    expect(sawSomeoneElse).toBe(true)
   })
 
   it('getInvolvedPlayerIds returns a deduplicated union of all selected players', () => {

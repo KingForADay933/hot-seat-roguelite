@@ -38,7 +38,7 @@ describe('computeOffenseStrength', () => {
   it('pick-and-roll: weights handler ball-handling/passing and roller inside-shot/vertical, scaled by ball movement', () => {
     const handler = makeTestPlayer({ attributes: { ballHandling: 80, passing: 60 } })
     const roller = makeTestPlayer({ attributes: { insideShot: 70, vertical: 90 } })
-    const s = computeOffenseStrength('pick-and-roll', selection(handler, [roller]), playbook(1.2), [handler, roller])
+    const s = computeOffenseStrength('pick-and-roll', selection(handler, [roller]), playbook(1.2))
     // 0.35*80 + 0.25*60 + 0.25*70 + 0.15*90 = 74, * 1.2 = 88.8
     expect(s).toBeCloseTo(88.8, 5)
   })
@@ -48,44 +48,54 @@ describe('computeOffenseStrength', () => {
       attributes: { ballHandling: 70, outsideShot: 80, insideShot: 60 },
       hidden: { tendency: 'balanced' },
     })
-    const s = computeOffenseStrength('isolation', selection(handler), playbook(1.5), [handler])
+    const s = computeOffenseStrength('isolation', selection(handler), playbook(1.5))
     // 0.4*70 + 0.35*80 + 0.25*60(balanced modifier) = 28+28+15 = 71 -- NOT scaled by the 1.5 ballMovementModifier
     expect(s).toBeCloseTo(71, 5)
   })
 
   it('post-up: weights inside shot and vertical only', () => {
     const poster = makeTestPlayer({ attributes: { insideShot: 75, vertical: 65 } })
-    const s = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster])
+    const s = computeOffenseStrength('post-up', selection(poster), playbook(1))
     expect(s).toBeCloseTo(71, 5) // 0.6*75 + 0.4*65
   })
 
   it('spot-up: weights shooter outside-shot and creator passing, scaled by ball movement', () => {
     const shooter = makeTestPlayer({ attributes: { outsideShot: 85 } })
     const creator = makeTestPlayer({ attributes: { passing: 55 } })
-    const s = computeOffenseStrength('spot-up', selection(shooter, [creator]), playbook(1.1), [shooter, creator])
+    const s = computeOffenseStrength('spot-up', selection(shooter, [creator]), playbook(1.1))
     // (0.55*85 + 0.45*55) * 1.1 = 71.5 * 1.1 = 78.65
     expect(s).toBeCloseTo(78.65, 5)
   })
 
-  it('transition: includes the on-court team rebounding average', () => {
-    const handler = makeTestPlayer({ attributes: { speed: 85, passing: 65 } })
-    const teammates = [makeTestPlayer(), makeTestPlayer(), makeTestPlayer(), makeTestPlayer()]
-    const s = computeOffenseStrength('transition', selection(handler), playbook(1), [handler, ...teammates])
-    // rebounding avg = 50 (default), 0.4*85 + 0.3*65 + 0.3*50 = 68.5
-    expect(s).toBeCloseTo(68.5, 5)
+  it('cutting: weights the cutter speed and finishing, plus the two players average passing', () => {
+    const cutter = makeTestPlayer({ attributes: { speed: 80, insideShot: 70, passing: 60 } })
+    const passer = makeTestPlayer({ attributes: { passing: 90 } })
+    const s = computeOffenseStrength('cutting', selection(cutter, [passer]), playbook(1))
+    // 0.3*80 + 0.35*70 + 0.35*avg(90, 60) = 24 + 24.5 + 26.25 = 74.75
+    expect(s).toBeCloseTo(74.75, 5)
+  })
+
+  it('transition: reads the ball-handler alone, finishing included, and never the roster rebounding', () => {
+    // The formula used to blend the on-court five's mean rebounding at 0.3, which made a fast break
+    // a function of how well the team boarded rather than of who was running it. The mean-rebounding
+    // term is why this function once needed the whole on-court five as an argument.
+    const handler = makeTestPlayer({ attributes: { speed: 85, passing: 65, insideShot: 70 } })
+    const s = computeOffenseStrength('transition', selection(handler), playbook(1))
+    // 0.4*85 + 0.25*65 + 0.35*70 = 34 + 16.25 + 24.5 = 74.75
+    expect(s).toBeCloseTo(74.75, 5)
   })
 
   it('defaults synergy to 1 (neutral) when omitted, unaffecting every existing call site', () => {
     const poster = makeTestPlayer({ attributes: { insideShot: 75, vertical: 65 } })
-    const withDefault = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster])
-    const withExplicitNeutral = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster], 1)
+    const withDefault = computeOffenseStrength('post-up', selection(poster), playbook(1))
+    const withExplicitNeutral = computeOffenseStrength('post-up', selection(poster), playbook(1), 1)
     expect(withDefault).toBe(withExplicitNeutral)
   })
 
   it('scales the final result by the synergy multiplier, applied uniformly regardless of play call', () => {
     const poster = makeTestPlayer({ attributes: { insideShot: 75, vertical: 65 } })
-    const neutral = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster], 1)
-    const boosted = computeOffenseStrength('post-up', selection(poster), playbook(1), [poster], 1.1)
+    const neutral = computeOffenseStrength('post-up', selection(poster), playbook(1), 1)
+    const boosted = computeOffenseStrength('post-up', selection(poster), playbook(1), 1.1)
     expect(boosted).toBeCloseTo(neutral * 1.1, 5)
   })
 })

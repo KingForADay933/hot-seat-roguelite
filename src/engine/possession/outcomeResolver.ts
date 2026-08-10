@@ -15,7 +15,7 @@ import {
   FREE_THROWS_ON_TWO,
   FREE_THROW_PROB_MAX,
   FREE_THROW_PROB_MIN,
-  MAKE_PROB_BASE,
+  MAKE_PROB_BASE_BY_PLAY_CALL,
   MAKE_PROB_MARGIN_SCALE,
   MAKE_PROB_MAX,
   MAKE_PROB_MIN,
@@ -148,7 +148,7 @@ export function resolvePossession(
   // A three is harder than a two of the same quality -- that difficulty is what the extra point pays
   // for. Applied to the base rather than the margin so a player's shot-making still moves it the
   // same way; it shifts the whole curve down for outside attempts instead of flattening it.
-  const base = MAKE_PROB_BASE - (selection.isOutsideShotAction ? THREE_POINT_MAKE_PENALTY : 0)
+  const base = MAKE_PROB_BASE_BY_PLAY_CALL[playCall] - (selection.isOutsideShotAction ? THREE_POINT_MAKE_PENALTY : 0)
   const makeProb = clamp(base + margin / MAKE_PROB_MARGIN_SCALE, MAKE_PROB_MIN, MAKE_PROB_MAX)
 
   if (rng() < makeProb) {

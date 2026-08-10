@@ -1,6 +1,6 @@
 import type { OffensivePlaybook } from '../../data/presets'
-import type { PlayCallType, Player } from '../../data/types'
-import { average, clamp } from '../math'
+import type { PlayCallType } from '../../data/types'
+import { clamp } from '../math'
 import {
   POSSESSION_STRENGTH_WEIGHTS,
   SYNERGY_MULTIPLIER_FACTOR,
@@ -30,7 +30,6 @@ export function computeOffenseStrength(
   playCall: PlayCallType,
   selection: PlaySelection,
   playbook: OffensivePlaybook,
-  offenseOnCourt: Player[],
   offenseMultiplier: number = 1,
 ): number {
   const w = POSSESSION_STRENGTH_WEIGHTS
@@ -76,17 +75,18 @@ export function computeOffenseStrength(
       const passer = selection.secondaries[0]
       const s =
         w.cutting.speed * cutter.attributes.speed +
+        // The cut is finished by the cutter at the rim -- see POSSESSION_STRENGTH_WEIGHTS.
+        w.cutting.insideShot * cutter.attributes.insideShot +
         w.cutting.passingAvg * ((passer.attributes.passing + cutter.attributes.passing) / 2)
       raw = s * playbook.ballMovementModifier
       break
     }
     case 'transition': {
       const handler = selection.primary
-      const teamReboundingAvg = average(offenseOnCourt.map((p) => p.attributes.rebounding))
       raw =
         w.transition.speed * handler.attributes.speed +
         w.transition.passing * handler.attributes.passing +
-        w.transition.teamRebounding * teamReboundingAvg
+        w.transition.insideShot * handler.attributes.insideShot
       break
     }
   }
