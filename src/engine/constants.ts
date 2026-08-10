@@ -332,6 +332,22 @@ export const FATIGUE_MULT_MAX = 1.3
 /** Fatigue (0-100) at which an on-court player becomes eligible to be subbed out. */
 export const FATIGUE_SUB_OUT_THRESHOLD = 80
 
+/**
+ * Fatigue at which a coach starts *looking* for a rest, rather than needing one.
+ *
+ * The heuristic used to have no trigger between "fine" and FATIGUE_SUB_OUT_THRESHOLD's 80, so a
+ * player only came off when either their minutes ran ahead of target or they were genuinely
+ * labouring -- and measurement showed 28.7% of all substitutions happening at 80 or above. A real
+ * rotation does not run its starters to the line and then react; it rests them while it can still
+ * afford to.
+ *
+ * Chosen by sweep: 45 and 60 both leave more players reaching 80 than 55 does (10.2% and 11.3%
+ * against 9.9% at the time of measurement), 45 by churning through shifts too fast to keep anyone
+ * fresh and 60 by simply waiting too long. It only ever becomes a substitution when a rested
+ * replacement exists at the slot, so it shortens shifts without stranding a thin position group.
+ */
+export const FATIGUE_ROTATE_THRESHOLD = 55
+
 /** Fatigue so high a player is pulled immediately, bypassing MIN_SHIFT_SECONDS's cooldown. */
 export const FATIGUE_EMERGENCY_THRESHOLD = 95
 
@@ -339,11 +355,19 @@ export const FATIGUE_EMERGENCY_THRESHOLD = 95
  *  FATIGUE_SUB_OUT_THRESHOLD so a just-subbed-out player can never immediately re-qualify. */
 export const FATIGUE_SUB_IN_MAX = 30
 
-/** Seconds a player must stay on court after entering before being re-evaluated for a sub-out
- *  (except via FATIGUE_EMERGENCY_THRESHOLD) -- prevents rapid in/out thrashing when fatigue or pace
- *  sits right at a threshold boundary. ~3 minutes, carried over from the old 6-possession cooldown
- *  (6/100 of a 48-minute game = 2.88 minutes). */
-export const MIN_SHIFT_SECONDS = 175
+/**
+ * Seconds a player must stay on court after entering before being re-evaluated for a sub-out
+ * (except via FATIGUE_EMERGENCY_THRESHOLD) -- prevents rapid in/out thrashing when fatigue or pace
+ * sits right at a threshold boundary.
+ *
+ * Raised from 175 (~2.9 minutes, itself carried over from an old 6-possession cooldown) once
+ * FATIGUE_ROTATE_THRESHOLD started pulling players earlier: shorter shifts plus an earlier trigger
+ * churned the rotation, 65 substitutions a team-game against a real dozen or so. At 240 the same
+ * zero-players-run-into-the-ground result comes with 51.6 a game and stints averaging about 4.6
+ * minutes rather than 3.7. 300 churns less still (42.7) but starts letting players back over 80,
+ * which is the thing this was fixing.
+ */
+export const MIN_SHIFT_SECONDS = 240
 
 /** Game seconds elapsed below which the pace-overage trigger is skipped entirely -- avoids dividing
  *  by a tiny elapsed time in the opening minutes. Carried over from the old 8-possession guard. */
@@ -352,6 +376,7 @@ export const PACE_CHECK_MIN_SECONDS = 230
 /** A player is sub-out eligible on pace grounds once secondsPlayed / secondsElapsed exceeds their
  *  target share (rotationMinutes / REGULATION_MINUTES) by this fraction. */
 export const PACE_OVERAGE_THRESHOLD = 0.2
+
 
 /** Weight on a bench candidate's raw-attribute quality in rotationValue. */
 export const ROTATION_QUALITY_WEIGHT = 0.6

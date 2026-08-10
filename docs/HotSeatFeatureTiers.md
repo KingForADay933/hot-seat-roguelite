@@ -565,6 +565,15 @@ expand away. Deciding that up front is what stops the two items undoing each oth
 - **Compact, single-screen sections** (M7) -- **Planned**: My Team in particular has grown to a long
   scroll of independently-designed panels. Pairs with the item above under the progressive-disclosure
   decision; same milestone for the same reason.
+> ⚠️ **Now the bottleneck, and a candidate to pull forward before M2.** Fixing the auto rotation so it
+> stops running players into the ground (Tier 0) removed the *only* insight kind that fired for a
+> typical run. A normal team — no rotation chart authored, a defence that isn't Switch-Everything —
+> now reads "Nothing notable this stretch" at every checkpoint, and the per-game **What Happened**
+> block is empty too. That is honest rather than noisy, which is an improvement, but it leaves two
+> shipped features with nothing to show. The insight catalogue, not the insight *plumbing*, is what
+> is thin: weak-link targeting needs Switch-Everything and chart-override needs a chart, so between
+> them they cover a minority of runs. Broadening it is the item directly below.
+
 - **Richer Coaching Insights** (M4) -- **Planned**: three kinds exist today
   (`weak-link-targeting`, `chart-override`, `fatigue-substitution`), and only the first says anything
   about *tactics* rather than rotation mechanics. The possession log already carries everything a
