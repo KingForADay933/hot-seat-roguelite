@@ -11,6 +11,7 @@ export type CoachingUpgradeId =
   | 'player-development-guru'
   | 'bench-mob-mentality'
   | 'system-guru'
+  | 'fan-culture-buy-in'
 
 export interface CoachingUpgrade {
   id: CoachingUpgradeId
@@ -66,6 +67,11 @@ export const COACHING_UPGRADES: Record<CoachingUpgradeId, CoachingUpgrade> = {
     id: 'system-guru',
     label: 'System Guru',
     description: "A deeper mastery of the roster's drafted system than the roster found on its own.",
+  },
+  'fan-culture-buy-in': {
+    id: 'fan-culture-buy-in',
+    label: 'Fan Culture Buy-In',
+    description: 'The building fills whether you win or lose. Every season from now pays out more -- so it is worth what is left of your run, and nothing at all if this is your last.',
   },
 }
 

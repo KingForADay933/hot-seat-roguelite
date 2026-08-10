@@ -25,10 +25,18 @@ function shiftRoster(players: Player[], teamId: Team['id'], shift: (p: Player) =
  * to a rating the simulation already reads" mechanic roster quirks and camps use, just team-wide
  * and GM-purchased instead of imposed or randomly rolled.
  *
- * Players' Coach and System Guru are deliberately no-ops here: their effect is a Team.synergyScore
- * bonus that has to be *re-added* every time synergyScore gets recomputed from roster fit (camp
- * purchases do this), not applied once -- see run/coachingUpgrades/synergyBonus.ts and its caller
- * in RunProvider. A one-time mutation here would just get silently overwritten by the next camp.
+ * Three cards are deliberate no-ops here, for two different reasons.
+ *
+ * Players' Coach and System Guru: their effect is a Team.synergyScore bonus that has to be *re-added*
+ * every time synergyScore gets recomputed from roster fit (camp purchases do this), not applied once
+ * -- see run/coachingUpgrades/synergyBonus.ts and its caller in RunProvider. A one-time mutation here
+ * would just get silently overwritten by the next camp.
+ *
+ * Fan Culture Buy-In: its effect is not a rating at all, but a raise on every future season's payout,
+ * derived from run.coachingUpgrades each time earnings are computed (budgetBonus.ts, read by
+ * run/budget.ts). Paying it out here instead would turn a permanent raise into a one-time cash lump
+ * -- which is both a worse version of a card the game already has, and the exact shape that made the
+ * Energy Drink Sponsorship a money pump.
  */
 export function applyCoachingUpgrade(upgradeId: CoachingUpgradeId, team: Team, players: Player[]): ApplyCoachingUpgradeResult {
   switch (upgradeId) {
@@ -68,6 +76,7 @@ export function applyCoachingUpgrade(upgradeId: CoachingUpgradeId, team: Team, p
 
     case 'players-coach':
     case 'system-guru':
+    case 'fan-culture-buy-in':
       return { team, players }
   }
 }

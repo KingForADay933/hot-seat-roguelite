@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StandingsRow } from '../data/types'
 import { computeSeasonBudgetEarnings } from './budget'
-import { BUDGET_PER_WIN, STRETCH_CLEAR_BUDGET_BONUS } from './constants'
+import { BUDGET_PER_WIN, COACHING_UPGRADE_COST, FAN_CULTURE_BUY_IN_SEASON_BONUS, STRETCH_CLEAR_BUDGET_BONUS } from './constants'
 import { MARKET_SIZES } from './marketSize'
 import { createRun } from './runState'
 
@@ -44,5 +44,50 @@ describe('computeSeasonBudgetEarnings', () => {
     const run = createRun('us', 'stacked-guards', 'youth-movement', 'mid')
     const standings = [row('them', 32)]
     expect(computeSeasonBudgetEarnings(run, standings, false)).toBe(0)
+  })
+})
+
+describe('Fan Culture Buy-In', () => {
+  const standings = [row('us', 20), row('them', 12)]
+
+  it('adds nothing until it is owned', () => {
+    const run = createRun('us', 'stacked-guards', 'youth-movement', 'mid')
+    expect(run.coachingUpgrades).toEqual([])
+    expect(computeSeasonBudgetEarnings(run, standings, false)).toBe(20 * BUDGET_PER_WIN)
+  })
+
+  it('raises every season by exactly the constant at mid market', () => {
+    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), coachingUpgrades: ['fan-culture-buy-in' as const] }
+    expect(computeSeasonBudgetEarnings(run, standings, false)).toBe(20 * BUDGET_PER_WIN + FAN_CULTURE_BUY_IN_SEASON_BONUS)
+  })
+
+  it('is scaled by the market multiplier, like every other flat term in the formula', () => {
+    for (const marketSize of ['big', 'mid', 'small'] as const) {
+      const without = createRun('us', 'stacked-guards', 'youth-movement', marketSize)
+      const owned = { ...without, coachingUpgrades: ['fan-culture-buy-in' as const] }
+      const delta = computeSeasonBudgetEarnings(owned, standings, false) - computeSeasonBudgetEarnings(without, standings, false)
+      expect(delta).toBe(Math.round(FAN_CULTURE_BUY_IN_SEASON_BONUS * MARKET_SIZES[marketSize].budgetMultiplier))
+    }
+  })
+
+  it('stacks with the stretch-clear bonus rather than replacing it', () => {
+    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), coachingUpgrades: ['fan-culture-buy-in' as const] }
+    expect(computeSeasonBudgetEarnings(run, standings, true)).toBe(
+      20 * BUDGET_PER_WIN + STRETCH_CLEAR_BUDGET_BONUS + FAN_CULTURE_BUY_IN_SEASON_BONUS,
+    )
+  })
+
+  it('pays out on a losing season too, which is the point of it being flat', () => {
+    // A percentage would pay least exactly here -- the season where the budget matters most and the
+    // GM is closest to being fired.
+    const run = { ...createRun('us', 'stacked-guards', 'youth-movement', 'mid'), coachingUpgrades: ['fan-culture-buy-in' as const] }
+    const badSeason = [row('us', 8), row('them', 24)]
+    expect(computeSeasonBudgetEarnings(run, badSeason, false)).toBe(8 * BUDGET_PER_WIN + FAN_CULTURE_BUY_IN_SEASON_BONUS)
+  })
+
+  it('takes COACHING_UPGRADE_COST / the bonus seasons to pay for itself', () => {
+    // The number the constant was chosen against. Pinned so moving either constant has to be a
+    // deliberate act rather than a silent change to how long the card takes to be worth buying.
+    expect(Math.ceil(COACHING_UPGRADE_COST / FAN_CULTURE_BUY_IN_SEASON_BONUS)).toBe(3)
   })
 })
