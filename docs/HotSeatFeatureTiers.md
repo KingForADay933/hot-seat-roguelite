@@ -48,9 +48,19 @@ playoffs add stakes structure but not a playstyle), and why injuries are schedul
 teeth).
 
 Estimates are **focused working days**, not calendar time — multiply by your own availability.
-Excluding the completed M1, the list totals roughly **76–112 days**: at two solid days a week that's
-9–13 months, at four it's 5–7. (Was 65–100 before Tiers 16 and 17 were folded in; the legibility and
-scouting work adds 11–16 days, most of it in M3 and M7.)
+Excluding the completed M1 and M1.5, the list totals roughly **96–138 days**: at two solid days a week
+that's 11–16 months, at four it's 6–8. (Was 76–112 before Tiers 18–22 were folded in; owner
+archetypes, focus points, mentorship, analytics and rivalries add 20–26 days, spread across M3
+through M7.)
+
+**That is a real increase and worth reading as one.** The list has roughly doubled since it was first
+sequenced, and every addition has been individually justified — which is exactly how a scope grows
+past what one person ships. Tiers 18–22 are all genuinely good, and none of them is required for a
+run to be complete and fun; M1 already cleared that bar. If the timeline needs to come down, this is
+the block to cut from, and the honest order to cut in is 21, 22, 18, 20, 19 — analytics is polish,
+rivalries and archetypes are texture on a season structure that has to exist first, mentorship is
+tied to a roster problem M5 could ship without, and focus points are the one that adds a way to
+*play* differently rather than a way to feel differently.
 
 | Milestone | Contents | Tiers | Days |
 | --- | --- | --- | --- |
@@ -58,11 +68,11 @@ scouting work adds 11–16 days, most of it in M3 and M7.)
 | **M1 — Complete run** ✅ | ~~Simcast pacing~~ · ~~chronological game order~~ · ~~rebounds in-sim + defensive stats~~ · ~~run-end summary~~ — **complete** | 7.5, 1.5, 11, 8 | 10–14 |
 | **M1.5 — Pre-playtest legibility** ✅ | ~~Coaching Insights after every game~~ · ~~team records in the schedule~~ · ~~standings comprehension~~ · ~~weight rebounds toward bigs~~ — **complete** | 16, 11 | 2–4 |
 | **M2 — First playtest** | Share privately with 3–5 people; first real difficulty pass; sets the price/scarcity targets for M5 | 1, 15 | 3–5 + ongoing |
-| **M3 — Tactical axis** | In-game decisions tiers 1–2 (scheme/focus switching) · **opponent scouting** · position-fit tuning · more team-construction options | 13, 17, 7.6, 3 | 12–17 |
-| **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations · richer Coaching Insights | 12, 16 | 14–21 |
-| **M5 — Roster turnover** | Injuries · foul trouble · retirement, backfill & poaching · shop-based signings · run-configuration toggles | 14, 15, 12 | 21–32 |
+| **M3 — Tactical axis** | In-game decisions tiers 1–2 (scheme/focus switching) · **opponent scouting** · **tactical focus points** · position-fit tuning · more team-construction options | 13, 17, **19**, 7.6, 3 | 14–20 |
+| **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations · **owner archetypes** · **nemesis teams** · richer Coaching Insights | 12, 16, **18**, **22** | 19–28 |
+| **M5 — Roster turnover** | Injuries · foul trouble · retirement, backfill & poaching · shop-based signings · **veteran mentorship** · run-configuration toggles | 14, 15, 12, **20** | 24–36 |
 | **M6 — Live coaching** | In-game decisions tiers 3–4 (substitutions, matchups, timeouts) | 13 | 15–20 |
-| **M7 — Launch prep** | Paint mode · more descriptive cards & compact screens (from M2 notes) · polish · page finalization and publish | 7.6, 16, 10 | 8–12 |
+| **M7 — Launch prep** | Paint mode · **analytics suite** · more descriptive cards & compact screens (from M2 notes) · polish · page finalization and publish | 7.6, **21**, 16, 10 | 10–15 |
 
 ### Why this shape
 
@@ -200,7 +210,7 @@ Things that happen *to* the player, no choice involved -- the hot-seat pressure:
   - The last two are enforced in `run/minutesBudget.ts` alongside the per-position budget, so a house rule can only ever *narrow* the window a GM may write, never widen it. `MinutesInput` reads the same window, so the spinner stops exactly where the write would.
 - **More team-construction options** (M3) -- **Planned**: extend the quirk pool further. Three were raised; one is already shipped and the other two are genuinely new, which is worth checking before adding any more:
   - *"Great bigs, decent guards"* -- this is **Frontcourt Overload**, shipped. Any future proposal should be checked against the four axes above first; the pool is now large enough that near-duplicates are the likely failure mode, not gaps.
-  - *One Random Superstar* (new) -- elevates a **randomly chosen** player rather than the roster's best. Distinct from One Aging Superstar in the way that matters: that one hands you a declining star you already know how to use, this one might hand a 40-minute talent to your third-string centre, which is a rotation and chart problem rather than a decline problem. Needs a decision on whether the star's *position* is re-rolled too.
+  - *One Random Superstar* (new) -- elevates a **randomly chosen** player rather than the roster's best. Distinct from One Aging Superstar in the way that matters: that one hands you a declining star you already know how to use, this one might hand a 40-minute talent to your third-string center, which is a rotation and chart problem rather than a decline problem. Needs a decision on whether the star's *position* is re-rolled too.
   - *Underdog Squad* (new) -- low current attributes, high potential across the whole roster. The inverse of Balanced/Low Ceiling, and distinct from High-Variance (which widens the two tails and leaves the middle alone) because it moves everyone at once. It is also the one quirk that would genuinely test whether the run length is long enough to develop out of a hole -- worth pairing with a market size that grants patience, and worth watching in M2 for whether it is simply a losing card.
 - **Wildcard events** (~30% chance per season): Breakout (young player attribute boost) or Sophomore Slump (attribute dip). Rolled before the season sims, so it actually affects that season's games, and flows through into real player development.
 - **Market size** (one per run): Big (1.5x budget, 2 seasons/stretch patience), Mid (1.0x, 3), Small (0.6x, 4). Two independent axes -- cash vs. patience -- so no tier is strictly better.
@@ -374,7 +384,7 @@ Sequenced deliberately last -- validate the loop is fun as a plain browser app b
 2. Electron-wrapped downloadable build (same code, no rewrite), added once the loop is validated. Storage already goes through IndexedDB (Tier 0), which behaves identically under Electron's embedded Chromium -- no persistence rework expected at this step.
 3. Steam release via the same Electron build, `steamworks.js` for achievements/leaderboards -- wired to Tier 9's leaderboard behind a swappable interface, same pattern as the storage adapter.
 
-Tiers 11-13 below were added after this one and are gameplay work, so despite the higher numbers they come *before* distribution in the Build Order -- numbers are identifiers, not sequence.
+Tiers 11-22 below were added after this one and are gameplay work, so despite the higher numbers they come *before* distribution in the Build Order -- numbers are identifiers, not sequence.
 
 ---
 
@@ -384,9 +394,9 @@ Tiers 11-13 below were added after this one and are gameplay work, so despite th
 Deepening what the possession model actually tracks. **Both items below change `PossessionLogEntry`'s shape, which invalidates existing saves with no migration path** -- `isValidBundleShape` rejects rather than migrates, deliberately, on the grounds that nothing has shipped. That's still true, so this is the cheap moment, and it stops being cheap the day there are real players with real runs. Treat them as one unit of work.
 
 - **Shipped -- rebounds during the sim** (M1): `PossessionLogEntry.rebounderId` is set when the miss resolves, using `pickRebounder` -- which already existed in `possession/rebound.ts`, exported and entirely unused. Two things fell out of it: `deriveBoxScore` is now a pure function of the log (it took an `Rng` only for this roll, and no longer needs `playersById` either), and the simcast shows **real rebounds live** -- `LiveBoxScoreLine` was `Omit<PlayerBoxScoreLine, 'rebounds'>` and the REB column rendered a dash for the whole game.
-- **Shipped -- rebounds weighted toward bigs** (M1.5): measured before and after over 6 simulated seasons (~35,000 boards). Centres went from 7.76 to **9.64 reb/36** and point guards from 5.31 to **3.76**, moving the C:PG rate ratio from **1.46 to 2.56** against a real-basketball figure near 3 — every position now lands within about a rebound of its NBA rate. Purely an attribution change: `offensiveReboundProbability` decides possession *before* `pickRebounder` is called, and the pick still spends exactly one `rng()` draw however the weights fall, so no game outcome and no existing seed moved. The two causes were:
-  - `pickRebounder` weights **linearly** by the `rebounding` attribute, so a 55-rated guard takes nearly as many boards as a 75-rated centre (55/75 = 73% as often). Compare the offensive side, which raises selection scores to `USAGE_WEIGHT_EXPONENT` (3) precisely so the best-suited player dominates a role without monopolising it. Rebounding is the same kind of contest and has no such exponent. **Reusing that constant is the obvious first attempt**, and keeps the two concentration knobs from drifting apart.
-  - Nothing but the attribute is read -- not height, not position, not `vertical`. A 6'0" point guard and a 7'0" centre with equal Rebounding are equally likely to come down with it, which is the part that reads as wrong regardless of how the numbers are tuned. `avgInteriorDefense` (interiorDefense + vertical) already exists as the engine's "big man" composite and is the natural blend partner.
+- **Shipped -- rebounds weighted toward bigs** (M1.5): measured before and after over 6 simulated seasons (~35,000 boards). Centers went from 7.76 to **9.64 reb/36** and point guards from 5.31 to **3.76**, moving the C:PG rate ratio from **1.46 to 2.56** against a real-basketball figure near 3 — every position now lands within about a rebound of its NBA rate. Purely an attribution change: `offensiveReboundProbability` decides possession *before* `pickRebounder` is called, and the pick still spends exactly one `rng()` draw however the weights fall, so no game outcome and no existing seed moved. The two causes were:
+  - `pickRebounder` weights **linearly** by the `rebounding` attribute, so a 55-rated guard takes nearly as many boards as a 75-rated center (55/75 = 73% as often). Compare the offensive side, which raises selection scores to `USAGE_WEIGHT_EXPONENT` (3) precisely so the best-suited player dominates a role without monopolising it. Rebounding is the same kind of contest and has no such exponent. **Reusing that constant is the obvious first attempt**, and keeps the two concentration knobs from drifting apart.
+  - Nothing but the attribute is read -- not height, not position, not `vertical`. A 6'0" point guard and a 7'0" center with equal Rebounding are equally likely to come down with it, which is the part that reads as wrong regardless of how the numbers are tuned. `avgInteriorDefense` (interiorDefense + vertical) already exists as the engine's "big man" composite and is the natural blend partner.
   - Shipped as `REBOUND_WEIGHT_EXPONENT` (equal to `USAGE_WEIGHT_EXPONENT`, named separately so the two can diverge) and `REBOUND_SIZE_WEIGHT` (0.4). Both are first-pass numbers set against real per-position rates, not against play feel -- **a tuning candidate for M2** if boards feel too concentrated in practice.
 - **Shipped -- defensive stats** (M1): steals and blocks, as attribution fields (`stolenById` / `blockedById`) rather than new outcomes -- a steal is still a turnover and a blocked shot is still a miss, with the same attempt and the same rebound, so no existing branch changed. Both are decided *after* the outcome roll, which means turnover and make/miss rates are untouched by their existence and can be tuned independently. Credit goes to the matchup defender the possession already identified. Measured over 160 games: 5.8 steals and 4.3 blocks a team a game, blocks at 4.9% of attempts against a real ~5%. Steals run light because the engine's turnover rate itself is light (~10.4 against a real ~13.5) -- inherited, not introduced, and the fix belongs in `TURNOVER_BASE_PROB`. **Deliberately stopped short of personal fouls committed**, which would drag in foul trouble and foul-outs: that stays Tier 14.
 
@@ -521,7 +531,7 @@ one at a time -- more words in the same space, or the same words in less. What r
 **progressive disclosure**: a compact summary that always fits, with the explanation one hover or one
 expand away. Deciding that up front is what stops the two items undoing each other's work.
 
-- **Coaching Insights after every game** (M1.5) -- **Planned, and the cheapest item in this tier**:
+- **Shipped -- Coaching Insights after every game** (M1.5), and it was the cheapest item in this tier:
   insights are already generated per game (`resolveGame` calls `generateCoachingInsights` on each) and
   already persisted per game in `bundle.pendingChunkInsights` while a stretch is open. Nothing needs
   computing; a stretch's games each have their insights sitting in state, thrown away visually until
@@ -530,14 +540,15 @@ expand away. Deciding that up front is what stops the two items undoing each oth
   per-game text, and the checkpoint deliberately collapses repeats (`run/chunkInsightSummary.ts`) --
   showing both is right, but the checkpoint must stay the collapsed view or it re-acquires the
   twelve-bullet problem that summariser exists to fix.
-- **Team records in the schedule** (M1.5) -- **Planned**: the stretch screen lists Date / Matchup /
-  Result with no standing context, so "who am I playing and are they any good" needs a trip to the
-  standings and back. `computeStandings` is already a pure function over played games and is already
-  called on this screen's siblings. Records should be **as of that game**, not current, for played
-  games -- a season-to-date record next to a game from three weeks ago is a different and more
-  confusing fact than no record at all.
-- **Standings comprehension, not standings arithmetic** (M1.5) -- **Planned, and reframed from the
-  original request.** The request was that a winning record should always carry a positive point
+- **Shipped -- team records in the schedule** (M1.5): the stretch screen listed Date / Matchup /
+  Result with no standing context, so "who am I playing and are they any good" meant a trip to the
+  standings and back. Records are **as of that game** rather than current
+  (`recordsThroughGame`), so a finished row reads as the record it produced and an upcoming row as
+  what both sides carry into it -- a season-to-date record next to a game from three weeks ago is a
+  different and more confusing fact than no record at all. Read from the whole season rather than
+  the chunk, so it doesn't restart at 0-0 every stretch.
+- **Shipped -- standings comprehension, not standings arithmetic** (M1.5), and reframed from the
+  original request. The request was that a winning record should always carry a positive point
   differential, a losing one negative, and a .500 team should be even. **`pointDiff` is computed
   correctly** (`pointsFor - pointsAgainst` in `engine/schedule/standings.ts`) and the disagreement is
   real basketball: a team that wins close and loses badly genuinely earns a winning record and a
@@ -625,6 +636,73 @@ systems and schemes are all invisible, which means every pre-game decision is ma
 - **Why M3.** This is the missing half of M3's tactical axis. Switching defensive scheme between games
   already works, but nothing on screen tells you *what to switch to* -- scouting is what converts that
   control from a guess into a decision, and the two are much less valuable apart than together.
+
+---
+
+## Tier 18 — Owner Archetypes & Dynamic Directives
+**Planned -- scheduled M4**
+
+Turns ownership pressure from a scalar rank-fraction target into distinct behavioural constraints and win conditions. Today every run is fired for the same reason in the same way; an owner with an opinion makes the *same* record mean different things run to run.
+
+- **Owner personalities** (imposed at run start, rolled alongside Market Size -- Tier 3, design doc Section 8.1):
+  - *Impatient Billionaire*: 1.5x Budget, but stretch targets escalate aggressively and veteran playing time is mandated.
+  - *Stathead / Efficiency Purist*: requires a high rim-and-three attempt share or a top-tier defensive rating; penalises a mid-range-heavy diet.
+  - *Youth Fanatic*: development-first mandate; the firing threshold trips if players 22 and under average under 18 minutes.
+  - *Cheapskate Mogul*: earnings halved, but grants +1 season of patience per stretch.
+- **Dynamic directives**: mid-stretch mini-mandates ("win 5 of the next 8", "sweep the road trip") paying bonus Budget or a stretch extension.
+- **Why M4.** It interacts directly with Tier 12's graduated expectations and the playoff bar -- both change what "success" means, and defining them separately means defining them twice.
+- **Note the overlap with existing systems.** Several archetypes are minutes mandates, which is exactly what Tier 3's Homegrown Mandate and Minutes Cap already are, enforced through `run/minutesBudget.ts`. Build these as house rules the owner imposes rather than as a parallel constraint system, or there will be two places that can narrow the same window.
+
+---
+
+## Tier 19 — Tactical Emphasis & Situational Focus Points
+**Planned -- scheduled M3**
+
+Granular pre-game and checkpoint levers, giving immediate counter-play against a scouted opponent (Tier 17) without building a full playbook editor.
+
+- **Offensive focus points**: pace control (slow it down vs. push in transition), shot-selection priority (attack the rim / hunt threes / mid-range pull-ups). Modifies play-call selection weights during possession resolution.
+- **Defensive aggression toggles**: crash the boards vs. leak out (trades offensive rebound share against transition offense), protect the paint vs. deny the perimeter (modifies resistance against inside and outside shots).
+- **Why M3.** It is the bridge between Tier 17 and Tier 13's levels 1-2: scouting reveals *what* an opponent runs, focus points are the dial that exploits it, and Tier 13's directive channel is how a mid-game change reaches the sim. All three are much weaker apart.
+- **Reuses machinery that exists.** Play-call weights are already a normalised profile per system (Tier 6) and resistance already reads an interior/perimeter lean per scheme (`SLOT_INTERIOR_LEAN`, `interiorFocus`). A focus point is a modifier over those, not a new model -- which is what keeps this cheap enough to sit in M3.
+
+---
+
+## Tier 20 — Veteran Mentorship & Locker Room Dynamics
+**Planned -- scheduled M5**
+
+Gives ageing, low-ceiling veterans a strategic use, alongside the roster turnover that makes them expendable.
+
+- **Mentorship**: pairing a veteran (30+) with a prospect (22 and under) in the same position group accelerates the prospect's gap-closing toward potential at season-end growth.
+- **Locker-room traits** (derived player quirks):
+  - *Floor General / Vet Leader*: raises team consistency in clutch possessions while on the floor.
+  - *Volatile / Locker Room Headache*: high raw talent, but costs synergy or raises variance if bench minutes fall below expectations.
+- **Why M5.** It ships alongside Tier 15's retirement and shop signings, and answers the problem those create: once roster spots are scarce and a signing is expensive, an ageing veteran is dead weight unless he does something a young player can't.
+- **Decide first, and it is the same open question as Tier 6.5.** "Locker-room traits" are player roles by another name, and Tier 6.5 already parks that whole idea on three unresolved questions (how a trait is assigned, how traits stack, what one mechanically *does*). Answer them once, for both tiers, or this arrives as a second parallel trait system.
+
+---
+
+## Tier 21 — Analytics Suite & Shot Quality Breakdowns
+**Planned -- scheduled M7**
+
+Exposes what the possession log already records to a data-minded GM, as compact visual reports.
+
+- **Shot-location efficiency**: eFG% by distance and type (rim, mid-range, three).
+- **Lineup efficiency**: point differential per 100 possessions for five-man combinations.
+- **Play-call efficiency**: points per possession by play-call primitive (pick-and-roll, isolation, post-up, spot-up, cutting, transition).
+- **Why M7.** Pure presentation over data the engine already produces -- the natural launch-prep polish item, and it competes with nothing else for design attention.
+- **One real constraint.** Possession logs are stripped as each chunk resolves (Tier 1.5), so anything wanting *possession-level* detail across a season has to capture it as games resolve, the way Tier 16's performance trends deliberately avoided needing to. Lineup and play-call breakdowns are possession-level; shot-location is not, since box scores persist. Decide the capture strategy before building, or the first two reports will only ever cover the current chunk.
+
+---
+
+## Tier 22 — Nemesis Teams & Rivalry Arc
+**Planned -- scheduled M4**
+
+Dynamic rivalries generated from what actually happened, reinforcing the Storyteller pillar the design doc names.
+
+- **Triggers**: an opponent beats you in overtime, knocks you out of contention, or sweeps a stretch series against you.
+- **Payoff**: custom broadcast commentary lines, raised clutch variance for both sides, and a bonus Budget payout or a consumable for winning a rivalry game.
+- **Why M4.** It hooks into Tier 12's playoff bracket and season structure -- elimination is the strongest rivalry trigger available and it doesn't exist until the bracket does.
+- **Cheap where it counts.** Broadcast commentary is already a data-driven line selector, and `League.seasonHistory` already retains per-season standings, so "who has beaten you and when" is derivable rather than new state.
 
 ---
 
@@ -751,6 +829,11 @@ Recorded so they stay decided rather than getting relitigated:
 | 13 | In-game decisions (timeouts, subs, schemes, matchups) | Planned | M3, M6 |
 | 14 | Risk & attrition (injuries, foul trouble) | Planned, needs design | M5 |
 | 15 | Roster turnover (retirement, poaching, shop signings) | Planned / trades post-launch | M5 |
-| 16 | Legibility & comprehension (per-game insights, schedule records, descriptive cards) | Planned | M1.5, M4, M7 |
+| 16 | Legibility & comprehension (per-game insights, schedule records, performance trends, Insights screen) | Shipped / descriptive cards + compact views planned | M4, M7 |
 | 17 | Opponent scouting (lineups, systems, schemes) | Planned | M3 |
+| 18 | Owner archetypes & dynamic directives | Planned | M4 |
+| 19 | Tactical emphasis & focus points | Planned | M3 |
+| 20 | Veteran mentorship & locker room | Planned | M5 |
+| 21 | Analytics suite & shot breakdowns | Planned | M7 |
+| 22 | Nemesis teams & rivalry arc | Planned | M4 |
 | — | [Parked](#parked) — meta-progression, seeds, audio, onboarding, achievements, delegation, mods | Raised, not scheduled | revisit after M2 |
