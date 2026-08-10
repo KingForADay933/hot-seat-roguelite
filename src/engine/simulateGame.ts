@@ -251,13 +251,7 @@ export function* simulateGameSteps(
 
       const playCall = selectPlayCall(playbook, rng)
       const selection = selectPlayers(playCall, offenseFive, defenseFive, scheme, rng)
-      const strength = computeOffenseStrength(
-        playCall,
-        selection,
-        playbook,
-        offenseOnCourt,
-        synergy * focusPaceEfficiency(offenseFocus),
-      )
+      const strength = computeOffenseStrength(playCall, selection, playbook, synergy * focusPaceEfficiency(offenseFocus))
       // The glass dial's whole cost and payout, on the one trip where it means anything: the
       // defense here is the team that just missed, so crashing means they are not back yet and
       // getting back means they arrived set. 1 for a balanced team, which is why an un-dialled

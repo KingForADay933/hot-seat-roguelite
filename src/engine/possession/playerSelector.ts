@@ -1,7 +1,7 @@
 import type { DefensiveScheme } from '../../data/presets'
 import type { PlayCallType, Player, PlayerId } from '../../data/types'
 import { USAGE_WEIGHT_EXPONENT } from '../constants'
-import { avgInteriorDefense, avgPerimeterDefense, buildMatchups, pickBest, playersOf, type OnCourtPlayer } from '../matchup'
+import { avgInteriorDefense, avgPerimeterDefense, buildMatchups, playersOf, type OnCourtPlayer } from '../matchup'
 import type { Rng } from '../rng'
 
 export interface PlaySelection {
@@ -47,7 +47,6 @@ const scorePasser = (p: Player) => p.attributes.passing
 const scoreCutter = (p: Player) => (p.attributes.passing + p.attributes.speed) / 2
 const scoreTransitionHandler = (p: Player) => (p.attributes.speed + p.attributes.passing) / 2
 const scoreRebounder = (p: Player) => p.attributes.rebounding
-const scoreSpeed = (p: Player) => p.attributes.speed
 
 /**
  * Takes slot-assigned fives because defender assignment pairs on slots, but scores candidates on
@@ -147,7 +146,12 @@ export function selectPlayers(
       return {
         primary: handler,
         secondaries: [outlet],
-        primaryDefender: pickBest(defense, scoreSpeed),
+        // The assigned matchup, like every other play call. This used to be pickBest(defense,
+        // scoreSpeed) -- a fast break faced the fastest defender on the floor, deterministically,
+        // making transition the one play call always defended by the opponent's best option at it.
+        // That is backwards: a break is a break precisely because the defense is *not* set, and it
+        // was most of why transition was the engine's least efficient call.
+        primaryDefender: assignedDefenderOf(handler),
         secondaryDefenders: [],
         isOutsideShotAction: false,
       }

@@ -703,13 +703,34 @@ Turns ownership pressure from a scalar rank-fraction target into distinct behavi
 > cannot compute one for itself (`computeInitialSynergyScore` lives in `run/`, and `engine/` does not
 > import from there); `run/teamSynergy.ts` holds the one formula both paths use.
 >
-> **Two dials were rebuilt against measurement, and one imbalance was left on purpose.** The Glass
-> dial's cost was inverted -- transition is the *least* efficient play call in the engine, so the
-> "concede fast breaks" cost was a gift -- and Pace's efficiency term had to drop 5x once it turned out
-> the volume half of that trade is symmetric. Hunt Threes still never actively loses, because spot-up
-> is the engine's most efficient call by a wide margin; that is a shot-model calibration question for
-> M2, not a dial question, and a mechanism built to offset it was measured and reverted. Full numbers
-> in `m3-tactical-axis.md`.
+> **Two dials were rebuilt against measurement, and one imbalance turned out not to be a dial problem
+> at all.** The Glass dial's cost was inverted -- transition was then the *least* efficient play call
+> in the engine, so the "concede fast breaks" cost was a gift -- and Pace's efficiency term had to drop
+> 5x once it turned out the volume half of that trade is symmetric. Hunt Threes never actively lost,
+> and the cause was correctly diagnosed as the shot model rather than the dial: a mechanism built to
+> offset it inside the dial was measured and reverted, and the real fix landed later in the shot model
+> itself (see below). Full numbers in `m3-tactical-axis.md`.
+>
+> **Shipped afterwards -- the shot model was fixed, and the dial became a real decision.** Nothing had
+> ever compared play calls against *each other*, and measured over 240 games the engine had the two
+> extremes of real basketball inverted: transition was its worst call at **0.917** points per play and
+> cutting fifth of six at 1.000, while spot-up led at 1.102. Since `RIM_LEAN` runs along exactly that
+> axis, Hunt Threes was buying points for every system. Four causes, all structural rather than tuning:
+> transition scored partly off the on-court five's mean **rebounding**; transition was defended by
+> `pickBest(defense, speed)`, so a fast break faced the opponent's *quickest* defender every single
+> time -- the one play call always drawing the best available defense, when a break is a break
+> precisely because the defense is not set; cutting had **no finishing attribute at all** and was
+> treated as a *perimeter* action, so Pack-the-Paint helped cutters reach the rim; and make probability
+> was a single `MAKE_PROB_BASE` for every shot in the game, so a play call could only be better than
+> another by producing better *players*, never a better *shot*. That last one is now
+> `MAKE_PROB_BASE_BY_PLAY_CALL`, which encodes shot location. Result: cutting **1.181**, transition
+> **1.143**, spot-up 1.068, pick-and-roll 1.020, post-up 1.000, isolation 0.978, at 222.0 combined
+> points against 221.2 before -- the ordering inverted with the scoring level untouched (2PT% 54.5 ->
+> 55.8, 3PT% 36.8 -> 34.6, both still inside `scoringCalibration`'s bounds). Swept again paired across
+> six systems at 300 games each, **no lean dominates**: rim is best for Balanced Attack and 7 Seconds
+> or Less, threes for Twin Towers and Grit and Grind, balanced for Motion and Triangle. `RIM_LEAN` and
+> the dial's own costs were **not touched** -- fixing the model was the whole fix. Guarded by
+> `engine/playCallEfficiency.test.ts`, which asserts the ordering as a shape rather than as numbers.
 >
 > **AI teams carry dials too**, derived from their offensive system rather than rolled (rolling would
 > have drawn from `rng` and invalidated every seed in the suite). Five of nine systems get a lean; the

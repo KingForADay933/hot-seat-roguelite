@@ -1,4 +1,4 @@
-﻿import type { AttributeKey, Position, TendencyProfile } from '../data/types'
+﻿import type { AttributeKey, PlayCallType, Position, TendencyProfile } from '../data/types'
 
 /** All formula weights live here so balance tuning is a config change, not a code change. */
 
@@ -78,13 +78,29 @@ export const POSITION_BIAS: Record<Position, Partial<Record<AttributeKey, number
   },
 }
 
+/**
+ * Each play call's offense strength, as a weighted blend of the attributes that actually decide it.
+ *
+ * Two of these used to describe something other than scoring, which is why cuts and fast breaks were
+ * the engine's *worst* play calls when they are two of basketball's best:
+ *
+ *  - Transition blended the on-court five's mean `rebounding` at 0.3. Rebounding is not a finishing
+ *    skill, and averaging it across the floor dragged every guard-led break toward the roster's
+ *    bigs. A runout ends at the rim, so the term is `insideShot` on the player finishing it.
+ *  - Cutting had no finishing attribute at all -- `speed` and mean `passing`, nothing else. A
+ *    backdoor cut ends in a layup; `insideShot` belongs in it for the same reason.
+ *
+ * A hand-maintained mirror of these formulas lives in run/variation/possessionRoles.ts, used to
+ * score system fit before a game is played. Change one and change the other -- possessionRoles.test.ts
+ * fails if they disagree.
+ */
 export const POSSESSION_STRENGTH_WEIGHTS = {
   pickAndRoll: { handlerBallHandling: 0.35, handlerPassing: 0.25, rollerInsideShot: 0.25, rollerVertical: 0.15 },
   isolation: { ballHandling: 0.4, shot: 0.35, shotSelection: 0.25 },
   postUp: { insideShot: 0.6, vertical: 0.4 },
   spotUp: { outsideShot: 0.55, creatorPassing: 0.45 },
-  cutting: { speed: 0.5, passingAvg: 0.5 },
-  transition: { speed: 0.4, passing: 0.3, teamRebounding: 0.3 },
+  cutting: { speed: 0.3, insideShot: 0.35, passingAvg: 0.35 },
+  transition: { speed: 0.4, passing: 0.25, insideShot: 0.35 },
 } as const
 
 export const RESISTANCE_WEIGHTS = {
@@ -164,16 +180,41 @@ export const BLOCK_SHARE_MIN = 0.01
 export const BLOCK_SHARE_MAX = 0.35
 
 /**
- * Make probability for an evenly-matched two-point attempt, before the shot-quality margin moves it.
- * Realized two-point percentage lands ~54%, against a real league's ~53%.
+ * Make probability for an evenly-matched attempt, before the shot-quality margin moves it -- per
+ * play call, because a layup off a cut and a contested isolation jumper are not the same shot.
  *
- * It could only be tuned to a real rate once offensive rebounds became retained possession. Before
- * that a trip was exactly one shot, so the engine took ~80 attempts per 100 possessions where a real
- * team takes ~89, and the per-attempt rate had to be inflated to ~59% to reach a believable score.
- * Second chances supply the missing attempts, so the percentage no longer has to lie to make up for
- * them.
+ * This was a single 0.47 for every attempt in the engine, which meant a play call could only be
+ * better than another by producing better *players* on the possession, never by producing a better
+ * *shot*. That is the wrong model of basketball and it showed: measured across 240 games, cutting
+ * and transition -- the two most efficient things a real offense does -- came out fifth and sixth
+ * of six, and spot-up came out first. The tactical shot-selection dial sat on top of that ordering,
+ * so Hunt Threes won for every system tested and the dial was a setting rather than a decision.
+ *
+ * The values encode shot location. Cuts and fast breaks finish at the rim and convert far better
+ * than a jumper; post-ups and isolations are the grinding half-court looks a defense is happy to
+ * concede. THREE_POINT_MAKE_PENALTY is still subtracted on top for outside attempts, so spot-up's
+ * number is a two-point-equivalent baseline, not its realized rate (it lands ~37% from deep).
+ *
+ * Tuned as a set, against measured points per play, holding total scoring where scoringCalibration
+ * wants it -- the level is set by the weighted average, the spread by real basketball. Measured over
+ * 240 games at these values, against the same 240 before the change:
+ *
+ *   cutting       1.000 -> 1.181     pick-and-roll  1.062 -> 1.020
+ *   transition    0.917 -> 1.143     post-up        1.036 -> 1.000
+ *   spot-up       1.102 -> 1.068     isolation      1.026 -> 0.978
+ *
+ * at 222.0 combined points against 221.2 -- the ordering inverted, the scoring level untouched.
+ * Realized rim rates land at 65% on cuts and 63% in transition against a real league's ~65% at the
+ * basket, and spot-up at 35% from three against ~36%.
  */
-export const MAKE_PROB_BASE = 0.47
+export const MAKE_PROB_BASE_BY_PLAY_CALL: Record<PlayCallType, number> = {
+  cutting: 0.582,
+  transition: 0.595,
+  'spot-up': 0.437,
+  'pick-and-roll': 0.453,
+  'post-up': 0.449,
+  isolation: 0.441,
+}
 
 /**
  * How much less often a three goes in than a two of the same quality.

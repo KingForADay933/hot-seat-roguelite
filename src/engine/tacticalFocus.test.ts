@@ -81,6 +81,7 @@ function homeShape(game: Game, homeTeamId: string) {
     offensiveRebounds: own.filter((p) => p.offensiveRebound).length,
     threeAttempts: own.filter((p) => p.isThreePointAttempt).length,
     postUps: own.filter((p) => p.playCallUsed === 'post-up').length,
+    cuts: own.filter((p) => p.playCallUsed === 'cutting').length,
     transitions: own.filter((p) => p.playCallUsed === 'transition').length,
   }
 }
@@ -235,10 +236,11 @@ describe('each dial moves its own quantity in a whole game', () => {
           possessions: sum.possessions + shape.possessions,
           offensiveRebounds: sum.offensiveRebounds + shape.offensiveRebounds,
           postUps: sum.postUps + shape.postUps,
+          cuts: sum.cuts + shape.cuts,
           transitions: sum.transitions + shape.transitions,
         }
       },
-      { possessions: 0, offensiveRebounds: 0, postUps: 0, transitions: 0 },
+      { possessions: 0, offensiveRebounds: 0, postUps: 0, cuts: 0, transitions: 0 },
     )
   }
 
@@ -254,8 +256,19 @@ describe('each dial moves its own quantity in a whole game', () => {
     expect(totals(focus({ glass: 'getBack' })).offensiveRebounds).toBeLessThan(balanced.offensiveRebounds)
   })
 
-  it('attacking the rim produces more post-ups', () => {
-    expect(totals(focus({ shotSelection: 'rim' })).postUps).toBeGreaterThan(balanced.postUps)
+  it('attacking the rim shifts the play mix toward the rim', () => {
+    // A share, not a count. The dial scales play-call *weights* (focusedPlaybook), so the mix is the
+    // quantity it controls; the number of plays in a game is set by pace and by how many misses come
+    // back as second chances, neither of which the dial is aiming at. Counting post-ups outright made
+    // this test a proxy for shooting percentage -- once rim attacks started converting like rim
+    // attacks, a rim-leaning team missed less, got fewer second chances, and ran *fewer* total plays,
+    // so 97 post-ups became 95 while the share of its offense going to the post went up.
+    //
+    // Post-up and cutting together, because RIM_LEAN boosts both at 1 -- post-ups alone measure half
+    // of what the dial does.
+    const rimShare = (t: ReturnType<typeof totals>) => (t.postUps + t.cuts) / t.possessions
+    expect(rimShare(totals(focus({ shotSelection: 'rim' })))).toBeGreaterThan(rimShare(balanced))
+    expect(rimShare(totals(focus({ shotSelection: 'threes' })))).toBeLessThan(rimShare(balanced))
   })
 
   it('crashing costs points off live rebounds, which is what pays for the extra boards', () => {

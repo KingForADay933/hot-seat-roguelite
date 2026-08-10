@@ -320,7 +320,10 @@ describe('computeSystemFitBreakdown', () => {
     const postUp = breakdown.find((f) => f.playCall === 'post-up')!
     const cutting = breakdown.find((f) => f.playCall === 'cutting')!
     expect(postUp.rosterQuality).toBe(90)
-    expect(cutting.rosterQuality).toBe(20)
+    // 0.3*20 speed + 0.35*90 finishing + 0.35*20 passing. Was 20, when cutting was speed and passing
+    // and nothing else: a roster of elite finishers with no legs graded as badly at cutting as it
+    // possibly could, despite a cut being a layup. Adding insideShot to the formula is what moved it.
+    expect(cutting.rosterQuality).toBe(45)
   })
 
   it('reports each play call against the roster baseline, which is what actually moves the score', () => {
