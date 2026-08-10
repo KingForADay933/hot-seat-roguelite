@@ -236,6 +236,17 @@ export const ENERGY_DRINK_SPONSORSHIP_BUDGET_BONUS = 150
  *  read or to matter to the sim (a few seconds of "on court" isn't a real substitution decision). */
 export const MIN_ROTATION_SEGMENT_SECONDS = 60
 
+/**
+ * The grid every chart boundary snaps to.
+ *
+ * A free-sliding boundary let a span land on 7:23, which is a precision the GM neither asked for nor
+ * can act on -- substitutions aren't planned to the second, and a chart full of ragged times is
+ * harder to read and compare than one built from half-minutes. Thirty divides PERIOD_SECONDS (720)
+ * exactly 24 ways and divides MIN_ROTATION_SEGMENT_SECONDS exactly twice, so both the period edges
+ * and the minimum span already sit on the grid rather than fighting it.
+ */
+export const ROTATION_SNAP_SECONDS = 30
+
 // --- Run-long Coaching Insights (Tier 8's epilogue) ---
 
 /** Notable insights kept per season for the fired epilogue (run/runInsights.ts). Three is enough to

@@ -2,7 +2,7 @@ import type { PlayerId, Position, RotationPlan, RotationSegment } from '../data/
 import { PERIOD_SECONDS, REGULATION_PERIODS, SECONDS_PER_MINUTE } from '../engine/constants'
 import { clamp } from '../engine/math'
 import { POSITION_ORDER } from '../engine/matchup'
-import { MIN_ROTATION_SEGMENT_SECONDS } from './constants'
+import { MIN_ROTATION_SEGMENT_SECONDS, ROTATION_SNAP_SECONDS } from './constants'
 
 /**
  * Pure mutation helpers behind the rotation chart editor (rotation-charts.md Phase G). Unlike
@@ -17,6 +17,21 @@ import { MIN_ROTATION_SEGMENT_SECONDS } from './constants'
 /** REGULATION_PERIODS worth of chartable periods -- overtime (Decision 5) is a live simcast prompt,
  *  not something authored ahead of time, so the editor only ever shows Q1-Q4. */
 export const CHARTABLE_PERIODS: number[] = Array.from({ length: REGULATION_PERIODS }, (_, i) => i + 1)
+
+/**
+ * Rounds a boundary time onto the ROTATION_SNAP_SECONDS grid.
+ *
+ * Applied in the mutation helpers rather than in the drag handler, so the grid is a property of the
+ * chart rather than of one way of editing it -- splitting a span has to land on it too, and a future
+ * editor (keyboard nudges, a numeric entry) inherits it for free instead of having to remember.
+ *
+ * Note that period edges (0 and PERIOD_SECONDS) and MIN_ROTATION_SEGMENT_SECONDS are all exact
+ * multiples of the grid, which is what lets the clamping below stay on-grid without a second round:
+ * every bound it can clamp to is itself a grid multiple.
+ */
+export function snapToRotationGrid(seconds: number): number {
+  return Math.round(seconds / ROTATION_SNAP_SECONDS) * ROTATION_SNAP_SECONDS
+}
 
 /** A slot/period with nothing charted yet reads as one Auto segment spanning the whole period --
  *  Decision 3's "unfilled time is implicitly Auto" applied to a full period at once. */
@@ -50,15 +65,17 @@ export function setSegmentFill(
   return withSegments(plan, period, slot, segments.map((s, i) => (i === index ? { ...s, fill } : s)))
 }
 
-/** Bisects a segment into two equal halves sharing its current fill -- the starting point for then
- *  dragging the new boundary and reassigning one half. No-ops (returns the plan unchanged) if the
- *  segment is too short to produce two MIN_ROTATION_SEGMENT_SECONDS-or-longer halves. */
+/** Bisects a segment into two halves sharing its current fill, the new boundary snapped to the grid
+ *  like any other -- the starting point for then dragging it and reassigning one half. No-ops
+ *  (returns the plan unchanged) if the segment is too short to produce two
+ *  MIN_ROTATION_SEGMENT_SECONDS-or-longer halves, checked *after* snapping so the answer is about
+ *  the split that would actually be made rather than the ideal midpoint. */
 export function splitSegment(plan: RotationPlan | undefined, period: number, slot: Position, index: number): RotationPlan {
   const segments = getSegments(plan, period, slot)
   const segment = segments[index]
   if (!segment) return plan ?? {}
 
-  const midpoint = Math.round((segment.startSeconds + segment.endSeconds) / 2)
+  const midpoint = snapToRotationGrid((segment.startSeconds + segment.endSeconds) / 2)
   if (midpoint - segment.startSeconds < MIN_ROTATION_SEGMENT_SECONDS || segment.endSeconds - midpoint < MIN_ROTATION_SEGMENT_SECONDS) {
     return plan ?? {}
   }
@@ -102,8 +119,11 @@ export function moveBoundary(
   const right = segments[index + 1]
   if (!left || !right) return plan ?? {}
 
+  // Snapped *before* clamping, not after: clamping second means a drag pushed past either end
+  // settles exactly on the minimum-length bound, where snapping second could shove it back across
+  // that bound and produce a segment shorter than the minimum.
   const clamped = clamp(
-    Math.round(newBoundarySeconds),
+    snapToRotationGrid(newBoundarySeconds),
     left.startSeconds + MIN_ROTATION_SEGMENT_SECONDS,
     right.endSeconds - MIN_ROTATION_SEGMENT_SECONDS,
   )
