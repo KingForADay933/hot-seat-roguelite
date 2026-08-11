@@ -1,28 +1,37 @@
 import { createId } from '../../data/ids'
-import type { Player, PlayerId, Position, Team } from '../../data/types'
-import { DEFAULT_INDIVIDUAL_DEVELOPMENT_SHARE, ROTATION_DEPTH_WEIGHTS, REGULATION_MINUTES, SYNERGY_NEUTRAL } from '../constants'
+import type { Position, Team } from '../../data/types'
+import {
+  DEFAULT_INDIVIDUAL_DEVELOPMENT_SHARE,
+  ROSTER_TALENT_LADDER,
+  SYNERGY_NEUTRAL,
+  TALENT_BASELINE,
+  TALENT_JITTER,
+  TEAM_TALENT_SPREAD,
+} from '../constants'
+import { ALL_POSITIONS, deriveDepthChart } from '../depthChart'
 import type { Rng } from '../rng'
 import { focusForSystem } from '../tacticalFocus'
 import { generatePlayer } from './randomPlayer'
 
 const MAX_ROSTER_SIZE = 12
-/** Two of each position guarantees a fillable starting five with bench depth; 2 extra add variety. */
-const ROSTER_TEMPLATE: Position[] = ['PG', 'PG', 'SG', 'SG', 'SF', 'SF', 'PF', 'PF', 'C', 'C']
-const ALL_POSITIONS: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
+/** One of each position starts; the second of each plus two rolled spares fill the bench. Same
+ *  composition the flat template always produced -- what is new is which *rung* each slot draws. */
+const BENCH_TEMPLATE: Position[] = [...ALL_POSITIONS]
+const ROLLED_BENCH_SLOTS = MAX_ROSTER_SIZE - ALL_POSITIONS.length - BENCH_TEMPLATE.length
 
-/** Target minutes per rostered player, ranked by overallRating within each position group (the
- *  same sanctioned roster-construction use of overallRating as startingFive's own selection). */
-function computeRotationMinutes(players: Player[]): Record<PlayerId, number> {
-  const minutes: Record<PlayerId, number> = {}
-  ALL_POSITIONS.forEach((position) => {
-    const group = players.filter((p) => p.positions[0] === position).sort((a, b) => b.overallRating - a.overallRating)
-    const weights = group.map((_, rank) => ROTATION_DEPTH_WEIGHTS[Math.min(rank, ROTATION_DEPTH_WEIGHTS.length - 1)])
-    const totalWeight = weights.reduce((sum, w) => sum + w, 0)
-    group.forEach((p, i) => {
-      minutes[p.id] = totalWeight > 0 ? (REGULATION_MINUTES * weights[i]) / totalWeight : 0
-    })
-  })
-  return minutes
+function shuffle<T>(items: T[], rng: Rng): T[] {
+  const out = [...items]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
+/** Bell-ish draw across [-spread, +spread], so most teams sit near the league average and the
+ *  extremes are rare -- a uniform draw would make every league a flat spread of quality. */
+function centeredRoll(rng: Rng, spread: number): number {
+  return ((rng() + rng() + rng()) / 3 - 0.5) * 2 * spread
 }
 
 export interface GenerateTeamParams {
@@ -51,19 +60,25 @@ export function generateTeam(params: GenerateTeamParams): GeneratedTeam {
   const { rng, averageOverallShift = 0, takenNames = new Set<string>() } = params
   const teamId = createId('team')
 
-  const extraPositions = Array.from({ length: MAX_ROSTER_SIZE - ROSTER_TEMPLATE.length }, () => {
-    return ALL_POSITIONS[Math.floor(rng() * ALL_POSITIONS.length)]
-  })
+  // How good this team is before any individual is rolled. Drawn once, added to every player.
+  const teamTalent = centeredRoll(rng, TEAM_TALENT_SPREAD)
 
-  const players = [...ROSTER_TEMPLATE, ...extraPositions].map((position) => {
-    const player = generatePlayer(position, rng, averageOverallShift, takenNames)
+  /**
+   * The roster in depth order: five starters, one per position, then the bench.
+   *
+   * Shuffled so the franchise player is not always a point guard, and so which position carries the
+   * better backup varies from team to team. Because slot order *is* talent order, the existing
+   * best-overall-at-each-position starter selection in depthChart.ts picks exactly these five --
+   * which is the whole depth-chart fix, with no change to that selection.
+   */
+  const rolledBench = Array.from({ length: ROLLED_BENCH_SLOTS }, () => ALL_POSITIONS[Math.floor(rng() * ALL_POSITIONS.length)])
+  const slots: Position[] = [...shuffle(ALL_POSITIONS, rng), ...shuffle([...BENCH_TEMPLATE, ...rolledBench], rng)]
+
+  const players = slots.map((position, rung) => {
+    const talent = TALENT_BASELINE + teamTalent + ROSTER_TALENT_LADDER[rung] + centeredRoll(rng, TALENT_JITTER)
+    const player = generatePlayer(position, rng, talent + averageOverallShift, takenNames)
     player.teamId = teamId
     return player
-  })
-
-  const startingFive = ALL_POSITIONS.map((position) => {
-    const atPosition = players.filter((p) => p.positions.includes(position))
-    return atPosition.reduce((best, p) => (p.overallRating > best.overallRating ? p : best))
   })
 
   const team: Team = {
@@ -75,8 +90,7 @@ export function generateTeam(params: GenerateTeamParams): GeneratedTeam {
     secondaryColor: params.secondaryColor,
     rosterPlayerIds: players.map((p) => p.id),
     maxRosterSize: MAX_ROSTER_SIZE,
-    startingFive: startingFive.map((p) => p.id),
-    rotationMinutes: computeRotationMinutes(players),
+    ...deriveDepthChart(players),
     offensiveStrategyId: params.offensiveStrategyId,
     // Derived from the system rather than rolled, so no rng draw moves and a scouted opponent's
     // dials agree with its identity. See engine/tacticalFocus.ts's focusForSystem. Undefined for

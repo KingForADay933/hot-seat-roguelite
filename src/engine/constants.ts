@@ -13,6 +13,48 @@ export const ATTRIBUTE_STANDOUT_CHANCE = 0.05
 export const ATTRIBUTE_STANDOUT_MIN = 90
 export const ATTRIBUTE_STANDOUT_SPAN = 9
 
+/**
+ * Talent, which the generator did not previously have in any form.
+ *
+ * Every attribute used to be rolled independently, so `overallRating` -- the mean of ten of them --
+ * had its spread crushed by the central limit theorem to a standard deviation of **3.53** on a
+ * 0-100 scale. Measured over 400 leagues, that produced a league averaging 71.5 in which only 0.30%
+ * of players reached 82 and *nobody ever reached 90*. Since run/assignWorstTeam.ts hands the GM the
+ * league's worst roster on purpose, the roster actually played had 77.3% of its starters under 75
+ * and no 82+ player 99.2% of the time -- a lost cause by the 2K standard this was retuned against.
+ *
+ * The same gap explained the depth chart. With no talent structure, which player was best at a
+ * position was pure noise, so a doubled-up position benched its second-best above some other
+ * position's starter on **86.8%** of teams.
+ *
+ * Both are fixed by one thing: a per-player offset applied to all ten attributes at once, so overall
+ * is mostly *talent* with noise around it rather than noise alone. It is composed into the `shift`
+ * argument generatePlayer already accepts for the league-wide "Average Overall" slider.
+ */
+
+/**
+ * Additive talent by depth-chart rung, best to worst across a 12-man roster.
+ *
+ * A ladder rather than a symmetric draw because a normal distribution has no star tail -- the top
+ * rung is what puts a franchise player on most rosters. randomTeam.ts assigns rungs 0-4 to five
+ * *distinct* positions, which is what makes the existing "best overall at each position" starter
+ * selection pick the five best players without that logic changing at all.
+ */
+export const ROSTER_TALENT_LADDER = [8, 4, 2, 1, 1, -9, -9, -10, -10, -11, -11, -12] as const
+
+/** Random wobble around a player's rung. Keeps the ladder from reading as visible tiers, and is what
+ *  leaves a sixth man occasionally a point or two above the weakest starter -- real rosters have good
+ *  bench players, and a perfectly ordered depth chart reads artificial. */
+export const TALENT_JITTER = 1.5
+
+/** Half-width of the per-team talent draw, so the league has contenders and cellar-dwellers rather
+ *  than eight interchangeable rosters. pickWorstTeamId needs this to mean anything. */
+export const TEAM_TALENT_SPREAD = 6
+
+/** Flat lift on every generated player, which is what raises the league off its old 71.5 mean. Tuned
+ *  against the ladder's own average so the two together land the league where it should sit. */
+export const TALENT_BASELINE = 7.5
+
 /** Height band generation rolls within, per position -- also the fit reference for positionFit.ts's
  *  out-of-position height penalty (a player slotted outside their own band's range). */
 export const POSITION_HEIGHT_RANGE_INCHES: Record<Position, [number, number]> = {
@@ -676,11 +718,21 @@ export const POSITIONLESS_MIN_HEIGHT_BANDS = 2
  *  raw max-minus-min: POSITION_BIAS above builds 30 points of raw spread into a point guard before
  *  a die is thrown, so a raw test mostly asks "is this PG shaped like a PG".
  *
- *  Derived from the residual distribution across 30 generated leagues (~2,880 players), where the
- *  median sits at 32-34 at every position and p90 at 44-52. 26 and 42 put roughly the flattest fifth
- *  and the spikiest fifth on either side, leaving neutral the clear plurality everywhere -- see
- *  positionFit.test.ts's distribution test, which is the real specification. */
-export const POSITIONLESS_ATTRIBUTE_SPREAD_MAX = 26
+ *  Derived from the residual distribution across generated leagues, sized to put roughly the flattest
+ *  fifth and the spikiest fifth on either side and leave neutral the clear plurality everywhere --
+ *  see positionFit.test.ts's distribution test, which is the real specification.
+ *
+ *  Positionless dropped 26 -> 24 when ROSTER_TALENT_LADDER landed. Raising the league's ratings
+ *  compresses residual spread from the top: a star whose best attributes clamp against
+ *  ATTRIBUTE_CEILING has a flatter *measured* profile than the same player twenty points lower, and
+ *  at 26 that pushed Positionless to 31% at some positions -- past the point where the neutral case
+ *  the out-of-position penalty was reasoned around is still the common one. Measured across 40
+ *  leagues (3,840 players) the population median moved 32-34 -> 31, and the top decile sits at 28.
+ *
+ *  Some correlation between quality and Positionless survives at 24 and is left alone deliberately:
+ *  a genuinely excellent player being able to line up anywhere is a fair reading, unlike the original
+ *  bug this pair was retuned for, where the label was really just re-reading POSITION_BIAS. */
+export const POSITIONLESS_ATTRIBUTE_SPREAD_MAX = 24
 export const SPECIALIST_ATTRIBUTE_SPREAD_MIN = 42
 
 /** Multiplies the slide/height severity before it's applied: a Positionless player's height and

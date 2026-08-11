@@ -28,6 +28,8 @@ import { consumableActivationBlockedReason, pickConsumableOffers, type Consumabl
 import { pickRandomMarketSize } from '../../run/marketSize'
 import { clampToPositionBudget } from '../../run/minutesBudget'
 import { recordChunkInsights } from '../../run/runInsights'
+import { deriveDepthChart } from '../../engine/depthChart'
+import { ensureFranchisePlayer } from '../../run/franchisePlayer'
 import { createRun } from '../../run/runState'
 import { applyPlayerCamp, applyTeamCamp, openShopVisit, type ShopTier } from '../../run/shop'
 import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
@@ -101,6 +103,13 @@ export function RunProvider({ children }: { children: ReactNode }) {
    * applied in that order and the result becomes the roster the reveal screen shows. No run is
    * created yet: without a system there's no synergy score to write, and the whole point of the
    * split is that the system is chosen against this roster rather than ahead of it.
+   *
+   * The depth chart is re-derived between the quirk and the house rule so the lineup is owned by the
+   * roster it describes rather than by whatever generation happened to decide -- the quirk path
+   * returned only players and left `startingFive` behind. It rarely changes the five in practice (a
+   * position tilt preserves ordering within each position; see engine/depthChart.ts for the measured
+   * rates), but it is what makes the franchise guarantee below correct: that runs against the
+   * *post-quirk* five, so a tilt cannot knock the guaranteed star back under the threshold.
    */
   const confirmDraft = useCallback(
     async (rosterQuirk: RosterQuirkId, houseRule: HouseRuleId) => {
@@ -112,10 +121,11 @@ export function RunProvider({ children }: { children: ReactNode }) {
         players.filter((p) => p.teamId === teamId),
         defaultRng,
       )
-      const rosterAfterQuirkById = new Map(rosterAfterQuirk.map((p) => [p.id, p]))
+      const rosterWithStar = ensureFranchisePlayer(rosterAfterQuirk, deriveDepthChart(rosterAfterQuirk).startingFive)
+      const rosterAfterQuirkById = new Map(rosterWithStar.map((p) => [p.id, p]))
       const playersAfterQuirk = players.map((p) => rosterAfterQuirkById.get(p.id) ?? p)
 
-      const userTeam = teams.find((t) => t.id === teamId)!
+      const userTeam = { ...teams.find((t) => t.id === teamId)!, ...deriveDepthChart(rosterWithStar) }
       const { team: teamAfterHouseRule, players: playersAfterHouseRule } = applyHouseRule(houseRule, userTeam, playersAfterQuirk)
       const teamsAfterHouseRule = teams.map((t) => (t.id === teamId ? teamAfterHouseRule : t))
 

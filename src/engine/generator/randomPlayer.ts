@@ -93,7 +93,11 @@ function rollAttribute(rng: Rng, bias: number): number {
   const bell = (rng() + rng() + rng()) / 3
   let value = ATTRIBUTE_FLOOR + bell * ATTRIBUTE_BASELINE_SPAN + bias
   if (rng() < ATTRIBUTE_STANDOUT_CHANCE) {
-    value = ATTRIBUTE_STANDOUT_MIN + rng() * ATTRIBUTE_STANDOUT_SPAN
+    // Taken as a floor, not a replacement. The standout branch ignores bias and shift on purpose --
+    // a talent ceiling shouldn't move because the league average did -- but once ROSTER_TALENT_LADDER
+    // started handing stars a large positive shift, replacing outright meant a signature skill could
+    // land *below* the attribute it overwrote, docking the best players for rolling well.
+    value = Math.max(value, ATTRIBUTE_STANDOUT_MIN + rng() * ATTRIBUTE_STANDOUT_SPAN)
   }
   return clamp(Math.round(value), ATTRIBUTE_FLOOR, ATTRIBUTE_CEILING)
 }
