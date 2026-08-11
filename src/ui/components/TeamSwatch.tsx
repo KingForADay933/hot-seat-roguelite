@@ -1,22 +1,13 @@
 import type { Team } from '../../data/types'
+import { teamColorStyle } from '../teamColors'
 
-/** Small color chip using the team's generated colors -- gives every team a visual identity
- *  instead of just a name in a table. */
+/**
+ * A team's colour bar, beside its name wherever one appears.
+ *
+ * A bar rather than the dot this used to be: at 10px round, two colours read as one muddy speck, and
+ * a standings table full of them said nothing. Upright and squared off, the primary and secondary
+ * are both legible and the table starts to look like a league of distinct teams.
+ */
 export function TeamSwatch({ team }: { team: Team }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        display: 'inline-block',
-        width: 10,
-        height: 10,
-        borderRadius: '50%',
-        backgroundColor: team.primaryColor,
-        border: `2px solid ${team.secondaryColor}`,
-        marginRight: 6,
-        verticalAlign: 'middle',
-        flexShrink: 0,
-      }}
-    />
-  )
+  return <span className="team-swatch" aria-hidden="true" style={teamColorStyle(team)} />
 }

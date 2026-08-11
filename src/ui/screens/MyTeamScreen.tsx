@@ -11,6 +11,7 @@ import { MARKET_SIZES } from '../../run/marketSize'
 import { HOUSE_RULES } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS } from '../../run/variation/rosterQuirks'
 import { RosterDetailPanel } from '../components/RosterDetailPanel'
+import { Section } from '../components/Section'
 import { RotationChartEditor } from '../components/RotationChartEditor'
 import { ScoutingPanel } from '../components/ScoutingPanel'
 import { TeamSummary } from '../components/TeamSummary'
@@ -60,92 +61,119 @@ export function MyTeamScreen({
   const offense = OFFENSIVE_PLAYBOOKS[team.offensiveStrategyId]
   const defense = DEFENSIVE_SCHEMES[team.defensiveStrategyId]
 
+  const heldConsumables = countById(run.consumableInventory)
+    .map(({ id, count }) => (count > 1 ? `${CONSUMABLES[id].label} x${count}` : CONSUMABLES[id].label))
+    .join(', ')
+  const activeConsumables = countById(run.activeConsumablesThisSeason)
+    .map(({ id, count }) => (count > 1 ? `${CONSUMABLES[id].label} x${count}` : CONSUMABLES[id].label))
+    .join(', ')
+  const averageOverall = Math.round(roster.reduce((sum, p) => sum + p.overallRating, 0) / Math.max(roster.length, 1))
+
+  /**
+   * Two columns and a lot of folding, because this screen ran 3.9 screens tall and the things you
+   * come here to *change* -- minutes, training focus, the rotation chart, the dials -- were the ones
+   * you had to scroll past a season summary and a scouting table to reach. The rule throughout is
+   * that what you act on is open on the left and what you consult is folded on the right.
+   */
   return (
     <main>
       <h1>
         {team.city} {team.name}
       </h1>
-      <p>
-        Stretch {run.stretchNumber}, Season {run.seasonInStretch} of {run.seasonsPerStretch}. Finish top {targetPct}% of
-        standings or it&apos;s over. {run.seasonsPlayed} season{run.seasonsPlayed === 1 ? '' : 's'} survived so far.
-      </p>
-      <p>
-        {market.label} -- {market.description} Budget: ${run.budget}
+      <p className="screen-lede">
+        Stretch {run.stretchNumber}, Season {run.seasonInStretch} of {run.seasonsPerStretch} · finish top {targetPct}% or
+        it&apos;s over · {run.seasonsPlayed} survived · {market.label}, budget ${run.budget}
       </p>
 
-      <div className="team-summary">
-        <p>
-          <strong>{quirk.label}</strong> -- {quirk.description}
-        </p>
-        <p>
-          <strong>House Rule: {houseRule.label}</strong> -- {houseRule.description}
-        </p>
-        <p>
-          <strong>Offense: {offense.name}</strong> -- {offense.description} (Synergy: {team.synergyScore})
-        </p>
-        {/* Grouped under the system rather than in a block of their own: the system is who the team
-            is and these are how it plays, and reading them apart invites the question of whether
-            changing a dial changed the offense. It doesn't -- the system is drafted once. */}
-        <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="offense" />
-        <p>
-          <strong>Defense:</strong> <DefensiveSchemeSelect value={team.defensiveStrategyId} onChange={onSetDefensiveScheme} /> --{' '}
-          {defense.description}
-        </p>
-        <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="defense" />
-        <p>
-          <strong>Head Coach: {team.coaching.headCoachRating}</strong> -- {team.practiceSettings.individualDevelopmentShare}% of
-          practice goes to individual development.
-        </p>
+      <div className="screen-columns">
+        <div>
+          <Section
+            title="Roster"
+            summary={`${roster.length} players · avg ${averageOverall} OVR`}
+            defaultOpen
+          >
+            <p className="section-note">
+              Each attribute shows its current rating; a green <span className="headroom">+N</span> is how much growth is
+              left before that player&apos;s fixed potential. Minutes and training focus can be changed here at any time --
+              they take effect from the next stretch of games.
+            </p>
+            <RosterDetailPanel team={team} roster={roster} houseRule={run.houseRule} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+          </Section>
+
+          <Section title="Rotation Chart" summary="who is on the floor, period by period">
+            <RotationChartEditor team={team} roster={roster} playersById={playersById} onSetRotationPlan={onSetRotationPlan} />
+          </Section>
+        </div>
+
+        <div>
+          {/* Open, because these are decisions and they are the cheapest ones on the screen to
+              change. The descriptions that used to sit between them moved into Team Profile below --
+              reading them is a once-a-run thing, changing a dial is not. */}
+          <Section title="Game Plan" summary={`${offense.name} · ${defense.name}`} defaultOpen>
+            <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="offense" />
+            <p className="section-note">
+              <strong>Defense:</strong> <DefensiveSchemeSelect value={team.defensiveStrategyId} onChange={onSetDefensiveScheme} /> --{' '}
+              {defense.description}
+            </p>
+            <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="defense" />
+          </Section>
+
+          <Section title="Team Profile" summary={`${quirk.label} · ${houseRule.label}`}>
+            <div className="team-summary">
+              <p>
+                <strong>{quirk.label}</strong> -- {quirk.description}
+              </p>
+              <p>
+                <strong>House Rule: {houseRule.label}</strong> -- {houseRule.description}
+              </p>
+              <p>
+                <strong>Offense: {offense.name}</strong> -- {offense.description} (Synergy: {team.synergyScore})
+              </p>
+              <p>
+                <strong>{market.label}</strong> -- {market.description}
+              </p>
+              <p>
+                <strong>Head Coach: {team.coaching.headCoachRating}</strong> --{' '}
+                {team.practiceSettings.individualDevelopmentShare}% of practice goes to individual development.
+              </p>
+            </div>
+          </Section>
+
+          <Section title="Season Averages" summary={record ? `${record.wins}-${record.losses}` : 'no games yet'}>
+            <TeamSummary team={team} roster={roster} record={record} />
+          </Section>
+
+          <Section
+            title="Coaching Staff"
+            summary={run.coachingUpgrades.length > 0 ? `${run.coachingUpgrades.length} bought` : 'none bought'}
+          >
+            {run.coachingUpgrades.length > 0 ? (
+              <ul>
+                {run.coachingUpgrades.map((id) => (
+                  <li key={id}>
+                    <strong>{COACHING_UPGRADES[id].label}</strong> -- {COACHING_UPGRADES[id].description}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No coaching upgrades bought yet.</p>
+            )}
+          </Section>
+
+          <Section
+            title="Consumables"
+            summary={`${run.consumableInventory.length}/${CONSUMABLE_INVENTORY_CAPACITY} held`}
+          >
+            <p>Held: {heldConsumables || 'none'}</p>
+            <p>Active this season: {activeConsumables || 'none'}</p>
+          </Section>
+
+          <Section title="Scouting" summary="consistency, clutch, durability">
+            <p className="section-note">Ratings the simulation reads that don&apos;t show up in the attribute sheet.</p>
+            <ScoutingPanel team={team} roster={roster} />
+          </Section>
+        </div>
       </div>
-
-      <h2>Season Averages</h2>
-      <TeamSummary team={team} roster={roster} record={record} />
-
-      <h2>Coaching Staff</h2>
-      {run.coachingUpgrades.length > 0 ? (
-        <ul>
-          {run.coachingUpgrades.map((id) => (
-            <li key={id}>
-              <strong>{COACHING_UPGRADES[id].label}</strong> -- {COACHING_UPGRADES[id].description}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>No coaching upgrades bought yet.</p>
-      )}
-
-      <h2>Consumables</h2>
-      <p>
-        Held ({run.consumableInventory.length}/{CONSUMABLE_INVENTORY_CAPACITY}):{' '}
-        {run.consumableInventory.length > 0
-          ? countById(run.consumableInventory)
-              .map(({ id, count }) => (count > 1 ? `${CONSUMABLES[id].label} x${count}` : CONSUMABLES[id].label))
-              .join(', ')
-          : 'none'}
-      </p>
-      <p>
-        Active this season:{' '}
-        {run.activeConsumablesThisSeason.length > 0
-          ? countById(run.activeConsumablesThisSeason)
-              .map(({ id, count }) => (count > 1 ? `${CONSUMABLES[id].label} x${count}` : CONSUMABLES[id].label))
-              .join(', ')
-          : 'none'}
-      </p>
-
-      <h2>Roster</h2>
-      <p>
-        Each attribute shows its current rating; a green <span className="headroom">+N</span> is how much growth is left
-        before that player&apos;s fixed potential. Minutes and training focus can be changed here at any time -- they
-        take effect from the next stretch of games.
-      </p>
-      <RosterDetailPanel team={team} roster={roster} houseRule={run.houseRule} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
-
-      <h2>Rotation Chart</h2>
-      <RotationChartEditor team={team} roster={roster} playersById={playersById} onSetRotationPlan={onSetRotationPlan} />
-
-      <h2>Scouting</h2>
-      <p>Ratings the simulation reads that don&apos;t show up in the attribute sheet.</p>
-      <ScoutingPanel team={team} roster={roster} />
 
       <button className="primary" onClick={onBack}>
         Back
