@@ -72,7 +72,7 @@ tied to a roster problem M5 could ship without, and focus points are the one tha
 | **M4 — Season arc** | League structure & conferences · playoffs bracket · graduated expectations · **owner archetypes** · **nemesis teams** · richer Coaching Insights | 12, 16, **18**, **22** | 19–28 |
 | **M5 — Roster turnover** | Injuries · foul trouble · retirement, backfill & poaching · shop-based signings · **veteran mentorship** · run-configuration toggles | 14, 15, 12, **20** | 24–36 |
 | **M6 — Live coaching** | In-game decisions tiers 3–4 (substitutions, matchups, timeouts) | 13 | 15–20 |
-| **M7 — Launch prep** | Paint mode · **analytics suite** · more descriptive cards & compact screens (from M2 notes) · polish · page finalization and publish | 7.6, **21**, 16, 10 | 10–15 |
+| **M7 — Launch prep** | Paint mode · **analytics suite** · more descriptive cards (from M2 notes; compact screens + first broadcast pass shipped early) · polish · page finalization and publish | 7.6, **21**, 16, 10 | 10–15 |
 
 ### Why this shape
 
@@ -148,6 +148,7 @@ Everything Hoop Sim already had, carried over into the roguelite repo unmodified
 - Player development (season-end growth/decay toward potential, aging)
 - Schedule generation + standings
 - IndexedDB persistence via a swappable storage-adapter pattern -- swapped in from an initial localStorage implementation once a season's saved payload started exceeding localStorage's ~5MB per-origin quota (a hard Chromium/Blink limit that wrapping the app in Electron doesn't change, since Electron embeds the same storage engine)
+- **Shipped -- roster talent structure**: every attribute used to roll independently, so `overallRating` (the mean of ten of them) had its spread crushed by the central limit theorem to a standard deviation of **3.53** on a 0-100 scale. Measured over 400 leagues: mean 71.5, only 0.30% of players at 82+, nobody ever reaching 90. Since Tier 2 hands the GM the league's worst roster on purpose, the roster actually played had 77.3% of its starters under 75 -- a lost cause by the 2K standard this was retuned against, and "worst team" barely meant anything when the whole league sat within a few points of average. The same absence of any per-player quality signal made the depth chart pure noise: a doubled-up position benched its second-best above some other position's starter on **86.8%** of teams. `ROSTER_TALENT_LADDER` (`engine/constants.ts`) fixes both with one mechanism: an additive per-depth-rung offset applied to all ten attributes at once (rungs 0-4 land on five distinct positions, so the existing best-overall-at-each-position starter selection just picks the five best players with no logic change), plus a per-team `TEAM_TALENT_SPREAD` draw so the league has real contenders and cellar-dwellers rather than eight interchangeable rosters. Measured before -> after: bench-outranks-a-starter 86.8% -> 14.6% of teams (by 3+: 58.3% -> 5.1%), league mean/sd 71.5/3.53 -> 74.0/7.39, teams with an 82+ 3.7% -> 95.4%, teams with a 90+ 0.0% -> 11.1%, your own roster's starters under 75 dropped 77.3% -> 16.6%. Calibration held: scoring 111.0 -> 114.0 a team, 2PT% 55.8 -> 56.7, 3PT% 34.6 -> 34.7, free throws 74.5% -> 78.6% (the one term that doesn't cancel under a uniform lift, and the value that moved toward the real league's ~78%). `engine/depthChart.ts` extracts the starting-five/rotation-minutes derivation so generation and the post-quirk path (which previously had no owner at all -- `applyRosterQuirk` returned reshaped players while `startingFive` stayed whatever generation had picked) share one implementation. `run/franchisePlayer.ts` guarantees the GM's own roster one player at 82 -- a floor, not a set, lifting a starter rather than the roster best so it can't reintroduce the depth-chart problem, applied after the quirk so a tilt can't knock the guaranteed star back under. **Knock-on retune:** `POSITIONLESS_ATTRIBUTE_SPREAD_MAX` (Tier 7.6) dropped 26 -> 24, since raising the league's ratings compresses measured attribute spread from the top and had pushed Positionless to 31% at some positions.
 
 ---
 
@@ -297,6 +298,7 @@ Not part of the original phase plan. Watching a game happen, rather than only re
 - **Overtime prompt** -- playback pauses at the start of each overtime period with score and clock frozen at the buzzer, so the GM gets a beat to notice it happened. Acknowledge to resume. The Q4 closing five carries over by default, which needed no engine change (rotation state already persisted across periods).
 - **Shipped -- slower default pacing** (M1): `BASE_POSSESSION_MS` is now 1500, up from the 450 the clock rewrite (Tier 7.6) had halved it to. Took two passes: restoring the original 900 fixed the arithmetic (the comment above it had claimed "about three minutes" while describing the pre-halving value) but still played faster than anyone actually reads. 1500 was set by feel rather than derived. At a measured ~219 possessions a game, 1x runs about 5m30s.
 - **Shipped -- slower speed options**: `PLAYBACK_SPEEDS` is now `[0.5, 0.75, 1, 2, 4, 16]`, ascending so the control row reads slowest-to-fastest. The slow end is deliberately generous -- 1x is meant to be reading speed, and that turned out slower than this screen originally shipped with, so the ladder extends past the default rather than bottoming out at it. Spans ~20 seconds (16x) to ~11 minutes (0.5x) a game. Verified by sampling the live feed in-browser at each step; measured ticks land within 1-2ms of intended.
+- **Shipped -- read a player without leaving the broadcast**: watching a game used to be the one place in a run where a player's name wasn't a way to find out about him -- `PlayerName` controls silently degraded to plain text, because the simcast holds its game generator, queued directive and period cursor in refs owned by the screen, and routing to the run's player page would unmount it and destroy the game in progress. The simcast now runs its own `InspectorContext` whose `openPlayer` opens a card *over* the broadcast instead, leaving the screen beneath mounted. Every on-court row and every box-score row is clickable, live and at final; opening pauses the game and closing resumes it only if it was playing when opened (Escape also closes). The card shows tonight's line and current fatigue -- both things the run's `PlayerScreen` structurally can't, since its season totals come from committed games (this one isn't committed until the buzzer) and fatigue exists only in playback state. Each on-court row also gained a one-glance ratings line under the name, so the common question doesn't need a click at all. Visibility follows Tier 17's own-roster-vs-opponent split throughout: your own five quote overall and their best attribute's rating, the opposing five get the attribute named with no number and no overall, trading the attribute sheet for a sentence. `Inspector.openTeam` is now nullable and `TeamName` degrades to plain text on null, since there's no team page reachable from inside a broadcast.
 - **Idea, unscoped** -- live lineup editing during the overtime pause. Deliberately not built: injecting a GM's mid-game edit means threading a live mutable channel into what is otherwise a pure, seed-deterministic simulation -- the same `simulateGameSteps` that also runs every AI-vs-AI game with no UI attached. Folded into Tier 13, which has to solve that problem anyway.
 - **Deepens into Tier 7.7** -- the labeled-court-view simcast (`detailed-simcast.md`) renders the same possession log this tier already produces; it's an alternate presentation, not a replacement.
 
@@ -325,6 +327,7 @@ Not part of the original phase plan. A 2K-style rotation chart, and the engine r
 - **Minutes are a per-position budget.** Each position group shares exactly 48 minutes, 240 team-wide, so raising one player means lowering a teammate at his position. This enforces an invariant the generator already had; a readout above the roster shows each position's allocation.
 - **The chart feeds synergy and projected usage** (see Tier 6). Charted spans count exactly; `rotationMinutes` governs Auto time, prorated by how much of that slot's budget the chart hasn't spent. Reduces identically to the old behavior when no chart exists.
 - **Shipped -- the position-fit quirk thresholds are retuned** (M3 item 1; full before/after in `m3-tactical-axis.md`). The suspected Positionless/Specialist skew was measured across 30 generated leagues (~2,900 players) and was worse than "almost any pure PG": **76.0% of point guards and 58.2% of centers read as Specialist**, and neutral was the *least* common outcome at every position but center. A label meant to mark a player built for exactly one slot applied to most of the league, so it carried no information -- and since Specialist multiplies the penalty by 1.5, the harsh case was the common case. Two arithmetic causes, both now fixed. The attribute test ran on a raw max-minus-min, but `POSITION_BIAS` builds 30 points of spread into a point guard by construction, so it largely asked "is this PG shaped like a PG" -- `positionRelativeSpread` subtracts the position's own bias first, which collapses the median spread to 32-34 at *every* position (raw ran 34 to 48.5). And the height arm of `isSpecialist` was **removed rather than retuned**: `effectivePlayer` already charges an extreme height per inch through `heightMisfitInches`, so flagging it again double-counted -- and multiplied the unrelated slide-distance term by 1.5 as well, via a one-inch cliff that a quarter of every position fell over regardless of the constant's value. Result: neutral is now the plurality everywhere at 60-67%, with both labels at 9-25% (PG 18.7/64.4/16.9, SG 20.1/59.9/20.0, SF 14.6/67.3/18.1, PF 21.9/60.5/17.5, C 9.4/66.0/24.6). C's low Positionless share is structural and correct -- a center's height lands in a second band only 37.6% of the time. The distribution is asserted in `positionFit.test.ts` rather than eyeballed once.
+- **Retuned again when Tier 0's talent ladder landed.** Raising the league's ratings compresses measured attribute spread from the top -- a star whose best attributes clamp against `ATTRIBUTE_CEILING` reads flatter than the same player twenty points lower -- which had pushed Positionless to 31% at some positions. `POSITIONLESS_ATTRIBUTE_SPREAD_MAX` moved 26 -> 24; measured across 40 leagues (3,840 players) the population median moved 32-34 -> 31 and the top decile sits at 28. Some correlation between quality and Positionless survives at 24 deliberately -- a genuinely excellent player being able to line up anywhere is a fair reading, unlike the original bug this pair was retuned for.
 - **Planned -- tune the penalty magnitudes themselves** (M2 playtest question): `POSITION_FIT_SLIDE_PENALTY_PER_SLOT` and `POSITION_FIT_HEIGHT_PENALTY_PER_INCH` are still first-pass estimates written before any chart existed to exercise them, and they were deliberately left alone during the threshold retune -- changing labels and magnitudes together means being unable to attribute either effect. Slide cost after the retune: **4.43** points of raw overall at one slot, **11.52** at two, **18.78** at three, **24.33** at four (down 10-15%, purely from removing 1.5x surcharges that should never have applied). Whether those are the right size is a question for play, not measurement.
 - **Planned -- paint mode** (M7): pick a player, then click-drag across the grid to lay them straight into the time you drag over, instead of splitting and assigning as separate steps. The underlying plan mutations already exist, so this is a new *input* over the same operations -- mostly pointer handling. Decide whether painting respects the minimum-segment floor (probably yes), and make sure a stroke persists once on release, the way the boundary drag already batches to avoid a write per pixel.
 - **Explicitly out of scope here:** foul trouble and injuries as chart deviation rules. Neither system existed to build a rule on top of -- both are now Tier 14, which inherits this as part of its own work.
@@ -588,9 +591,36 @@ expand away. Deciding that up front is what stops the two items undoing each oth
   consumables is applying a solved idea, not inventing one. **After M2, not before**: the specific
   wording should come from what playtesters actually asked about, and the Parked onboarding note
   already commits to taking those notes during M2.
-- **Compact, single-screen sections** (M7) -- **Planned**: My Team in particular has grown to a long
-  scroll of independently-designed panels. Pairs with the item above under the progressive-disclosure
-  decision; same milestone for the same reason.
+- **Shipped -- compact, single-screen sections, and a first broadcast/visual-identity pass** (pulled
+  forward from M7): measured at 1280x800 in screens-worth of scrolling, Team Reveal ran 4.65, My Team
+  3.90, Checkpoint 2.42 -- and the shape of the problem was consistent across all three, the thing you
+  act on buried under the thing you consult (Team Reveal's two decisions totalled 1064px, sitting below
+  1623px of scouting cards). Two causes, and only one was about volume: `#root` was capped at 900px, so
+  a 1280px window left ~380px unused before anything got hidden -- layout was spent before content was.
+  `ui/components/Section.tsx` (native `details`/`summary` rather than a `useState` toggle -- keyboard-
+  operable and screen-reader-announced for free, default state as an attribute) now folds what you
+  consult and leaves open what you act on, per call site, with a `summary` prop so a folded section
+  still says whether it's worth opening. A `.screen-columns` grid splits above 1100px and stacks below
+  unchanged. On the Checkpoint the scheme and tactical dials moved under Coaching Insights, closing a
+  gap between a complaint and its fix that had drifted a full screen apart. Result: Team Reveal 4.65 ->
+  1.93, My Team 3.90 -> 1.58, Checkpoint 2.42 -> 1.41. **Two miss the 1.5 target on purpose, not by
+  oversight**: My Team is a twelve-row roster editor and that table is most of the column, and Team
+  Reveal's constraint is the left column -- comparing four systems and five defences is the screen's
+  whole job, and reaching 1.5 there means folding away a decision, which isn't worth a better number.
+  `BoxScoreTable` and `StandingsTable` were the only wide tables with no `.table-scroll` wrapper, so
+  they widened the *page* instead of scrolling inside themselves -- fixing that took the layout
+  viewport at 375px from 602px down to the actual 375px, which is what had been stopping the simcast
+  player card (above) from sizing itself correctly on a narrow screen. **The broadcast pass starts
+  here**: team colour is now published as CSS custom properties (`ui/teamColors.ts`) -- every team has
+  carried a primary/secondary pair since generation, and the only thing reading it before was a 10px
+  dot. The scoreboard becomes a scorebug (two team-coloured blocks with the clock between them and the
+  scores flanking it, so the margin reads at a glance), the team swatch becomes an upright bar where
+  both halves of the palette are legible, and tabular numerals now apply to every numeric cell rather
+  than the few that asked. **Deliberately not here**: a condensed display face, since there's no
+  webfont in the project and itch builds are self-contained -- committing one means a self-hosted woff2
+  and its licence, a decision left open rather than made by default. UI only; no engine, `run/`, or
+  save-shape change. Pairs with the item above under the same progressive-disclosure decision -- that
+  item (wording on the cards themselves) is still open and still waiting on M2 notes.
 - **Shipped -- performance trends and a dedicated Insights screen** (pulled forward from M4): fixing
   the auto rotation removed the only insight kind that fired for a typical run, leaving every
   checkpoint reading "Nothing notable this stretch". The gap was the insight *catalogue*, not the
@@ -901,7 +931,7 @@ Recorded so they stay decided rather than getting relitigated:
 
 | Tier | What | Status | Milestone |
 |---|---|---|---|
-| 0 | Core simulation | Shipped | — |
+| 0 | Core simulation (incl. roster talent ladder) | Shipped | — |
 | 1 | Run structure (target/fired/escalate) | Shipped / difficulty pass planned | M2 |
 | 1.5 | Season chunking (checkpoints + mid-season rotation/focus decisions) | Shipped | — |
 | 2 | Playable UI loop | Shipped | — |
@@ -911,7 +941,7 @@ Recorded so they stay decided rather than getting relitigated:
 | 6 | Systems & synergy | Shipped | — |
 | 6.5 | Player roles & team specializations | Idea, unscoped | — |
 | 7 | Shop, camps, upgrades, consumables | Shipped | — |
-| 7.5 | Live playback (simcast) | Shipped (incl. M1 pacing + 0.75x) | — |
+| 7.5 | Live playback (simcast) | Shipped (incl. M1 pacing + 0.75x, mid-broadcast player card) | — |
 | 7.6 | Rotation charts & lineup control | Shipped / tuning + paint mode planned | M3, M7 |
 | 7.7 | Detailed simcast (labeled court view, player/ball movement) | Planned, unscheduled | after Tier 13 |
 | 8 | Run-end summary | Shipped | — |
@@ -922,7 +952,7 @@ Recorded so they stay decided rather than getting relitigated:
 | 13 | In-game decisions (timeouts, subs, schemes, matchups) | Planned | M3, M6 |
 | 14 | Risk & attrition (injuries, foul trouble) | Planned, needs design | M5 |
 | 15 | Roster turnover (retirement, poaching, shop signings) | Planned / trades post-launch | M5 |
-| 16 | Legibility & comprehension (per-game insights, schedule records, performance trends, Insights screen) | Shipped / descriptive cards + compact views planned | M4, M7 |
+| 16 | Legibility & comprehension (per-game insights, schedule records, performance trends, Insights screen, compact screens + broadcast pass) | Shipped / descriptive cards planned | M4, M7 |
 | 17 | Opponent scouting (lineups, systems, schemes) | Shipped | M3 |
 | 18 | Owner archetypes & dynamic directives | Planned | M4 |
 | 19 | Tactical emphasis & focus points | Shipped | M3 |
