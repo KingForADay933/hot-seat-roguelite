@@ -18,6 +18,7 @@ import {
 import { defensiveFits } from '../../run/variation/defenseDraft'
 import { DefenseChoiceCard } from '../components/DefenseChoiceCard'
 import { PlayerRevealCard, type SystemFitEntry } from '../components/PlayerRevealCard'
+import { Section } from '../components/Section'
 import { SystemChoiceCard } from '../components/SystemChoiceCard'
 import { TeamSummary } from '../components/TeamSummary'
 import type { PendingReveal } from '../state/runContext.core'
@@ -167,92 +168,16 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
         it&apos;s over.
       </p>
 
-      <div className="team-summary">
-        <p>
-          <strong>{market.label}</strong> -- {market.description} Budget: ${view.budget}.
-        </p>
-        <p>
-          <strong>{quirk.label}</strong> -- {quirk.description}
-        </p>
-        <p>
-          <strong>House Rule: {houseRule.label}</strong> -- {houseRule.description}
-        </p>
-        {props.mode === 'locked' && (
-          <p>
-            <strong>System: {OFFENSIVE_PLAYBOOKS[team.offensiveStrategyId].name}</strong> -- {OFFENSIVE_PLAYBOOKS[team.offensiveStrategyId].description}{' '}
-            (Synergy {team.synergyScore}, neutral is {SYNERGY_NEUTRAL})
-          </p>
-        )}
-      </div>
-
-      <h2>Roster Shape</h2>
-      <div className="team-summary">
-        <p>
-          {roster.length} players &middot; average age {average(roster.map((p) => p.age)).toFixed(1)} &middot; average OVR{' '}
-          {Math.round(average(roster.map((p) => p.overallRating)))}
-        </p>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Depth</th>
-                {depth.map((d) => (
-                  <th key={d.position} className="numeric">
-                    {d.position}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Players</td>
-                {depth.map((d) => (
-                  <td key={d.position} className={`numeric${d.count === 0 ? ' text-negative' : ''}`}>
-                    {d.count}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <td>Best OVR</td>
-                {depth.map((d) => (
-                  <td key={d.position} className="numeric">
-                    {d.count === 0 ? '--' : d.bestOverall}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <TeamSummary team={team} roster={roster} />
-
-      <h2>Scouting Report</h2>
-      <p className="section-note">
-        Hover a trait tag for what it does. Growth room is the total attribute points each player still has below his potential. System fit is
-        signed and relative to each player&apos;s own game -- a specialist reads strongly positive for what suits him and negative for what
-        doesn&apos;t, while an all-rounder sits near zero everywhere.
-      </p>
-
-      <h3>Starting Five</h3>
-      <div className="player-cards">
-        {starters.map((player) => (
-          <PlayerRevealCard key={player.id} player={player} systemFits={systemFitsFor(player)} selectedSystemId={highlightedSystemId} starter />
-        ))}
-      </div>
-
-      {bench.length > 0 && (
-        <>
-          <h3>Bench</h3>
-          <div className="player-cards">
-            {bench.map((player) => (
-              <PlayerRevealCard key={player.id} player={player} systemFits={systemFitsFor(player)} selectedSystemId={highlightedSystemId} starter={false} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {props.mode === 'draft-system' ? (
+      {/* Decision on the left, roster on the right. The scouting cards are reference, but not inert
+          reference while a system is being picked: PlayerRevealCard takes selectedSystemId and
+          re-reads each player's fit as you choose, so folding them away would hide the feedback the
+          decision is made on. They stay open while drafting and collapse once the system is locked,
+          where there is no longer a pick for them to answer. The bench nests one level deeper --
+          seven more cards is most of this screen's height and the system is scored mostly on the
+          five. */}
+      <div className="screen-columns">
+        <div>
+          {props.mode === 'draft-system' ? (
         <>
           <h2>Pick Your System</h2>
           <p className="section-note">
@@ -318,7 +243,106 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
             <button onClick={props.onSimSeason}>Sim First Stretch</button>
           </div>
         </>
-      )}
+          )}
+        </div>
+
+        <div>
+          <Section title="Team Profile" summary={`${quirk.label} · ${houseRule.label}`}>
+            <div className="team-summary">
+              <p>
+                <strong>{market.label}</strong> -- {market.description} Budget: ${view.budget}.
+              </p>
+              <p>
+                <strong>{quirk.label}</strong> -- {quirk.description}
+              </p>
+              <p>
+                <strong>House Rule: {houseRule.label}</strong> -- {houseRule.description}
+              </p>
+              {props.mode === 'locked' && (
+                <p>
+                  <strong>System: {OFFENSIVE_PLAYBOOKS[team.offensiveStrategyId].name}</strong> --{' '}
+                  {OFFENSIVE_PLAYBOOKS[team.offensiveStrategyId].description} (Synergy {team.synergyScore}, neutral is{' '}
+                  {SYNERGY_NEUTRAL})
+                </p>
+              )}
+            </div>
+          </Section>
+
+          <Section
+            title="Roster Shape"
+            summary={`${roster.length} players · avg ${Math.round(average(roster.map((p) => p.overallRating)))} OVR`}
+          >
+            <div className="team-summary">
+              <p>
+                {roster.length} players &middot; average age {average(roster.map((p) => p.age)).toFixed(1)} &middot; average OVR{' '}
+                {Math.round(average(roster.map((p) => p.overallRating)))}
+              </p>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Depth</th>
+                      {depth.map((d) => (
+                        <th key={d.position} className="numeric">
+                          {d.position}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Players</td>
+                      {depth.map((d) => (
+                        <td key={d.position} className={`numeric${d.count === 0 ? ' text-negative' : ''}`}>
+                          {d.count}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td>Best OVR</td>
+                      {depth.map((d) => (
+                        <td key={d.position} className="numeric">
+                          {d.count === 0 ? '--' : d.bestOverall}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <TeamSummary team={team} roster={roster} />
+          </Section>
+
+          <Section
+            title="Scouting Report"
+            summary={`${starters.length} starters · ${bench.length} bench`}
+            defaultOpen={props.mode === 'draft-system'}
+          >
+            <p className="section-note">
+              Hover a trait tag for what it does. Growth room is the total attribute points each player still has below his
+              potential. System fit is signed and relative to each player&apos;s own game -- a specialist reads strongly
+              positive for what suits him and negative for what doesn&apos;t, while an all-rounder sits near zero everywhere.
+            </p>
+
+            <h3>Starting Five</h3>
+            <div className="player-cards">
+              {starters.map((player) => (
+                <PlayerRevealCard key={player.id} player={player} systemFits={systemFitsFor(player)} selectedSystemId={highlightedSystemId} starter />
+              ))}
+            </div>
+
+            {bench.length > 0 && (
+              <Section title="Bench" summary={`${bench.length} players`}>
+                <div className="player-cards">
+                  {bench.map((player) => (
+                    <PlayerRevealCard key={player.id} player={player} systemFits={systemFitsFor(player)} selectedSystemId={highlightedSystemId} starter={false} />
+                  ))}
+                </div>
+              </Section>
+            )}
+          </Section>
+        </div>
+      </div>
     </main>
   )
 }
