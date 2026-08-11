@@ -294,3 +294,13 @@ export const RUN_INSIGHTS_PER_SEASON = 3
  *  Structural insights (chart overrides, weak-link targeting) have no such bar -- one is already a
  *  problem. */
 export const RUN_INSIGHT_MIN_ROUTINE_OCCURRENCES = 2
+
+/**
+ * Overall rating the GM's own roster is guaranteed at least one of (run/franchisePlayer.ts).
+ *
+ * 82 because that is where a roster stops being a lost cause in the 2K vocabulary this generation
+ * was retuned against -- below it there is nobody a system can be built around. Generation puts an
+ * 82+ on ~81% of the worst-of-league rosters on its own; this covers the rest rather than replacing
+ * what the dice did.
+ */
+export const FRANCHISE_PLAYER_MIN = 82
