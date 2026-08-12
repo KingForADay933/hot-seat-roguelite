@@ -88,12 +88,13 @@ export function maxMinutesFor(team: Team, roster: Player[], playerId: PlayerId, 
 /**
  * The least this player may be given -- 0 unless a house rule pins him into the rotation.
  *
- * Deliberately not bounded by maxMinutesFor: the two are chosen so they cannot cross (see
- * HOMEGROWN_MIN_MINUTES), and silently lowering a floor to satisfy a ceiling would turn a rule the
- * GM agreed to into one that quietly stops applying.
+ * Deliberately not bounded by maxMinutesFor: every floor rule's value is chosen so the two cannot
+ * cross (see MINUTES_FLOORS in run/variation/houseRules.ts, and the invariant test that checks all of
+ * them against generated rosters), and silently lowering a floor to satisfy a ceiling would turn a
+ * rule the GM agreed to into one that quietly stops applying.
  */
-export function minMinutesFor(roster: Player[], playerId: PlayerId, houseRule?: HouseRuleId): number {
-  return houseRule ? houseRuleMinMinutesFor(houseRule, roster, playerId) : 0
+export function minMinutesFor(team: Team, roster: Player[], playerId: PlayerId, houseRule?: HouseRuleId): number {
+  return houseRule ? houseRuleMinMinutesFor(houseRule, team, roster, playerId) : 0
 }
 
 /** Rounds and clamps a requested minutes value into what's actually available at that position, and
@@ -105,7 +106,7 @@ export function clampToPositionBudget(
   minutes: number,
   houseRule?: HouseRuleId,
 ): number {
-  const floor = minMinutesFor(roster, playerId, houseRule)
+  const floor = minMinutesFor(team, roster, playerId, houseRule)
   const requested = Math.round(minutes)
   if (!Number.isFinite(requested) || requested <= 0) return floor
   return Math.max(Math.min(requested, maxMinutesFor(team, roster, playerId, houseRule)), floor)

@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
+import { shiftPlayerAttributes } from '../../engine/attributeShift'
+import { ATTRIBUTE_FLOOR } from '../../engine/constants'
+import { deriveDepthChart } from '../../engine/depthChart'
 import { createSeededRng } from '../../engine/rng'
 import { makeTestPlayer } from '../../engine/testFixtures'
+import { FRANCHISE_PLAYER_MIN } from '../constants'
+import { ensureFranchisePlayer } from '../franchisePlayer'
 import { applyRosterQuirk, pickRandomRosterQuirks, ROSTER_QUIRKS } from './rosterQuirks'
+
+/** ui/playerTags.ts's DURABILITY_LOW. Duplicated rather than imported: run/ must not depend on ui/,
+ *  and the point of the assertion is precisely that the two files agree about this number. */
+const DURABILITY_TAG_THRESHOLD = 42
 
 function makeRoster(): ReturnType<typeof makeTestPlayer>[] {
   return [
@@ -183,6 +192,103 @@ describe('applyRosterQuirk / high-variance', () => {
     for (const player of result) {
       expect(player.overallRating).toBe(tiny.find((p) => p.id === player.id)!.overallRating)
     }
+  })
+})
+
+describe('applyRosterQuirk / glass-cannons', () => {
+  it('puts every player at the durability floor, where the roster screen already names the problem', () => {
+    const result = applyRosterQuirk('glass-cannons', makeRoster(), createSeededRng(13))
+
+    for (const player of result) {
+      // The quirk carries no UI of its own -- it is legible because ui/playerTags.ts tags "Gasses Out"
+      // at 42 and My Team's Scouting section prints the number. Both depend on this holding.
+      expect(player.hidden.durability).toBeLessThanOrEqual(DURABILITY_TAG_THRESHOLD)
+      expect(player.hidden.durability).toBeGreaterThanOrEqual(ATTRIBUTE_FLOOR)
+      expect(player.overallRating).toBeGreaterThan(50) // and the skill it buys is real
+    }
+  })
+
+  it('leaves the traits it is not about alone', () => {
+    const roster = makeRoster()
+    const result = applyRosterQuirk('glass-cannons', roster, createSeededRng(14))
+    result.forEach((player, i) => {
+      expect(player.hidden.consistency).toBe(roster[i].hidden.consistency)
+      expect(player.hidden.clutch).toBe(roster[i].hidden.clutch)
+    })
+  })
+})
+
+describe('applyRosterQuirk / one-superstar', () => {
+  /** Full profiles rather than spikes over defaults: a lift this large clamps at ATTRIBUTE_CEILING on
+   *  a roster of 50s, and tied-at-the-ceiling attributes make "did he reach 90" untestable. Rated
+   *  through a zero shift because makeTestPlayer pins overallRating at 50 whatever the attributes say
+   *  -- the same helper franchisePlayer.test.ts uses, for the same reason. */
+  function ratedRoster(): ReturnType<typeof makeTestPlayer>[] {
+    return (['PG', 'SG', 'SF', 'PF', 'C', 'PG'] as const).map((position, i) =>
+      shiftPlayerAttributes(
+        makeTestPlayer({
+          positions: [position],
+          attributes: {
+            insideShot: 74 - i, outsideShot: 70 - i, passing: 68 - i, ballHandling: 72 - i, rebounding: 66 - i,
+            perimeterDefense: 71 - i, interiorDefense: 64 - i, speed: 73 - i, lateralQuickness: 69 - i, vertical: 67 - i,
+          },
+        }),
+        0,
+      ),
+    )
+  }
+
+  it('lifts one starter to the target and taxes everyone else for it', () => {
+    const roster = ratedRoster()
+    const result = applyRosterQuirk('one-superstar', roster, createSeededRng(15))
+
+    const star = result.reduce((top, p) => (p.overallRating > top.overallRating ? p : top))
+    expect(star.overallRating).toBeGreaterThanOrEqual(90)
+
+    for (const player of result) {
+      if (player.id === star.id) continue
+      expect(player.overallRating).toBeLessThan(roster.find((p) => p.id === player.id)!.overallRating)
+    }
+  })
+
+  it('never picks a bench player, so the star is not sitting behind someone worse', () => {
+    // The sixth man is the roster's best on purpose: a quirk that read "best available" rather than
+    // "best at each position" would pick him and re-create the depth-chart inversion.
+    for (let seed = 0; seed < 12; seed++) {
+      const roster = ratedRoster()
+      const five = new Set(deriveDepthChart(roster).startingFive)
+      const result = applyRosterQuirk('one-superstar', roster, createSeededRng(seed + 20))
+      const star = result.reduce((top, p) => (p.overallRating > top.overallRating ? p : top))
+      expect(five.has(star.id)).toBe(true)
+    }
+  })
+})
+
+describe('applyRosterQuirk / no-weak-links', () => {
+  function spreadRoster(): ReturnType<typeof makeTestPlayer>[] {
+    return makeRoster().map((p, i) => shiftPlayerAttributes(p, 22 - i * 6)) // 72, 66, 60, 54, 48
+  }
+
+  it('lands the best man exactly on the franchise threshold, so the guarantee never fires', () => {
+    // The whole reason the quirk slides its band upward rather than downward: RunProvider calls
+    // ensureFranchisePlayer immediately after this, and a roster with no 82 would have one lifted
+    // straight back out of the flat band this exists to produce.
+    const result = applyRosterQuirk('no-weak-links', spreadRoster(), createSeededRng(16))
+    expect(Math.max(...result.map((p) => p.overallRating))).toBe(FRANCHISE_PLAYER_MIN)
+
+    const startingFive = deriveDepthChart(result).startingFive
+    expect(ensureFranchisePlayer(result, startingFive)).toEqual(result)
+  })
+
+  it('compresses the roster rather than merely raising it', () => {
+    const roster = spreadRoster()
+    const result = applyRosterQuirk('no-weak-links', roster, createSeededRng(17))
+    const spread = (ps: typeof roster) => Math.max(...ps.map((p) => p.overallRating)) - Math.min(...ps.map((p) => p.overallRating))
+
+    // Measured across 64 generated rosters: a 22.4-point spread comes back as 8.0.
+    expect(spread(result)).toBeLessThan(spread(roster) / 2)
+    // Distinct from low-ceiling, which is about potential -- this one does not touch it.
+    result.forEach((player, i) => expect(player.development.potential).toEqual(roster[i].development.potential))
   })
 })
 

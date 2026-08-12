@@ -26,7 +26,7 @@ export function MinutesInput({
   // rule that caps or floors minutes -- setRotationMinutes clamps to the same window on write
   // (run/minutesBudget.ts), so the spinner stops exactly where the write would.
   const max = maxMinutesFor(team, roster, playerId, houseRule)
-  const min = minMinutesFor(roster, playerId, houseRule)
+  const min = minMinutesFor(team, roster, playerId, houseRule)
   const position = roster.find((p) => p.id === playerId)?.positions[0]
   const budgetNote = `${position}'s ${POSITION_MINUTES_BUDGET} less what his positional teammates hold`
   return (
