@@ -35,49 +35,55 @@ export function CampPurchaseForm({
   const affordable = budget >= cost
   const canBuy = affordable && (!playerGroups || playerId !== '')
 
+  // A block inside a Section, not a panel of its own -- the .team-summary box this used to be became
+  // a container nested in a container once the shop grew section straps.
   return (
-    <div className="team-summary">
-      <strong>{title}</strong>
-      <p>{description}</p>
-      <p>
-        ${cost} -- {remaining} left this visit
-      </p>
-      {playerGroups && (
+    <div className="camp-form">
+      <div className="camp-form-head">
+        <strong>{title}</strong>
+        <span className="price-tag">${cost}</span>
+        <span className="camp-form-remaining">{remaining} left</span>
+      </div>
+      <p className="section-note">{description}</p>
+      <div className="camp-form-controls">
+        {playerGroups && (
+          <label>
+            Player
+            <select value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
+              {playerGroups
+                .filter((group) => group.players.length > 0)
+                .map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.players.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.positions[0]} {p.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+            </select>
+          </label>
+        )}
         <label>
-          Player
-          <select value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
-            {playerGroups
-              .filter((group) => group.players.length > 0)
-              .map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.players.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.positions[0]} {p.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
+          Attribute
+          <select value={attribute} onChange={(e) => setAttribute(e.target.value as AttributeKey)}>
+            {ATTRIBUTE_COLUMNS.map((col) => (
+              <option key={col.key} value={col.key} title={col.long}>
+                {col.long}
+              </option>
+            ))}
           </select>
         </label>
-      )}
-      <label>
-        Attribute
-        <select value={attribute} onChange={(e) => setAttribute(e.target.value as AttributeKey)}>
-          {ATTRIBUTE_COLUMNS.map((col) => (
-            <option key={col.key} value={col.key}>
-              {col.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        type="button"
-        className="primary"
-        disabled={!canBuy}
-        onClick={() => onBuy(attribute, playerGroups ? playerId : undefined)}
-      >
-        Send to Camp
-      </button>
+        <button
+          type="button"
+          className="primary"
+          disabled={!canBuy}
+          onClick={() => onBuy(attribute, playerGroups ? playerId : undefined)}
+        >
+          Send to Camp
+        </button>
+      </div>
+      {!affordable && <p className="shop-card-blocked">Not enough budget</p>}
     </div>
   )
 }
