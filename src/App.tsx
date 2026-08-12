@@ -74,7 +74,17 @@ function AppContent() {
     activateConsumable,
   } = useRun()
 
-  if (loading) return <p>Loading…</p>
+  // The first thing anyone ever sees, and it used to be an unstyled paragraph. Deliberately fades in
+  // after a beat rather than appearing instantly (see .app-loading): reading a run out of IndexedDB
+  // is usually quicker than the eye, and a splash that flashes for 20ms is worse than no splash.
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <span className="app-loading-mark">Hot Seat</span>
+        <span className="app-loading-note">Loading your run…</span>
+      </div>
+    )
+  }
   // Run setup is two phases: the roster-shaping picks, then the reveal, where the system is chosen
   // against the roster those picks produced. Neither is persisted -- the run only exists once
   // lockSystem saves a bundle -- so both are checked before the saved-bundle branches below.

@@ -249,10 +249,21 @@ tr.user-row {
   text-decoration: underline;
 }
 
-/** A player's name, clickable through to their detail page. Inherits the surrounding text colour
-    rather than taking the accent -- these sit in dense roster and box-score tables where every row
-    would light up, which reads as noise rather than as affordance. The underline on hover/focus is
-    what says it's a control. */
+/**
+ * A player's or team's name, clickable through to their detail page.
+ *
+ * Still inherits the surrounding text colour, for the original reason: these sit in dense roster and
+ * box-score tables where colouring every one would light up every row, which reads as noise rather
+ * than as affordance.
+ *
+ * But leaving them with *no* resting cue meant nobody found them. Nothing in the UI said a name was
+ * a control, and the onboarding checklist had to spend two of its five slots teaching it -- which
+ * only ever helps a first-timer, and only during their first season.
+ *
+ * A dotted underline is the compromise: the long-standing convention for "there is more behind this
+ * word", quiet enough at 35% of the text colour that twelve of them down a column read as texture
+ * rather than as twelve links, and it costs no colour. Hover and focus promote it to solid.
+ */
 .player-link {
   background: none;
   border: none;
@@ -262,11 +273,18 @@ tr.user-row {
   color: inherit;
   text-align: left;
   cursor: pointer;
+  text-decoration: underline dotted;
+  /* 55%, not 35%. The first pass was so restrained it was effectively the invisible state it was
+     meant to replace -- which fails the whole purpose. Erring toward visible is right here: the
+     failure being fixed is that nobody found these at all. */
+  text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+  text-underline-offset: 3px;
 }
 
 .player-link:hover {
   color: var(--accent);
-  text-decoration: underline;
+  text-decoration: underline solid;
+  text-decoration-color: currentColor;
 }
 
 /**
@@ -284,7 +302,9 @@ tr.user-row {
 .player-link:focus-visible {
   outline: none;
   color: var(--accent);
-  text-decoration: underline;
+  /* Solid, overriding the dotted resting cue above -- focus should not be a subtler state than rest. */
+  text-decoration: underline solid;
+  text-decoration-color: currentColor;
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-radius: 2px;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
@@ -1581,4 +1601,54 @@ h2 {
 :where(button, select, input, summary, a, [tabindex]):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* --- First impressions ------------------------------------------------------------------------ */
+
+/**
+ * The loading state, which was an unstyled `<p>Loading…</p>` and is the first thing anyone ever sees.
+ *
+ * The delayed fade is the point. Reading a run out of IndexedDB is usually faster than the eye, so a
+ * splash that appears instantly mostly manifests as a 20ms flash of text -- worse than showing
+ * nothing. `both` fill mode holds it at opacity 0 through the delay, so a fast load never paints it
+ * at all and a slow one gets a calm fade rather than a pop.
+ */
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 60vh;
+  animation: app-loading-in 220ms ease 150ms both;
+}
+
+.app-loading-mark {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.app-loading-note {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+@keyframes app-loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Still delayed, so a fast load stays silent -- just no fade. */
+@media (prefers-reduced-motion: reduce) {
+  .app-loading {
+    animation: app-loading-in 1ms linear 150ms both;
+  }
 }
