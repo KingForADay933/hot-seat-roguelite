@@ -7,6 +7,7 @@ import { CampPurchaseForm } from '../components/CampPurchaseForm'
 import { CoachingUpgradeCard } from '../components/CoachingUpgradeCard'
 import { ConsumableCard } from '../components/ConsumableCard'
 import { ConsumableInventoryRow } from '../components/ConsumableInventoryRow'
+import { ScreenActions } from '../components/ScreenActions'
 import { splitRoster } from '../rosterGroups'
 
 export function ShopScreen({
@@ -51,6 +52,13 @@ export function ShopScreen({
 
   return (
     <main>
+      <ScreenActions>
+        <button className="primary" onClick={onContinue}>
+          Start Next Season
+        </button>
+        <button onClick={onSimSeason}>Sim First Stretch</button>
+      </ScreenActions>
+
       <h1>{shop.tier === 'expanded' ? 'Expanded Shop' : 'Shop'}</h1>
       <p>
         {shop.tier === 'expanded'
@@ -153,13 +161,6 @@ export function ShopScreen({
       )}
 
       {nothingLeftToBuy && <p>Nothing left to buy this visit.</p>}
-
-      <div className="stretch-actions">
-        <button className="primary" onClick={onContinue}>
-          Start Next Season
-        </button>
-        <button onClick={onSimSeason}>Sim First Stretch</button>
-      </div>
     </main>
   )
 }

@@ -8,6 +8,7 @@ import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { nextPlayableGameId, runTeamChunkGames } from '../../run/seasonChunks'
 import { BoxScoreTable } from '../components/BoxScoreTable'
 import { GameListItem } from '../components/GameListItem'
+import { ScreenActions } from '../components/ScreenActions'
 
 /**
  * The stretch the GM is partway through: their own games for this chunk, each waiting to be simmed
@@ -68,6 +69,12 @@ export function StretchScreen({
 
   return (
     <main>
+      <ScreenActions>
+        <button className="primary" onClick={onFinish}>
+          {allPlayed ? 'Continue to Checkpoint' : 'Sim the Rest & Continue'}
+        </button>
+      </ScreenActions>
+
       <h1>
         Stretch {run.chunkInSeason + 1} of {SEASON_CHUNK_COUNT}
       </h1>
@@ -132,11 +139,6 @@ export function StretchScreen({
         </>
       )}
 
-      <p>
-        <button className="primary" onClick={onFinish}>
-          {allPlayed ? 'Continue to Checkpoint' : 'Sim the Rest & Continue'}
-        </button>
-      </p>
     </main>
   )
 }

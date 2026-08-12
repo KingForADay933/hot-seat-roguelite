@@ -11,6 +11,7 @@ import { MARKET_SIZES } from '../../run/marketSize'
 import { HOUSE_RULES } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS } from '../../run/variation/rosterQuirks'
 import { RosterDetailPanel } from '../components/RosterDetailPanel'
+import { ScreenActions } from '../components/ScreenActions'
 import { Section } from '../components/Section'
 import { RotationChartEditor } from '../components/RotationChartEditor'
 import { ScoutingPanel } from '../components/ScoutingPanel'
@@ -77,6 +78,12 @@ export function MyTeamScreen({
    */
   return (
     <main>
+      <ScreenActions>
+        <button className="primary" onClick={onBack}>
+          Back
+        </button>
+      </ScreenActions>
+
       <h1>
         {team.city} {team.name}
       </h1>
@@ -174,10 +181,6 @@ export function MyTeamScreen({
           </Section>
         </div>
       </div>
-
-      <button className="primary" onClick={onBack}>
-        Back
-      </button>
     </main>
   )
 }

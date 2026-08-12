@@ -140,6 +140,8 @@ function SimcastBroadcast({
   const inspector = useMemo<Inspector>(() => ({ openPlayer, openTeam: null }), [openPlayer])
 
   const inspectingPlayer = inspectingId ? (playbackContext.playerById.get(inspectingId) ?? null) : null
+  // Both sides, so the feed can rule each possession in the colour of whoever had the ball.
+  const liveGameTeams = useMemo(() => new Map([[homeTeam.id, homeTeam], [awayTeam.id, awayTeam]]), [homeTeam, awayTeam])
 
   /**
    * A scheme change made mid-broadcast has to land in two places, because they are genuinely two
@@ -273,7 +275,7 @@ function SimcastBroadcast({
         <div className="simcast-body">
           <section className="simcast-feed">
             <h2>Play-by-Play</h2>
-            <CommentaryFeed feed={state.feed} userTeamId={run.teamId} />
+            <CommentaryFeed feed={state.feed} userTeamId={run.teamId} teamsById={liveGameTeams} />
           </section>
 
           <aside className="simcast-floor">

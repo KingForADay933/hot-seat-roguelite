@@ -7,6 +7,7 @@ import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
 import { TacticalFocusControls } from '../components/TacticalFocusControls'
 import { RosterAdjustmentPanel } from '../components/RosterAdjustmentPanel'
+import { ScreenActions } from '../components/ScreenActions'
 import { Section } from '../components/Section'
 import { StandingsTable } from '../components/StandingsTable'
 
@@ -43,6 +44,9 @@ export function ChunkResultsScreen({
   const rank = standings.findIndex((row) => row.teamId === run.teamId) + 1
   const own = standings.find((row) => row.teamId === run.teamId)
   const standingsSummary = own ? `${rank} of ${standings.length} · ${own.wins}-${own.losses}` : `${standings.length} teams`
+  // The rank the run has to finish at or above. run.target.rankFraction is what actually decides
+  // whether the GM is fired, and until now the standings table had no idea it existed.
+  const targetRank = Math.max(1, Math.floor(standings.length * run.target.rankFraction))
 
   return (
     <main>
@@ -61,15 +65,21 @@ export function ChunkResultsScreen({
         </p>
       )}
 
-      {/* Insights stay open and sit *beside* the adjustment rather than above it. The complaint and
-          the fix belonging together is the whole design of this screen -- folding the complaint away
-          would have made it fit by defeating its purpose. Only the standings, which are reference,
-          start collapsed. */}
+      <ScreenActions>
+        <button className="primary" onClick={onContinue}>
+          Continue Season
+        </button>
+        <button onClick={onSimStretch}>Sim Next Stretch</button>
+      </ScreenActions>
+
+      {/* Reading order is Standings, Insights, Schemes, Minutes: where you sit is the question the
+          checkpoint answers, so it leads, and the two controls that respond to the Insights stay
+          directly beneath them. Standings takes the wide column (a seven-column table) and the
+          adjustment panel the narrow one (three columns), which is the right way round for both. */}
       <div className="screen-columns">
         <div>
-          <Section title="Minutes &amp; Training" summary={`${roster.length} players`} defaultOpen>
-            <p className="section-note">Respond to what the Insights are telling you before the next stretch plays out.</p>
-            <RosterAdjustmentPanel team={team} roster={roster} houseRule={run.houseRule} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
+          <Section title="Standings So Far" summary={standingsSummary} defaultOpen>
+            <StandingsTable rows={standings} teams={teams} userTeamId={run.teamId} targetRank={targetRank} />
           </Section>
         </div>
 
@@ -110,17 +120,13 @@ export function ChunkResultsScreen({
             <TacticalFocusControls focus={team.tacticalFocus} onChange={onSetTacticalFocus} side="defense" />
           </Section>
 
-          <Section title="Standings So Far" summary={standingsSummary}>
-            <StandingsTable rows={standings} teams={teams} userTeamId={run.teamId} />
+          {/* Last, and folded: it is the one thing here you may not need every checkpoint, and the
+              summary line carries the roster size so a closed panel still says what is inside. */}
+          <Section title="Minutes &amp; Training" summary={`${roster.length} players`}>
+            <p className="section-note">Respond to what the Insights are telling you before the next stretch plays out.</p>
+            <RosterAdjustmentPanel team={team} roster={roster} houseRule={run.houseRule} onSetMinutes={onSetMinutes} onSetFocus={onSetFocus} />
           </Section>
         </div>
-      </div>
-
-      <div className="stretch-actions">
-        <button className="primary" onClick={onContinue}>
-          Continue Season
-        </button>
-        <button onClick={onSimStretch}>Sim Next Stretch</button>
       </div>
     </main>
   )

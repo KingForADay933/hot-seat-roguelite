@@ -4,6 +4,7 @@ import { HOUSE_RULES, type HouseRuleId } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS, type RosterQuirkId } from '../../run/variation/rosterQuirks'
 import { DraftOptionCard } from '../components/DraftOptionCard'
 import type { PendingDraft } from '../state/runContext.core'
+import { ScreenActions } from '../components/ScreenActions'
 
 /**
  * Phase one of run setup: the two picks that reshape the roster itself. The system draft used to
@@ -24,7 +25,13 @@ export function RunDraftScreen({
   const canConfirm = rosterQuirk && houseRule
 
   return (
-    <main>
+    <main>
+      <ScreenActions>
+        <button className="primary" disabled={!canConfirm} onClick={() => canConfirm && onConfirm(rosterQuirk, houseRule)}>
+          Meet the Team
+        </button>
+      </ScreenActions>
+
       <h1>Build Your Roster</h1>
       <p>
         <strong>{market.label}</strong> -- {market.description}
@@ -57,9 +64,6 @@ export function RunDraftScreen({
         ))}
       </div>
 
-      <button className="primary" disabled={!canConfirm} onClick={() => canConfirm && onConfirm(rosterQuirk, houseRule)}>
-        Meet the Team
-      </button>
     </main>
   )
 }

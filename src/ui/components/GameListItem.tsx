@@ -77,15 +77,14 @@ export function GameListItem({
       <td>
         {game.isPlayed && game.result ? (
           <>
-            <button onClick={onViewBoxScore}>
+            <button className="score-chip" onClick={onViewBoxScore}>
               {game.result.awayScore}-{game.result.homeScore}
               {formatOvertimeLabel(game.result.overtimePeriods)}
             </button>
-            {badge && (
-              <span className={badge.className} style={{ fontWeight: 700, marginLeft: 4 }}>
-                {badge.label}
-              </span>
-            )}
+            {/* A filled pill rather than a coloured letter: this is the one thing on the row you
+                scan a whole schedule for, and at a glance a run of W's and L's should read as a
+                shape before it reads as text. */}
+            {badge && <span className={`result-pill ${badge.className}`}>{badge.label}</span>}
           </>
         ) : (
           <>

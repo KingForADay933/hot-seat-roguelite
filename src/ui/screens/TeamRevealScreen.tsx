@@ -18,6 +18,7 @@ import {
 import { defensiveFits } from '../../run/variation/defenseDraft'
 import { DefenseChoiceCard } from '../components/DefenseChoiceCard'
 import { PlayerRevealCard, type SystemFitEntry } from '../components/PlayerRevealCard'
+import { ScreenActions } from '../components/ScreenActions'
 import { Section } from '../components/Section'
 import { SystemChoiceCard } from '../components/SystemChoiceCard'
 import { TeamSummary } from '../components/TeamSummary'
@@ -160,6 +161,23 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
 
   return (
     <main>
+      {/* Both modes' actions, in the one bar. Lock In System keeps its disabled state -- the whole
+          reason ScreenActions takes buttons as children rather than labels. */}
+      <ScreenActions>
+        {props.mode === 'draft-system' ? (
+          <button className="primary" disabled={!pick} onClick={() => pick && props.onLockSystem(pick, selectedDefense)}>
+            Lock In System
+          </button>
+        ) : (
+          <>
+            <button className="primary" onClick={props.onBeginSeason}>
+              Begin Season
+            </button>
+            <button onClick={props.onSimSeason}>Sim First Stretch</button>
+          </>
+        )}
+      </ScreenActions>
+
       <h1>
         {team.city} {team.name}
       </h1>
@@ -214,10 +232,6 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
               />
             ))}
           </div>
-
-          <button className="primary" disabled={!pick} onClick={() => pick && props.onLockSystem(pick, selectedDefense)}>
-            Lock In System
-          </button>
         </>
       ) : (
         <>
@@ -235,12 +249,6 @@ export function TeamRevealScreen(props: TeamRevealScreenProps) {
               .map((fit) => (
                 <DefenseChoiceCard key={fit.scheme.id} fit={fit} selected />
               ))}
-          </div>
-          <div className="stretch-actions">
-            <button className="primary" onClick={props.onBeginSeason}>
-              Begin Season
-            </button>
-            <button onClick={props.onSimSeason}>Sim First Stretch</button>
           </div>
         </>
           )}
