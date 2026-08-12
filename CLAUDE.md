@@ -36,6 +36,21 @@ bad annotation passes 556 green tests. Tests prove behaviour; only the typecheck
 an error here, not a warning — prefer removing it to silencing it, since a parameter nothing reads
 is usually a sign the function's shape is wrong.
 
+### A new dependency is installed per checkout, and a worktree is its own checkout
+
+`npm install <pkg>` does two separate things: it records the dependency in `package.json`, which
+travels with the commit, and it unpacks it into **that checkout's** `node_modules`, which does not.
+A git worktree under `.claude/worktrees/` has its own `node_modules`, so all three checks — plus
+`npm run build` — can pass there while the main checkout has the dependency listed and missing.
+
+This is not hypothetical. `@fontsource/barlow-condensed` was added from a worktree, went green on
+tests, typecheck, lint and a full build there, merged, and then broke `npm run package:itch` on
+master with `Rolldown failed to resolve import "@fontsource/barlow-condensed/latin-600.css"`. Nothing
+in the worktree could have caught it, because the package was sitting right there.
+
+**If a change touches `package.json`, run `npm install` and the build in the main checkout before
+calling it verified.** The same applies to anyone pulling a commit that adds a dependency.
+
 ## Verifying in the browser
 
 Anything a GM can see should be exercised in the running app before it ships, not just unit-tested.
@@ -45,5 +60,9 @@ fractional `max` attribute. If a change is observable, open it.
 
 ## Releasing
 
-See `docs/releasing-to-itch.md`. In short: `npm run package:itch`, upload `hot-seat-itch.zip`.
-Do not zip the working folder — that is `node_modules`, and itch rejects it.
+See `docs/releasing-to-itch.md`. In short: `npm install`, `npm run package:itch`, upload
+`hot-seat-itch.zip`. Do not zip the working folder — that is `node_modules`, and itch rejects it.
+
+`npm run build` and `npm run build:itch` are not the same build: different mode, different base path,
+different output directory, and only the second is what ships. A green `npm run build` says the code
+compiles, not that the release is good.

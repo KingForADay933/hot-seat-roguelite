@@ -1,14 +1,32 @@
 # Releasing to itch.io
 
-One command builds and packs the upload:
+Install first, then one command builds and packs the upload:
 
 ```
+npm install
 npm run package:itch
 ```
 
-That writes `hot-seat-itch.zip` in the repo root — about 100 KB, five files. Upload that file and nothing else.
+That writes `hot-seat-itch.zip` in the repo root — about 200 KB, nine files. Upload that file and nothing else.
 
 Both `dist-itch/` and `hot-seat-itch.zip` are gitignored; they are build output, rebuilt on demand.
+
+## `npm install` first, every time you have pulled
+
+Not ceremony. `package.json` travels with a commit; `node_modules` does not — and it is per checkout,
+so a git worktree has its own. A change developed in a worktree can pass every check there, be merged,
+and leave the checkout you release from with the dependency **listed and not installed**.
+
+That is exactly how the Barlow Condensed release broke:
+
+```
+Error: [vite]: Rolldown failed to resolve import
+"@fontsource/barlow-condensed/latin-600.css" from "src/main.tsx"
+```
+
+The build had been green everywhere it was tested. `npm install` in the release checkout was the whole
+fix. If `package:itch` ever fails to resolve an import that plainly exists in `package.json`, this is
+why — reach for `npm install` before you go looking for anything cleverer.
 
 ---
 
@@ -16,7 +34,7 @@ Both `dist-itch/` and `hot-seat-itch.zip` are gitignored; they are build output,
 
 Zipping the working folder sweeps in `node_modules`, which is why the first attempt hit **"Too many files in zip (2734 > 1000)"**. itch.io does not run your source; it serves an already-built static site. Almost everything in the repo is input to that build, not part of it.
 
-The build output is five files:
+The build output is nine files:
 
 ```
 index.html
@@ -24,7 +42,17 @@ favicon.svg
 icons.svg
 assets/index-<hash>.css
 assets/index-<hash>.js
+assets/barlow-condensed-latin-600-normal-<hash>.woff2
+assets/barlow-condensed-latin-700-normal-<hash>.woff2
+assets/barlow-condensed-latin-600-normal-<hash>.woff
+assets/barlow-condensed-latin-700-normal-<hash>.woff
 ```
+
+The display face ships as a bundled asset rather than a CDN link, because an itch build has to work
+with no network. Only the `.woff2` of the weight in use is actually fetched; the `.woff` pair is a
+fallback for engines that predate woff2, and is the obvious thing to drop if the zip ever needs
+trimming. Latin only — the unscoped `@fontsource` entrypoints also pull Cyrillic, Greek and
+Vietnamese, which would ship in the zip and never be requested.
 
 ## The two traps this script exists to avoid
 
