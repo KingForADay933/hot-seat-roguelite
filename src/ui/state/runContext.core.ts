@@ -6,6 +6,7 @@ import type { ChunkSimContext } from '../../run/chunkSimContext'
 import type { CoachingUpgradeId } from '../../run/coachingUpgrades'
 import type { ConsumableId } from '../../run/consumables'
 import type { MarketSizeId } from '../../run/marketSize'
+import type { OnboardingSpotId } from '../../run/onboarding'
 import type { HouseRuleId } from '../../run/variation/houseRules'
 import type { RosterQuirkId } from '../../run/variation/rosterQuirks'
 
@@ -155,6 +156,12 @@ export interface RunContextValue {
    *  moves one instance from run.consumableInventory to run.activeConsumablesThisSeason, where
    *  simulateSeasonChunk picks it up for every chunk of that season. No-ops if none are held. */
   activateConsumable: (consumableId: ConsumableId) => Promise<void>
+  /** Records that the GM has found one of the onboarding spots (run/onboarding.ts). Called from the
+   *  hint components on mount, so it no-ops when the spot is already recorded rather than writing on
+   *  every revisit. */
+  markOnboardingSeen: (spot: OnboardingSpotId) => Promise<void>
+  /** Records every checklist spot at once, for a returning player who does not need orienting. */
+  skipOnboarding: () => Promise<void>
 }
 
 export const RunContext = createContext<RunContextValue | null>(null)

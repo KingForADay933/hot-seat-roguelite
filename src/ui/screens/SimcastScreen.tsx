@@ -10,6 +10,7 @@ import { InspectorContext, type Inspector } from '../state/inspector.core'
 import { BoxScoreTable } from '../components/BoxScoreTable'
 import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
 import { TacticalFocusControls } from '../components/TacticalFocusControls'
+import { OnboardingHint } from '../components/OnboardingHint'
 import { formatOvertimeLabel } from '../formatOvertime'
 import { CommentaryFeed } from '../simcast/CommentaryFeed'
 import { LiveBoxScore } from '../simcast/LiveBoxScore'
@@ -197,6 +198,13 @@ function SimcastBroadcast({
   return (
     <InspectorContext.Provider value={inspector}>
       <main>
+        {/* Being here at all is the discovery -- Sim sits right beside Watch Live on the schedule and
+            nothing says the live one can be coached. */}
+        <OnboardingHint spot="watch-live">
+          This is a game you can coach. The defence and the four dials below change from the next possession
+          on, the speed controls run it as fast or slow as you like, and any player name opens their card.
+        </OnboardingHint>
+
         <h1>
           {awayTeam.abbreviation} @ {homeTeam.abbreviation}
         </h1>

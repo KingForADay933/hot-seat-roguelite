@@ -1316,3 +1316,113 @@ h2 {
   border-left: 3px solid var(--team-primary, transparent);
   padding-left: 10px;
 }
+
+/* --- Onboarding: first-visit hints and the explore checklist ---------------------------------- */
+
+/**
+ * One line naming what a first-time GM would walk past. Accent-ruled like a section strap so it reads
+ * as part of the broadcast furniture rather than as a browser notification, and quiet enough that a
+ * returning player -- who will never see it again anyway -- would not resent it.
+ */
+.onboarding-hint {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: 90ch;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg-alt);
+  font-size: 14px;
+}
+
+.onboarding-hint-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.explore-checklist {
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-alt);
+}
+
+.explore-checklist h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.explore-count {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.explore-checklist ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.explore-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+/* Found items stay listed and go quiet rather than disappearing, so the block reads as progress
+   rather than as a list that keeps mysteriously shrinking. */
+.explore-item-done {
+  color: var(--text-muted);
+}
+
+.explore-item-done strong {
+  font-weight: 400;
+  text-decoration: line-through;
+}
+
+.explore-tick {
+  flex: none;
+  width: 1.2em;
+  color: var(--positive);
+  font-weight: 700;
+}
+
+.explore-where {
+  color: var(--text-muted);
+}
+
+/* Pushed to the far end of the strap, and a link rather than a button -- skipping orientation should
+   always be available but never sit shoulder to shoulder with the thing it is dismissing. Same
+   argument, and the same treatment, as .nav-quit. */
+.explore-skip {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: system-ui, sans-serif;
+}
+
+.explore-skip:hover {
+  color: var(--accent);
+}

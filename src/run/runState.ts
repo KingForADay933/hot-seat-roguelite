@@ -24,6 +24,9 @@ export function createRun(teamId: TeamId, rosterQuirk: RosterQuirkId, houseRule:
     coachingUpgrades: [],
     consumableInventory: [],
     activeConsumablesThisSeason: [],
+    // Seeded empty rather than left undefined so a run created now is explicit about it; the field
+    // stays optional for the sake of runs created before it existed (run/onboarding.ts).
+    onboarding: [],
   }
 }
 
