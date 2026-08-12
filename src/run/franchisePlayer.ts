@@ -23,6 +23,28 @@ import { FRANCHISE_PLAYER_MIN } from './constants'
  *  it exists so a player who genuinely cannot reach the threshold can't spin. */
 const LIFT_PASSES = 3
 
+/**
+ * Moves a player to a target overall by shifting every attribute, keeping his *shape*.
+ *
+ * Shifted by the gap rather than set to the target, so a rim-running big lifted to 82 is still a
+ * rim-running big -- a player to build a system around rather than a flat block of 82s.
+ *
+ * Applied repeatedly because a single shift undershoots: attributes clamp at ATTRIBUTE_CEILING, so a
+ * spiky player whose best ratings are already near the top spends part of the lift against the
+ * ceiling and lands short. Each pass re-reads the gap that is actually left, and the loop stops early
+ * when a pass changes nothing -- which is the case where he is as high as the scale allows. Shared
+ * with run/variation/rosterQuirks.ts's one-superstar, which lifts to 90 and hits the ceiling harder.
+ */
+export function liftToOverall(player: Player, target: number): Player {
+  let lifted = player
+  for (let pass = 0; pass < LIFT_PASSES && lifted.overallRating < target; pass++) {
+    const next = shiftPlayerAttributes(lifted, target - lifted.overallRating)
+    if (next.overallRating === lifted.overallRating) break
+    lifted = next
+  }
+  return lifted
+}
+
 export function ensureFranchisePlayer(players: Player[], startingFive: PlayerId[]): Player[] {
   if (players.length === 0) return players
   if (players.some((p) => p.overallRating >= FRANCHISE_PLAYER_MIN)) return players
@@ -33,21 +55,7 @@ export function ensureFranchisePlayer(players: Player[], startingFive: PlayerId[
   // whole roster keeps this total rather than throwing during run setup.
   const pool = candidates.length > 0 ? candidates : players
   const best = pool.reduce((top, p) => (p.overallRating > top.overallRating ? p : top))
-
-  // Shifted by the gap rather than set to the threshold, so his *shape* survives -- a rim-running
-  // big lifted to 82 is still a rim-running big, which is what makes him a player to build a system
-  // around rather than a flat block of 82s.
-  //
-  // Applied repeatedly because a single shift undershoots: attributes clamp at ATTRIBUTE_CEILING, so
-  // a spiky player whose best ratings are already near the top spends part of the lift against the
-  // ceiling and lands short. Each pass re-reads the gap that is actually left, and the loop stops
-  // early when a pass changes nothing -- which is the case where he is as high as the scale allows.
-  let lifted = best
-  for (let pass = 0; pass < LIFT_PASSES && lifted.overallRating < FRANCHISE_PLAYER_MIN; pass++) {
-    const next = shiftPlayerAttributes(lifted, FRANCHISE_PLAYER_MIN - lifted.overallRating)
-    if (next.overallRating === lifted.overallRating) break
-    lifted = next
-  }
+  const lifted = liftToOverall(best, FRANCHISE_PLAYER_MIN)
 
   return players.map((p) => (p.id === best.id ? lifted : p))
 }

@@ -198,7 +198,7 @@ describe('house rules narrowing the budget', () => {
     const roster = flat.map((p, i) => ({ ...p, overallRating: 90 - i * 10 }))
     const worst = roster[2]
 
-    expect(minMinutesFor(roster, worst.id, 'homegrown-mandate')).toBe(0)
+    expect(minMinutesFor(team, roster, worst.id, 'homegrown-mandate')).toBe(0)
     expect(clampToPositionBudget(team, roster, worst.id, 0, 'homegrown-mandate')).toBe(0)
   })
 })

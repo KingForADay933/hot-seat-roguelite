@@ -1,8 +1,11 @@
 import type { AttributeKey, Player } from '../../data/types'
 import { shiftPlayerAttributes, shiftPlayerAttributesBy } from '../../engine/attributeShift'
 import { ATTRIBUTE_CEILING, ATTRIBUTE_FLOOR } from '../../engine/constants'
-import { clamp } from '../../engine/math'
+import { deriveDepthChart } from '../../engine/depthChart'
+import { average, clamp } from '../../engine/math'
 import type { Rng } from '../../engine/rng'
+import { FRANCHISE_PLAYER_MIN } from '../constants'
+import { liftToOverall } from '../franchisePlayer'
 import { pickDistinct } from './draftPool'
 
 export type RosterQuirkId =
@@ -15,6 +18,9 @@ export type RosterQuirkId =
   | 'undersized-fast'
   | 'all-prime'
   | 'high-variance'
+  | 'glass-cannons'
+  | 'one-superstar'
+  | 'no-weak-links'
 
 export interface RosterQuirk {
   id: RosterQuirkId
@@ -82,6 +88,21 @@ export const ROSTER_QUIRKS: Record<RosterQuirkId, RosterQuirk> = {
     id: 'high-variance',
     label: 'High-Variance Roster',
     description: 'A couple of genuine lottery tickets, a couple who may never contribute, nothing in between.',
+  },
+  'glass-cannons': {
+    id: 'glass-cannons',
+    label: 'Glass Cannons',
+    description: 'A little more skill than you had a right to, and not a set of legs among them -- everyone here is gone by the fourth.',
+  },
+  'one-superstar': {
+    id: 'one-superstar',
+    label: 'One Random Superstar',
+    description: 'One of your starters is a genuine star. The other eleven paid for him.',
+  },
+  'no-weak-links': {
+    id: 'no-weak-links',
+    label: 'No Weak Links',
+    description: 'Nine men you can play and nobody who wins a game on his own -- your ninth is nearly your third.',
   },
 }
 
@@ -202,6 +223,116 @@ function applyHighVariance(players: Player[]): Player[] {
   })
 }
 
+/**
+ * How far above the floor Glass Cannons scatters its durability, and why the band is so narrow.
+ *
+ * Hidden traits share the [ATTRIBUTE_FLOOR, ATTRIBUTE_CEILING] band every other rating uses --
+ * engine/attributeShift.ts's shiftPlayerHiddenTrait clamps there and the generator rolls 40-90 -- so
+ * a quirk cannot push one lower without widening a convention that coaching upgrades also rely on. It
+ * does not need to: ui/playerTags.ts tags "Gasses Out" at 42, so the floor already lights up every
+ * player on the roster, and the measured fatigue effect (below) is substantial there. The two-point
+ * span is only so the Scouting table does not show twelve copies of one number.
+ */
+const DURABILITY_FLOOR_SPAN = 2
+
+/**
+ * What Glass Cannons buys with its legs, and why it is so much smaller than SKILL_TILT.
+ *
+ * Measured over 240 seeded games against an unmodified opponent: the durability floor on its own is
+ * worth **-1.62 points a game**, and each attribute point handed back is worth about **+1.0**. So +2
+ * lands the quirk at +0.45 relative to a baseline roster -- inside the -1.06..+0.94 band the existing
+ * nine quirks already occupy (high-variance at the bottom, live-by-three at the top). +6, which is
+ * what this constant started at, measured +3.96 and won 65% of its games.
+ *
+ * That the number is this small is a fact about the fatigue system rather than about the quirk: a
+ * whole roster at the durability floor is worth under two points a game, so there is not much budget
+ * to spend. **If fatigue is ever retuned, come back here** -- this constant is calibrated against it.
+ *
+ * The asymmetry is the other reason to keep it low. overallRating is the mean of the ten attributes
+ * (engine/generator/randomPlayer.ts) and hidden traits never enter it, so the bonus is visible next to
+ * every name on the roster table while the durability is only visible under Scouting and in the player
+ * tags. A quirk that is both stronger than the pool and *looks* stronger is the worst of both.
+ */
+const GLASS_CANNON_BONUS = 2
+
+function applyGlassCannons(players: Player[], rng: Rng): Player[] {
+  return players.map((p) => ({
+    ...shiftPlayerAttributes(p, GLASS_CANNON_BONUS),
+    hidden: { ...p.hidden, durability: ATTRIBUTE_FLOOR + Math.floor(rng() * (DURABILITY_FLOOR_SPAN + 1)) },
+  }))
+}
+
+/** How much of each player's distance from the roster mean No Weak Links keeps. At 0.35 a 14-point
+ *  spread between the best and worst man comes back as 5. */
+const NO_WEAK_LINKS_KEPT_SPREAD = 0.35
+
+/** Bound on the band-sliding loop, for the same reason franchisePlayer.ts's LIFT_PASSES exists:
+ *  attributes clamp, so one shift can land short of the target. */
+const NO_WEAK_LINKS_PASSES = 3
+
+/**
+ * Pulls the roster in toward its own mean, then slides the whole band so the best man sits exactly at
+ * FRANCHISE_PLAYER_MIN.
+ *
+ * The second step is what makes this quirk possible at all. A roster with genuinely no star would be
+ * undone one line later: RunProvider applies the quirk and then calls ensureFranchisePlayer, which
+ * would lift the best starter straight back to 82. Landing the top man *on* the threshold satisfies
+ * that guarantee without it ever firing.
+ *
+ * Distinct from low-ceiling, which caps potential and leaves current ratings alone; this caps current
+ * ratings and leaves potential alone. The team it produces is one where fatigue never forces a drop in
+ * quality, because there is no drop to be had -- and where no single player wins a close game.
+ */
+function applyNoWeakLinks(players: Player[]): Player[] {
+  if (players.length === 0) return players
+
+  const mean = average(players.map((p) => p.overallRating))
+  let out = players.map((p) => shiftPlayerAttributes(p, (mean - p.overallRating) * (1 - NO_WEAK_LINKS_KEPT_SPREAD)))
+
+  for (let pass = 0; pass < NO_WEAK_LINKS_PASSES; pass++) {
+    const top = Math.max(...out.map((p) => p.overallRating))
+    if (top === FRANCHISE_PLAYER_MIN) break
+    const next = out.map((p) => shiftPlayerAttributes(p, FRANCHISE_PLAYER_MIN - top))
+    if (Math.max(...next.map((p) => p.overallRating)) === top) break
+    out = next
+  }
+  return out
+}
+
+/**
+ * What the other eleven give up so one of them can be a star.
+ *
+ * Measured over 240 seeded games at target 90: cost 0 is +1.09 relative to a baseline roster, cost 1
+ * is +0.31, cost 2 is -0.67, cost 3 is -1.96. Two is the pick -- inside the -1.06..+0.94 band the
+ * existing pool occupies, and on the paying side of it, which is the point of the quirk. Three, where
+ * this started, is outside the band and simply a worse team.
+ *
+ * Landing slightly negative on single-game margin is deliberate rather than a concession. One player
+ * covers about 36 of a team's 240 minutes, so concentrating talent cannot pay for itself inside one
+ * game; what it buys is a player worth developing, worth drafting a system around, and worth spending
+ * shop camps on -- none of which this measurement can see. high-variance sits at -1.06 for the same
+ * kind of reason.
+ */
+const SUPERSTAR_SUPPORT_COST = 2
+const SUPERSTAR_TARGET = 90
+
+/** Drawn from the starting five rather than the roster at large, for the reason ensureFranchisePlayer
+ *  gives: a 90 sitting behind a worse player is exactly the depth-chart inversion that release fixed.
+ *  deriveDepthChart is the same function RunProvider calls on the way out of here, so the five this
+ *  picks from and the five the GM is shown agree. */
+function applyOneSuperstar(players: Player[], rng: Rng): Player[] {
+  if (players.length === 0) return players
+
+  const startingFive = new Set(deriveDepthChart(players).startingFive)
+  const candidates = players.filter((p) => startingFive.has(p.id))
+  const pool = candidates.length > 0 ? candidates : players
+  const star = pool[Math.floor(rng() * pool.length)]
+
+  return players.map((p) =>
+    p.id === star.id ? liftToOverall(p, SUPERSTAR_TARGET) : shiftPlayerAttributes(p, -SUPERSTAR_SUPPORT_COST),
+  )
+}
+
 export function applyRosterQuirk(quirkId: RosterQuirkId, players: Player[], rng: Rng): Player[] {
   switch (quirkId) {
     case 'stacked-guards':
@@ -225,6 +356,12 @@ export function applyRosterQuirk(quirkId: RosterQuirkId, players: Player[], rng:
       return applyAllPrime(players, rng)
     case 'high-variance':
       return applyHighVariance(players)
+    case 'glass-cannons':
+      return applyGlassCannons(players, rng)
+    case 'one-superstar':
+      return applyOneSuperstar(players, rng)
+    case 'no-weak-links':
+      return applyNoWeakLinks(players)
   }
 }
 

@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest'
+import { generateLeague } from '../../engine/generator/randomLeague'
+import { POSITION_ORDER } from '../../engine/matchup'
 import { createSeededRng } from '../../engine/rng'
 import { makeTestPlayer, makeTestTeam } from '../../engine/testFixtures'
 import type { Player, Position, Team } from '../../data/types'
+import { POSITION_MINUTES_BUDGET } from '../minutesBudget'
 import {
   applyHouseRule,
   HOMEGROWN_MIN_MINUTES,
   HOUSE_RULES,
+  houseRuleMinMinutesFor,
   houseRuleMinutesCap,
   houseRuleProtectedPlayerIds,
   pickRandomHouseRules,
+  type HouseRuleId,
 } from './houseRules'
 
 function buildTeam(ages: Record<Position, number[]>): { team: Team; players: Player[] } {
@@ -150,11 +155,11 @@ describe('applyHouseRule / deep-bench', () => {
 
 describe('applyHouseRule / homegrown-mandate', () => {
   it('protects the two best players and nobody else', () => {
-    const { players } = buildRankedTeam([32, 30, 28, 24, 20])
-    const ids = houseRuleProtectedPlayerIds('homegrown-mandate', players)
+    const { team, players } = buildRankedTeam([32, 30, 28, 24, 20])
+    const ids = houseRuleProtectedPlayerIds('homegrown-mandate', team, players)
 
     expect(ids).toEqual(new Set([players[0].id, players[1].id]))
-    expect(houseRuleProtectedPlayerIds('short-bench', players).size).toBe(0)
+    expect(houseRuleProtectedPlayerIds('short-bench', team, players).size).toBe(0)
   })
 
   it('leaves an already-compliant rotation untouched', () => {
@@ -200,6 +205,90 @@ describe('applyHouseRule / homegrown-mandate', () => {
     expect(result.team.rotationMinutes[best.id]).toBeGreaterThanOrEqual(HOMEGROWN_MIN_MINUTES) // donated, but not below his own floor
     expect(result.team.rotationMinutes[best.id] + result.team.rotationMinutes[second.id]).toBe(48)
   })
+})
+
+describe('applyHouseRule / ironman-rule', () => {
+  it('pins every starter and nobody else', () => {
+    const { team, players } = buildRankedTeam([32, 30, 28, 24, 20, 16, 12, 10])
+    const ids = houseRuleProtectedPlayerIds('ironman-rule', team, players)
+    expect(ids).toEqual(new Set(team.startingFive))
+  })
+
+  it('raises a starter under the floor, paying for it from his own position', () => {
+    // Eight players, so PG holds ranks 0 and 5. The PG starter is parked at 10 while his backup holds
+    // 38 -- one starter per position means the shortfall can only come from that backup.
+    const { team, players } = buildRankedTeam([10, 30, 28, 24, 20, 38, 12, 10])
+    const result = applyHouseRule('ironman-rule', team, players)
+
+    expect(result.team.rotationMinutes[players[0].id]).toBe(30)
+    expect(result.team.rotationMinutes[players[5].id]).toBe(38 - 20)
+    // The position group's total is conserved, so the floor never pushes it past its 48.
+    expect(result.team.rotationMinutes[players[0].id] + result.team.rotationMinutes[players[5].id]).toBe(48)
+  })
+})
+
+describe('applyHouseRule / everybody-plays', () => {
+  it('pins the whole roster', () => {
+    const { team, players } = buildRankedTeam([32, 30, 28, 24, 20, 16, 12, 10])
+    expect(houseRuleProtectedPlayerIds('everybody-plays', team, players)).toEqual(new Set(players.map((p) => p.id)))
+  })
+
+  it('lifts the deepest bench to the floor out of the starter at his position', () => {
+    // PG four deep -- the worst case the roster template can produce -- with the last two below the
+    // floor. Both have to come up, and the minutes can only come from the two above them.
+    const positions: Position[] = ['PG', 'PG', 'PG', 'PG', 'SG', 'SF', 'PF', 'C']
+    const players = positions.map((position, i) => ({ ...makeTestPlayer({ positions: [position] }), overallRating: 90 - i }))
+    const team = makeTestTeam({
+      rosterPlayerIds: players.map((p) => p.id),
+      startingFive: [players[0].id, players[4].id, players[5].id, players[6].id, players[7].id],
+      rotationMinutes: Object.fromEntries(players.map((p, i) => [p.id, [28, 11, 6, 3, 48, 48, 48, 48][i]])),
+    })
+    players.forEach((p) => (p.teamId = team.id))
+
+    const result = applyHouseRule('everybody-plays', team, players)
+    const pg = players.slice(0, 4).map((p) => result.team.rotationMinutes[p.id])
+
+    expect(pg.every((m) => m >= 8)).toBe(true)
+    expect(pg.reduce((a, b) => a + b, 0)).toBe(48) // conserved: nobody's floor is paid for out of thin air
+  })
+})
+
+/**
+ * The invariant three floor rules introduce and none of them can check alone: floors owed inside one
+ * position group must fit that group's 48.
+ *
+ * Homegrown's constant carried this as a hand-worked comment ("two at 20 needs 40 of 48"). With three
+ * rules the arithmetic is worth enforcing rather than re-deriving, and it is the specific way a new
+ * floor rule would break -- silently, on the subset of rosters that happen to stack a position.
+ */
+describe('minutes floors fit inside every position budget', () => {
+  const floorRules: HouseRuleId[] = ['homegrown-mandate', 'ironman-rule', 'everybody-plays']
+
+  for (const ruleId of floorRules) {
+    it(`${HOUSE_RULES[ruleId].label} never owes a position more than it has`, () => {
+      for (let seed = 0; seed < 8; seed++) {
+        const rng = createSeededRng(seed + 1)
+        const { teams, players } = generateLeague({ teamCount: 8, leagueName: 'L', rng, seasonLength: 16 })
+        const byId = new Map(players.map((p) => [p.id, p]))
+
+        for (const generated of teams) {
+          const roster = generated.rosterPlayerIds.map((id) => byId.get(id)!).filter(Boolean)
+          const { team } = applyHouseRule(ruleId, generated, roster)
+
+          for (const position of POSITION_ORDER) {
+            const group = roster.filter((p) => p.positions[0] === position)
+            const owed = group.reduce((sum, p) => sum + houseRuleMinMinutesFor(ruleId, team, roster, p.id), 0)
+            expect(owed).toBeLessThanOrEqual(POSITION_MINUTES_BUDGET)
+
+            // And seeding leaves the group inside its budget, so no floor can ever exceed the ceiling
+            // maxMinutesFor derives from it -- the conflict minMinutesFor promises cannot happen.
+            const assigned = group.reduce((sum, p) => sum + (team.rotationMinutes[p.id] ?? 0), 0)
+            expect(assigned).toBeLessThanOrEqual(POSITION_MINUTES_BUDGET + 1e-6)
+          }
+        }
+      }
+    })
+  }
 })
 
 describe('pickRandomHouseRules', () => {

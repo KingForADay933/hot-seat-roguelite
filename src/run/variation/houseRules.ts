@@ -3,7 +3,14 @@ import { shiftPlayerAttributes } from '../../engine/attributeShift'
 import type { Rng } from '../../engine/rng'
 import { pickDistinct } from './draftPool'
 
-export type HouseRuleId = 'youth-movement' | 'short-bench' | 'minutes-cap' | 'deep-bench' | 'homegrown-mandate'
+export type HouseRuleId =
+  | 'youth-movement'
+  | 'short-bench'
+  | 'minutes-cap'
+  | 'deep-bench'
+  | 'homegrown-mandate'
+  | 'ironman-rule'
+  | 'everybody-plays'
 
 export interface HouseRule {
   id: HouseRuleId
@@ -41,6 +48,28 @@ const DEEP_BENCH_PENALTY = 16
 const HOMEGROWN_PROTECTED_COUNT = 2
 export const HOMEGROWN_MIN_MINUTES = 20
 
+/**
+ * The floor Ironman Rule holds every starter to.
+ *
+ * Cannot conflict with the budget: generateTeam builds startingFive as exactly one player per
+ * position (engine/depthChart.ts), so this claims 30 of that position's 48 and leaves 18 behind.
+ *
+ * Like Homegrown Mandate it rarely fires at draft time -- the depth weights already hand a lone
+ * starter about 32 -- and like that rule, the starting state is not the point. It removes load
+ * management for the rest of the run: fatigue has to be absorbed rather than rotated around.
+ */
+const IRONMAN_MIN_MINUTES = 30
+
+/**
+ * The floor Everybody Plays holds every rostered player to.
+ *
+ * Worst case is four players at one position -- randomTeam.ts fills 5 + 5 slots by position against
+ * MAX_ROSTER_SIZE 12 and rolls the last 2 freely -- so the group needs 4 x 8 = 32 of its 48 and keeps
+ * 16 of slack. Unlike the two floors above this one does fire at draft: the depth weights leave a
+ * 4-deep position's last men near zero, so the rule starts by taking minutes off the starter.
+ */
+const EVERYBODY_PLAYS_MIN_MINUTES = 8
+
 export const HOUSE_RULES: Record<HouseRuleId, HouseRule> = {
   'youth-movement': {
     id: 'youth-movement',
@@ -67,6 +96,16 @@ export const HOUSE_RULES: Record<HouseRuleId, HouseRule> = {
     label: 'Homegrown Mandate',
     description: `Your ${HOMEGROWN_PROTECTED_COUNT} best players must stay in the rotation, ${HOMEGROWN_MIN_MINUTES} minutes a game minimum.`,
   },
+  'ironman-rule': {
+    id: 'ironman-rule',
+    label: 'Ironman Rule',
+    description: `Every starter plays at least ${IRONMAN_MIN_MINUTES} minutes -- no load management, no resting your way out of a bad night.`,
+  },
+  'everybody-plays': {
+    id: 'everybody-plays',
+    label: 'Everybody Plays',
+    description: `Every man on the roster gets at least ${EVERYBODY_PLAYS_MIN_MINUTES} minutes -- including the ones you would rather not use.`,
+  },
 }
 
 /** The per-player minutes ceiling this rule imposes, or null when it imposes none. Read by
@@ -77,25 +116,45 @@ export function houseRuleMinutesCap(ruleId: HouseRuleId): number | null {
 }
 
 /**
- * The players a rule pins into the rotation, by id -- empty for every rule that pins nobody.
+ * Every rule that pins players into the rotation, and who each one pins.
  *
- * Derived from the roster on every read rather than stored at draft time, which keeps the rule
- * working without adding a field to RunState. The cost is that the protected pair can shift if
- * development or a shop camp reorders the roster's top two; that is the honest reading of "your two
- * best players" anyway, and with no trades or free agency in the game there is nothing else that
- * could move them.
+ * One table rather than a branch per rule, because three floors have to agree about a single
+ * invariant: the floors owed inside any one position group must fit that group's REGULATION_MINUTES.
+ * Each entry's own doc comment above shows its worst case, and houseRules.test.ts checks all three
+ * against generated rosters rather than trusting the arithmetic.
+ *
+ * Membership is derived from the roster on every read rather than stored at draft time, which keeps
+ * the rules working without adding a field to RunState. The cost is that Homegrown's protected pair
+ * can shift if development or a shop camp reorders the top two; that is the honest reading of "your
+ * two best players" anyway, and with no trades or free agency there is nothing else that could move
+ * them.
  */
-export function houseRuleProtectedPlayerIds(ruleId: HouseRuleId, roster: Player[]): Set<PlayerId> {
-  if (ruleId !== 'homegrown-mandate') return new Set()
-  // Ties broken by id so the protected pair is stable across reads rather than depending on the
-  // order the roster happens to arrive in.
-  const ranked = [...roster].sort((a, b) => b.overallRating - a.overallRating || a.id.localeCompare(b.id))
-  return new Set(ranked.slice(0, HOMEGROWN_PROTECTED_COUNT).map((p) => p.id))
+const MINUTES_FLOORS: Partial<Record<HouseRuleId, { minutes: number; pins: (team: Team, roster: Player[]) => Set<PlayerId> }>> = {
+  'homegrown-mandate': {
+    minutes: HOMEGROWN_MIN_MINUTES,
+    // Ties broken by id so the protected pair is stable across reads rather than depending on the
+    // order the roster happens to arrive in.
+    pins: (_team, roster) =>
+      new Set(
+        [...roster]
+          .sort((a, b) => b.overallRating - a.overallRating || a.id.localeCompare(b.id))
+          .slice(0, HOMEGROWN_PROTECTED_COUNT)
+          .map((p) => p.id),
+      ),
+  },
+  'ironman-rule': { minutes: IRONMAN_MIN_MINUTES, pins: (team) => new Set(team.startingFive) },
+  'everybody-plays': { minutes: EVERYBODY_PLAYS_MIN_MINUTES, pins: (_team, roster) => new Set(roster.map((p) => p.id)) },
+}
+
+/** The players a rule pins into the rotation, by id -- empty for every rule that pins nobody. */
+export function houseRuleProtectedPlayerIds(ruleId: HouseRuleId, team: Team, roster: Player[]): Set<PlayerId> {
+  return MINUTES_FLOORS[ruleId]?.pins(team, roster) ?? new Set()
 }
 
 /** The minutes floor this rule holds a given player to -- 0 for anyone it doesn't protect. */
-export function houseRuleMinMinutesFor(ruleId: HouseRuleId, roster: Player[], playerId: PlayerId): number {
-  return houseRuleProtectedPlayerIds(ruleId, roster).has(playerId) ? HOMEGROWN_MIN_MINUTES : 0
+export function houseRuleMinMinutesFor(ruleId: HouseRuleId, team: Team, roster: Player[], playerId: PlayerId): number {
+  const floor = MINUTES_FLOORS[ruleId]
+  return floor && floor.pins(team, roster).has(playerId) ? floor.minutes : 0
 }
 
 /**
@@ -177,40 +236,45 @@ function applyDeepBench(roster: Player[]): Map<PlayerId, Player> {
 }
 
 /**
- * Seeds the protected players at their floor, taking any shortfall from their own positional
+ * Seeds every player a floor rule pins at that floor, taking each shortfall from his own positional
  * teammates so the position stays inside its budget.
  *
- * Rarely does anything at draft time -- the protected pair are the roster's two best, and the depth
- * weights already give the top man at a position about 32 -- but it keeps the invariant true from
- * the first screen rather than relying on the GM never having been shown a violating roster.
+ * Shared by all three floor rules. For Homegrown and Ironman it rarely does anything at draft time --
+ * the depth weights already give the top man at a position about 32 -- but it keeps the invariant true
+ * from the first screen rather than relying on the GM never having been shown a violating roster. For
+ * Everybody Plays it is load-bearing: a 4-deep position's last men start near zero.
  */
-function applyHomegrownMandate(team: Team, roster: Player[]): Team {
-  const protectedIds = houseRuleProtectedPlayerIds('homegrown-mandate', roster)
+function seedMinutesFloors(ruleId: HouseRuleId, team: Team, roster: Player[]): Team {
+  const floor = MINUTES_FLOORS[ruleId]
+  if (!floor) return team
+
+  const pinned = floor.pins(team, roster)
   const rotationMinutes = { ...team.rotationMinutes }
   const byId = new Map(roster.map((p) => [p.id, p]))
 
-  for (const playerId of protectedIds) {
+  for (const playerId of pinned) {
     const player = byId.get(playerId)
     if (!player) continue
-    const shortfall = HOMEGROWN_MIN_MINUTES - (rotationMinutes[playerId] ?? 0)
+    const shortfall = floor.minutes - (rotationMinutes[playerId] ?? 0)
     if (shortfall <= 0) continue
-    rotationMinutes[playerId] = HOMEGROWN_MIN_MINUTES
+    rotationMinutes[playerId] = floor.minutes
 
     // Paid for from the deepest bench upward, so the minutes come off whoever was playing least at
     // that position rather than off the rotation player the GM is relying on.
     //
-    // The other protected player is a donor too, down to his own floor and no further. Excluding him
-    // outright is what a first cut did, and it left a position holding both protected players with
-    // nowhere to find the shortfall -- the group went over its 48 and the ceiling it implies crossed
-    // below the floor this rule sets, which is precisely the conflict minMinutesFor promises cannot
-    // happen. Two protected players need 40 of a position's 48, so there is always enough to go round.
+    // Other pinned players are donors too, down to their own floor and no further. Excluding them
+    // outright is what a first cut of Homegrown did, and it left a position holding both protected
+    // players with nowhere to find the shortfall -- the group went over its 48 and the ceiling it
+    // implies crossed below the floor the rule sets, which is precisely the conflict minMinutesFor
+    // promises cannot happen. Every rule in MINUTES_FLOORS leaves slack in the worst case (see each
+    // constant's comment), so there is always enough to go round.
     let owed = shortfall
     const teammates = roster
       .filter((p) => p.id !== playerId && p.positions[0] === player.positions[0])
       .sort((a, b) => (rotationMinutes[a.id] ?? 0) - (rotationMinutes[b.id] ?? 0))
     for (const teammate of teammates) {
       if (owed <= 0) break
-      const teammateFloor = protectedIds.has(teammate.id) ? HOMEGROWN_MIN_MINUTES : 0
+      const teammateFloor = pinned.has(teammate.id) ? floor.minutes : 0
       const taken = Math.min(owed, Math.max((rotationMinutes[teammate.id] ?? 0) - teammateFloor, 0))
       rotationMinutes[teammate.id] = (rotationMinutes[teammate.id] ?? 0) - taken
       owed -= taken
@@ -235,7 +299,9 @@ export function applyHouseRule(ruleId: HouseRuleId, team: Team, players: Player[
     case 'minutes-cap':
       return { team: applyMinutesCap(team), players }
     case 'homegrown-mandate':
-      return { team: applyHomegrownMandate(team, roster), players }
+    case 'ironman-rule':
+    case 'everybody-plays':
+      return { team: seedMinutesFloors(ruleId, team, roster), players }
     case 'deep-bench': {
       const thinned = applyDeepBench(roster)
       return { team, players: players.map((p) => thinned.get(p.id) ?? p) }
