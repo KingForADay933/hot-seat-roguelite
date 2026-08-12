@@ -16,14 +16,18 @@ export function ConsumableInventoryRow({
    *  "should I have bought this", which the GM can still act on by holding it. */
   blockedReason?: string | null
 }) {
+  // A row, not a panel. These are rendered inside a Section, and the nested grey box this used to be
+  // put a container inside a container inside a container -- three borders deep for one consumable.
   return (
-    <div className="team-summary">
-      <strong>{consumable.label}</strong>
-      <p>{consumable.description}</p>
+    <div className="loadout-row">
+      <span className="loadout-row-text">
+        <strong>{consumable.label}</strong>
+        <span className="loadout-row-desc">{consumable.description}</span>
+        {blockedReason && <span className="shop-card-blocked">{blockedReason}</span>}
+      </span>
       <button type="button" onClick={onActivate} disabled={Boolean(blockedReason)} title={blockedReason ?? undefined}>
         Use Next Season
       </button>
-      {blockedReason && <p className="section-note">{blockedReason}</p>}
     </div>
   )
 }

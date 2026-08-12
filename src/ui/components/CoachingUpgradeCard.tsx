@@ -15,10 +15,13 @@ export function CoachingUpgradeCard({
   onBuy: () => void
 }) {
   return (
-    <button type="button" className="draft-option" disabled={!affordable} onClick={onBuy}>
-      <strong>{upgrade.label}</strong>
+    <button type="button" className="draft-option shop-card" disabled={!affordable} onClick={onBuy}>
+      <span className="shop-card-head">
+        <strong>{upgrade.label}</strong>
+        <span className="price-tag">${cost}</span>
+      </span>
       <p>{upgrade.description}</p>
-      <p>${cost}</p>
+      {!affordable && <p className="shop-card-blocked">Not enough budget</p>}
     </button>
   )
 }
