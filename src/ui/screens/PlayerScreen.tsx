@@ -4,6 +4,7 @@ import { aggregateSeasonTotals, type SeasonTotals } from '../../engine/boxScore'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 import { AGE_CURVE_LABELS, attributeLabel, currentTrainingFocus, formatHeight, TENDENCY_LABELS } from '../playerDisplay'
 import { playerTags, scoutingTags } from '../playerTags'
+import { OnboardingHint } from '../components/OnboardingHint'
 import { ScreenActions } from '../components/ScreenActions'
 
 /** Per-game average, or a dash when he hasn't played -- "0.0" would imply he played and scored none. */
@@ -119,6 +120,13 @@ export function PlayerScreen({
           Back
         </button>
       </ScreenActions>
+
+      {/* Reaching this page at all is the discovery -- every player name in the game is a link to it,
+          and nothing says so, because .player-link inherits its surrounding colour on purpose. */}
+      <OnboardingHint spot="player-page">
+        You got here by clicking a name. Every player name in the game opens their page like this — in a
+        box score, the standings, the live floor panel.
+      </OnboardingHint>
 
       <h1>
         <span className="player-pos">{player.positions[0]}</span> {player.name}

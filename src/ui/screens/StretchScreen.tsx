@@ -7,6 +7,7 @@ import { summarizeChunkInsights } from '../../run/chunkInsightSummary'
 import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { nextPlayableGameId, runTeamChunkGames } from '../../run/seasonChunks'
 import { BoxScoreTable } from '../components/BoxScoreTable'
+import { ExploreChecklist } from '../components/ExploreChecklist'
 import { GameListItem } from '../components/GameListItem'
 import { ScreenActions } from '../components/ScreenActions'
 
@@ -85,6 +86,10 @@ export function StretchScreen({
         {playedCount} of {stretchGames.length} games played. They play in order -- sim the next one for the result, or watch it
         call by call.
       </p>
+
+      {/* The hub screen, so the checklist lives here -- it is the one place a GM is guaranteed to
+          come back to between games during a first season. Renders nothing once orientation is over. */}
+      <ExploreChecklist />
 
       <div className="table-scroll">
         <table>

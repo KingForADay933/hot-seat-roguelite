@@ -2,6 +2,7 @@ import type { TeamId } from '../data/types'
 import type { CoachingUpgradeId } from './coachingUpgrades/catalog'
 import type { ConsumableId } from './consumables/catalog'
 import type { MarketSizeId } from './marketSize'
+import type { OnboardingSpotId } from './onboarding'
 import type { HouseRuleId } from './variation/houseRules'
 import type { RosterQuirkId } from './variation/rosterQuirks'
 
@@ -51,4 +52,14 @@ export interface RunState {
    *  for that season's games only. Cleared back to [] by evaluateSeasonEnd once the season
    *  completes, so nothing leaks into a season where the GM activated nothing new. */
   activeConsumablesThisSeason: ConsumableId[]
+  /**
+   * Onboarding spots the GM has visited (run/onboarding.ts).
+   *
+   * **Optional, and that is load-bearing.** `isValidBundleShape` rejects saves rather than migrating
+   * them, checking each required field by hand -- adding a required one here would invalidate every
+   * run in progress. It does not inspect unknown keys, so an optional array leaves older saves
+   * loading and reading as "nothing seen yet", which is exactly right for a run that predates the
+   * prompts.
+   */
+  onboarding?: OnboardingSpotId[]
 }

@@ -7,6 +7,7 @@ import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { DefensiveSchemeSelect } from '../components/DefensiveSchemeSelect'
 import { TacticalFocusControls } from '../components/TacticalFocusControls'
 import { RosterAdjustmentPanel } from '../components/RosterAdjustmentPanel'
+import { OnboardingHint } from '../components/OnboardingHint'
 import { ScreenActions } from '../components/ScreenActions'
 import { Section } from '../components/Section'
 import { StandingsTable } from '../components/StandingsTable'
@@ -50,6 +51,18 @@ export function ChunkResultsScreen({
 
   return (
     <main>
+      <ScreenActions>
+        <button className="primary" onClick={onContinue}>
+          Continue Season
+        </button>
+        <button onClick={onSimStretch}>Sim Next Stretch</button>
+      </ScreenActions>
+
+      <OnboardingHint spot="checkpoint">
+        The Insights are the game telling you what went wrong. The Scheme and Dials beside them are how you
+        answer, and Minutes and Training at the bottom is where you change who plays.
+      </OnboardingHint>
+
       <h1>
         Checkpoint {run.chunkInSeason} of {SEASON_CHUNK_COUNT - 1}
       </h1>
@@ -64,13 +77,6 @@ export function ChunkResultsScreen({
             : `${lastWildcardEvent.playerName} started the season in a slump.`}
         </p>
       )}
-
-      <ScreenActions>
-        <button className="primary" onClick={onContinue}>
-          Continue Season
-        </button>
-        <button onClick={onSimStretch}>Sim Next Stretch</button>
-      </ScreenActions>
 
       {/* Reading order is Standings, Insights, Schemes, Minutes: where you sit is the question the
           checkpoint answers, so it leads, and the two controls that respond to the Insights stay

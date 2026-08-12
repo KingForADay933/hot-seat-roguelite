@@ -12,6 +12,7 @@ import { HOUSE_RULES } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS } from '../../run/variation/rosterQuirks'
 import { RosterDetailPanel } from '../components/RosterDetailPanel'
 import { ScreenActions } from '../components/ScreenActions'
+import { OnboardingHint } from '../components/OnboardingHint'
 import { Section } from '../components/Section'
 import { RotationChartEditor } from '../components/RotationChartEditor'
 import { ScoutingPanel } from '../components/ScoutingPanel'
@@ -83,6 +84,10 @@ export function MyTeamScreen({
           Back
         </button>
       </ScreenActions>
+
+      <OnboardingHint spot="my-team">
+        Minutes and training focus are editable in the roster below, the rotation chart sets who is on the floor period by period, and the Game Plan dials change how your system is played.
+      </OnboardingHint>
 
       <h1>
         {team.city} {team.name}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { isOnboardingActive, seenSpots } from '../../run/onboarding'
 import { createRun } from '../../run/runState'
 import type { League } from '../types'
 import { clearRunBundle, loadRunBundle, saveRunBundle, type RunBundle } from './runRepository'
@@ -105,6 +106,23 @@ describe('saveRunBundle / loadRunBundle', () => {
     const { consumableInventory: _consumableInventory, activeConsumablesThisSeason: _activeConsumablesThisSeason, ...legacyRun } = legacyBundle.run
     await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
     expect(await loadRunBundle(adapter)).toBeNull()
+  })
+
+  it('still LOADS a pre-onboarding save missing run.onboarding', async () => {
+    // The opposite assertion to every one above, and the reason RunState.onboarding is optional.
+    // This validator rejects rather than migrates, so anything required here would have invalidated
+    // every run in progress the moment onboarding shipped. An absent key has to load and read as
+    // "nothing seen yet" -- see run/onboarding.ts's seenSpots.
+    const adapter = makeMemoryAdapter()
+    const legacyBundle = makeTestBundle()
+    const { onboarding: _onboarding, ...legacyRun } = legacyBundle.run
+    await adapter.setItem('hotseat:run', JSON.stringify({ ...legacyBundle, run: legacyRun }))
+
+    const loaded = await loadRunBundle(adapter)
+    expect(loaded).not.toBeNull()
+    expect(loaded?.run.onboarding).toBeUndefined()
+    expect(seenSpots(loaded!.run)).toEqual([])
+    expect(isOnboardingActive(loaded!.run)).toBe(true)
   })
 })
 

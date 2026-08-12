@@ -8,6 +8,7 @@ import { splitRoster } from '../rosterGroups'
 import { PlayerName } from '../components/PlayerName'
 import { TeamSummary } from '../components/TeamSummary'
 import { TeamSwatch } from '../components/TeamSwatch'
+import { OnboardingHint } from '../components/OnboardingHint'
 import { ScreenActions } from '../components/ScreenActions'
 
 /**
@@ -127,6 +128,11 @@ export function TeamScoutScreen({ bundle, teamId, onBack }: { bundle: RunBundle;
           Back
         </button>
       </ScreenActions>
+
+      <OnboardingHint spot="scout-report">
+        Every team name opens a report like this — from the standings, or from the matchup on your schedule.
+        Worth a look at whoever you play next: their system, their dials and the five they will start.
+      </OnboardingHint>
 
       <h1>
         <TeamSwatch team={team} />

@@ -30,6 +30,7 @@ import { clampToPositionBudget } from '../../run/minutesBudget'
 import { recordChunkInsights } from '../../run/runInsights'
 import { deriveDepthChart } from '../../engine/depthChart'
 import { ensureFranchisePlayer } from '../../run/franchisePlayer'
+import { withOnboardingSkipped, withSpotSeen, type OnboardingSpotId } from '../../run/onboarding'
 import { createRun } from '../../run/runState'
 import { applyPlayerCamp, applyTeamCamp, openShopVisit, type ShopTier } from '../../run/shop'
 import { simulateSeasonChunk } from '../../run/simulateSeasonChunk'
@@ -612,6 +613,38 @@ export function RunProvider({ children }: { children: ReactNode }) {
     [bundle, teamsWithRecomputedSynergy],
   )
 
+  /**
+   * Records that the GM has found one of the onboarding spots.
+   *
+   * **Returns early when the spot is already known**, and that is the important line. These are
+   * called from the hint components on mount, so without it every visit to My Team would write the
+   * whole bundle to IndexedDB again -- and the setters here all read `bundle` from a closure, which
+   * leaves a narrow window where two firing in the same tick can clobber each other. An orientation
+   * flag is not worth widening that, so the common path does nothing at all.
+   */
+  const markOnboardingSeen = useCallback(
+    async (spot: OnboardingSpotId) => {
+      if (!bundle) return
+      const onboarding = withSpotSeen(bundle.run, spot)
+      if (onboarding === bundle.run.onboarding) return
+
+      const updatedBundle: RunBundle = { ...bundle, run: { ...bundle.run, onboarding } }
+      await saveRunBundle(updatedBundle)
+      setBundle(updatedBundle)
+    },
+    [bundle],
+  )
+
+  /** Turns the whole apparatus off for a GM who already knows the game, by recording every checklist
+   *  spot as seen -- which closes isOnboardingActive through the one predicate everything else reads,
+   *  rather than adding a second flag for every call site to remember. */
+  const skipOnboarding = useCallback(async () => {
+    if (!bundle) return
+    const updatedBundle: RunBundle = { ...bundle, run: { ...bundle.run, onboarding: withOnboardingSkipped(bundle.run) } }
+    await saveRunBundle(updatedBundle)
+    setBundle(updatedBundle)
+  }, [bundle])
+
   const buyCoachingUpgrade = useCallback(
     async (upgradeId: CoachingUpgradeId) => {
       if (!bundle?.shop) return
@@ -760,6 +793,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
     buyConsumable,
     rerollConsumableOffers,
     activateConsumable,
+    markOnboardingSeen,
+    skipOnboarding,
   }
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>

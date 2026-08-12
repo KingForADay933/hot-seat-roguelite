@@ -7,6 +7,7 @@ import { comparePerformance, describePerformance, type PerformanceComparison } f
 import { describeRunInsight, insightsBySeason } from '../../run/runInsights'
 import { runTeamChunkGames } from '../../run/seasonChunks'
 import { ScreenActions } from '../components/ScreenActions'
+import { OnboardingHint } from '../components/OnboardingHint'
 import { StatCallouts } from '../components/StatCallouts'
 
 /** True once every game on the schedule has been played -- the run is sitting on season results or
@@ -114,6 +115,10 @@ export function InsightsScreen({ bundle, onBack }: { bundle: RunBundle; onBack: 
           Back
         </button>
       </ScreenActions>
+
+      <OnboardingHint spot="insights">
+        Rates here update after every game, split into what is going better than your usual and what is going worse. This is where a scheme that keeps getting picked on shows up first.
+      </OnboardingHint>
 
       <h1>Coaching Insights</h1>
       <p>
