@@ -4,6 +4,7 @@ import { aggregateSeasonTotals, type SeasonTotals } from '../../engine/boxScore'
 import { ATTRIBUTE_COLUMNS } from '../attributeColumns'
 import { AGE_CURVE_LABELS, attributeLabel, currentTrainingFocus, formatHeight, TENDENCY_LABELS } from '../playerDisplay'
 import { playerTags, scoutingTags } from '../playerTags'
+import { ScreenActions } from '../components/ScreenActions'
 
 /** Per-game average, or a dash when he hasn't played -- "0.0" would imply he played and scored none. */
 function perGame(total: number, gamesPlayed: number): string {
@@ -113,6 +114,12 @@ export function PlayerScreen({
 
   return (
     <main>
+      <ScreenActions>
+        <button className="primary" onClick={onBack}>
+          Back
+        </button>
+      </ScreenActions>
+
       <h1>
         <span className="player-pos">{player.positions[0]}</span> {player.name}
       </h1>
@@ -219,9 +226,6 @@ export function PlayerScreen({
         <p>No games played yet this season.</p>
       )}
 
-      <button className="primary" onClick={onBack}>
-        Back
-      </button>
     </main>
   )
 }

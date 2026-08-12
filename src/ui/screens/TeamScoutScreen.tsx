@@ -8,6 +8,7 @@ import { splitRoster } from '../rosterGroups'
 import { PlayerName } from '../components/PlayerName'
 import { TeamSummary } from '../components/TeamSummary'
 import { TeamSwatch } from '../components/TeamSwatch'
+import { ScreenActions } from '../components/ScreenActions'
 
 /**
  * The team's dials as a sentence, naming only the ones that are off balanced.
@@ -121,6 +122,12 @@ export function TeamScoutScreen({ bundle, teamId, onBack }: { bundle: RunBundle;
 
   return (
     <main>
+      <ScreenActions>
+        <button className="primary" onClick={onBack}>
+          Back
+        </button>
+      </ScreenActions>
+
       <h1>
         <TeamSwatch team={team} />
         {team.city} {team.name}
@@ -172,9 +179,6 @@ export function TeamScoutScreen({ bundle, teamId, onBack }: { bundle: RunBundle;
       <RosterGroup label="Starting Five" players={starters} />
       <RosterGroup label="Bench" players={bench} />
 
-      <button className="primary" onClick={onBack}>
-        Back
-      </button>
     </main>
   )
 }

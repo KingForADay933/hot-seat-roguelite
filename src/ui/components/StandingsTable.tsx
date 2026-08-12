@@ -14,10 +14,15 @@ export function StandingsTable({
   rows,
   teams,
   userTeamId,
+  targetRank,
 }: {
   rows: StandingsRow[]
   teams: Team[]
   userTeamId?: TeamId | null
+  /** Finish at or above this rank or the run ends. Draws the qualifying line under it -- the table's
+   *  only real question is whether you are on the right side of that, and until this was passed in it
+   *  had no way to say. Omitted where there is no target to speak of (a scouting report, say). */
+  targetRank?: number
 }) {
   const teamById = new Map(teams.map((t) => [t.id, t]))
 
@@ -26,6 +31,7 @@ export function StandingsTable({
       <table>
         <thead>
           <tr>
+            <th className="numeric standings-rank">#</th>
             <th>Team</th>
             <th className="numeric">W</th>
             <th className="numeric">L</th>
@@ -48,11 +54,16 @@ export function StandingsTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map((row, index) => {
             const team = teamById.get(row.teamId)
             const isUserTeam = row.teamId === userTeamId
+            const classNames = [isUserTeam ? 'user-row' : '']
+            // The rule goes under the last qualifying team, so the gap between "safe" and "fired" is
+            // a line you can see rather than a percentage you have to do arithmetic on.
+            if (targetRank !== undefined && index + 1 === targetRank) classNames.push('standings-cut')
             return (
-              <tr key={row.teamId} className={isUserTeam ? 'user-row' : ''}>
+              <tr key={row.teamId} className={classNames.filter(Boolean).join(' ')}>
+                <td className="numeric standings-rank">{index + 1}</td>
                 <td>
                   {/* Clickable through to a scouting report -- the standings is where a GM looks at
                       the rest of the league, so it is where "who are these people" should be

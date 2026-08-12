@@ -9,6 +9,14 @@
   --negative: #c0392b;
   --user-row-bg: rgba(29, 53, 87, 0.08);
 
+  /**
+   * Two faces, doing two jobs. Barlow Condensed (loaded in main.tsx) is the broadcast voice --
+   * headings, section straps, team abbreviations, scores, any number meant to be read across a
+   * room. Everything else stays system-ui, because a condensed face set at 14px across a
+   * twelve-column roster table costs exactly the legibility the layout work just bought.
+   */
+  --font-display: 'Barlow Condensed', 'Segoe UI Semibold', system-ui, sans-serif;
+
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light dark;
   color: var(--text);
@@ -1141,4 +1149,170 @@ th.numeric,
   margin: -8px 0 20px;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+/* --- Display face, sticky actions, standings cut line ---------------------------------------- */
+
+/* Where the broadcast voice is spent. Deliberately not on td/th -- see --font-display. */
+h1,
+h2,
+h3,
+.section-title,
+.scoreboard-team,
+.scoreboard-score,
+.scoreboard-period,
+.player-card-ovr,
+.stat-callout-value {
+  font-family: var(--font-display);
+}
+
+h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.section-title {
+  font-size: 15px;
+  letter-spacing: 0.09em;
+}
+
+.scoreboard-score {
+  font-size: 46px;
+  letter-spacing: 0.01em;
+}
+
+/**
+ * The screen's actions, pinned so they are reachable at any scroll position.
+ *
+ * One set, moved out of the bottom of each screen rather than copied to the top -- see
+ * ui/components/ScreenActions.tsx. Sits at the top of <main>, so it clears the nav above it and then
+ * sticks to the viewport edge once that has scrolled away.
+ */
+.screen-actions {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: 0 -24px 16px;
+  padding: 10px 24px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-actions-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* The primary action carries more weight here than a form button would -- it is the thing the whole
+   screen is building toward. */
+.screen-actions .primary {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 7px 20px;
+}
+
+/**
+ * The qualifying line: finish above it or the run ends.
+ *
+ * run.target.rankFraction has always decided that and the table had no way to show it, so a GM had
+ * to hold "top 50% of eight" in their head and count rows. Drawn under the last surviving team.
+ */
+.standings-cut > td {
+  border-bottom: 2px solid var(--negative);
+}
+
+.standings-rank {
+  width: 2.5em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A number meant to be read at a glance, with its label underneath -- the lower-third treatment. */
+.stat-callouts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-callout {
+  flex: 1 1 120px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg-alt);
+}
+
+.stat-callout-value {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-callout-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* --- Schedule strips and possession colour --------------------------------------------------- */
+
+/* The score doubles as the way into a box score, so it reads as a scorebug chip rather than a
+   generic button -- the same tabular, condensed treatment the live scoreboard uses. */
+.score-chip {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 12px;
+}
+
+.result-pill {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  color: #fff;
+}
+
+.result-pill.text-positive {
+  background: var(--positive);
+  color: #fff;
+}
+
+.result-pill.text-negative {
+  background: var(--negative);
+  color: #fff;
+}
+
+/* Whose possession it was, as a rule down the side. The green/red tone on these lines answers a
+   different question -- whether a possession scored, and whether that was good news for you -- so a
+   long run of unscored possessions carried no signal at all before this. */
+.commentary-line {
+  border-left: 3px solid var(--team-primary, transparent);
+  padding-left: 10px;
 }

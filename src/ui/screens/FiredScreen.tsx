@@ -6,6 +6,8 @@ import { aggregateRunInsights, describeRunInsight } from '../../run/runInsights'
 import { buildRunSummary, type RunSummary, type SeasonRecap } from '../../run/runSummary'
 import { HOUSE_RULES } from '../../run/variation/houseRules'
 import { ROSTER_QUIRKS } from '../../run/variation/rosterQuirks'
+import { ScreenActions } from '../components/ScreenActions'
+import { StatCallouts } from '../components/StatCallouts'
 
 /** Ordinal finish -- "3rd of 8" reads better than a bare rank on a results screen. */
 function ordinal(n: number): string {
@@ -100,6 +102,12 @@ export function FiredScreen({ bundle, onNewRun }: { bundle: RunBundle; onNewRun:
 
   return (
     <main>
+      <ScreenActions>
+        <button className="primary" onClick={onNewRun}>
+          Start New Run
+        </button>
+      </ScreenActions>
+
       <h1>Fired</h1>
       <p>
         {team ? `The ${team.city} ${team.name} let you go after ` : 'Let go after '}
@@ -133,12 +141,20 @@ export function FiredScreen({ bundle, onNewRun }: { bundle: RunBundle; onNewRun:
         </table>
       </div>
 
-      <p>
-        {summary.stretchesCleared} stretch{summary.stretchesCleared === 1 ? '' : 'es'} cleared ·{' '}
-        {summary.totalWins}-{summary.totalLosses} overall
-        {summary.bestSeason && ` · best finish ${ordinal(summary.bestSeason.rank)} in season ${summary.bestSeason.seasonNumber}`}
-        {' · '}${run.budget} left unspent
-      </p>
+      {/* The run's epitaph. These four were one run-on sentence, which made you read all of it to
+          find whichever number you actually wanted. */}
+      <StatCallouts
+        items={[
+          { label: 'Seasons', value: run.seasonsPlayed },
+          { label: 'Stretches cleared', value: summary.stretchesCleared },
+          { label: 'Overall', value: `${summary.totalWins}-${summary.totalLosses}` },
+          summary.bestSeason && {
+            label: `Best finish · season ${summary.bestSeason.seasonNumber}`,
+            value: ordinal(summary.bestSeason.rank),
+          },
+          { label: 'Left unspent', value: `$${run.budget}` },
+        ]}
+      />
 
       {runProblems.length > 0 && (
         <>
@@ -181,9 +197,6 @@ export function FiredScreen({ bundle, onNewRun }: { bundle: RunBundle; onNewRun:
         </p>
       </div>
 
-      <button className="primary" onClick={onNewRun}>
-        Start New Run
-      </button>
     </main>
   )
 }

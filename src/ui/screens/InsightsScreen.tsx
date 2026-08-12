@@ -6,6 +6,8 @@ import { SEASON_CHUNK_COUNT } from '../../run/constants'
 import { comparePerformance, describePerformance, type PerformanceComparison } from '../../run/performanceInsights'
 import { describeRunInsight, insightsBySeason } from '../../run/runInsights'
 import { runTeamChunkGames } from '../../run/seasonChunks'
+import { ScreenActions } from '../components/ScreenActions'
+import { StatCallouts } from '../components/StatCallouts'
 
 /** True once every game on the schedule has been played -- the run is sitting on season results or
  *  in the shop, and `run.chunkInSeason` has already been reset for a season that hasn't begun. */
@@ -107,12 +109,31 @@ export function InsightsScreen({ bundle, onBack }: { bundle: RunBundle; onBack: 
 
   return (
     <main>
+      <ScreenActions>
+        <button className="primary" onClick={onBack}>
+          Back
+        </button>
+      </ScreenActions>
+
       <h1>Coaching Insights</h1>
       <p>
-        {team.city} {team.name} -- {complete ? `Season ${seasonNumber} complete; reviewing its final stretch` : `Stretch ${chunk + 1} of ${SEASON_CHUNK_COUNT}`},{' '}
-        {playedInChunk.length} of {chunkGames.length} games played. Rates update after every game; the season log below is written
-        when each stretch closes.
+        {team.city} {team.name} -- {complete ? `Season ${seasonNumber} complete; reviewing its final stretch` : `Stretch ${chunk + 1} of ${SEASON_CHUNK_COUNT}`}
+        . Rates update after every game; the season log below is written when each stretch closes.
       </p>
+
+      {/* The shape of the stretch before any of the prose: how far through it you are, and how the
+          two lists below split. */}
+      <StatCallouts
+        items={[
+          { label: 'Games played', value: `${playedInChunk.length} of ${chunkGames.length}` },
+          { label: "What's working", value: goingWell.length, tone: goingWell.length > 0 ? 'positive' : undefined },
+          {
+            label: 'Needs work',
+            value: needsWork.length + events.length,
+            tone: needsWork.length + events.length > 0 ? 'negative' : undefined,
+          },
+        ]}
+      />
 
       {playedInChunk.length === 0 ? (
         <p>No games played in this stretch yet.</p>
@@ -170,9 +191,6 @@ export function InsightsScreen({ bundle, onBack }: { bundle: RunBundle; onBack: 
         <p>Nothing has recurred often enough to be a season-level pattern yet.</p>
       )}
 
-      <button className="primary" onClick={onBack}>
-        Back
-      </button>
     </main>
   )
 }
